@@ -10,8 +10,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <libgen.h>
+#ifndef _WIN32
 #include <unistd.h>
+#include <libgen.h>
+#else
+#include <windows.h>
+#include "perflib/getopt.h"
+#include "perflib/basename.h"
+#endif	/* _WIN32 */
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include <openssl/core_names.h>

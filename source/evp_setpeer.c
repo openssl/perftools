@@ -10,8 +10,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <libgen.h>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <windows.h>
+#include "perflib/getopt.h"
+#endif	/* _WIN32 */
 #include <openssl/evp.h>
 #include "perflib/perflib.h"
 
