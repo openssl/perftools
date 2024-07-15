@@ -29,7 +29,7 @@ include_directories(PUBLIC ${OPENSSL_INCLUDE_DIR} . )
 find_package(Threads)
 link_libraries(${CMAKE_THREAD_LIBS_INIT})
 
-find_package(OpenSSL)
+find_package(OpenSSL REQUIRED)
 
 if( "${OPENSSL_VERSION}" MATCHES 3\.* )
     add_executable(evp_fetch evp_fetch.c)

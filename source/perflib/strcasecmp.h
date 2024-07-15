@@ -7,8 +7,8 @@
  * https://www.openssl.org/source/license.html
  */
 
-#ifndef OSSL_PERFLIB_STRCASECMP_H
-# define OSSL_PERFLIB_STRCASECMP_H
+#ifndef OSSL_PERFLIB_BASENAME_H
+# define OSSL_PERFLIB_BASENAME_H
 # pragma once
 
 extern const char *basename(const char *);
