@@ -18,9 +18,8 @@ int optind = 0;
 
 
 int
-getopt(int argc, const char *argv[], const char *optstr)
+getopt(int argc, char * const argv[], const char *optstr)
 {
-	int	c;
 	char	*o;
 
 	optind++;

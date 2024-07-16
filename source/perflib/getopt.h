@@ -13,7 +13,6 @@
 
 extern const char *optarg;
 extern int optind;
-
-extern int getopt(int argc, const char *argv[], const char *);
+extern int getopt(int argc, char * const argv[], const char *);
 
 #endif

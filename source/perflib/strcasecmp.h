@@ -12,7 +12,7 @@
 
 # pragma once
 
-extern const char *strcasecmp(const char *);
+extern int strcasecmp(const char *, const char *);
 
 #endif
 
