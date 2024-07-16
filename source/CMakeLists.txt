@@ -14,6 +14,8 @@
 # then you can build tools using cmake:
 #	cmake --build ./build
 #
+# On windows ask for release build:
+#	cmake --build ./build --config Release
 #
 
 cmake_minimum_required(VERSION 3.10)
