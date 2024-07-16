@@ -7,6 +7,9 @@
 # run cmake as follows:
 #	cmake -S . -B ./build
 # option -B defines location of project files and resulting binaries.
+# Looks like cmake is not able to pickup OPENSSL_ROOT_DIR from env.
+# variables, it must be passed explicitly on command line as -DOPENSSL_ROOT_DIR
+#	cmake -S . -B ./build -DOPENSSL_ROOT_DIR=c:\Users\your\openssl.root\...
 #
 # then you can build tools using cmake:
 #	cmake --build ./build
@@ -19,12 +22,7 @@ project(perf-tools)
 add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 	perflib/time.c perflib/getopt.c perflib/basename.c perflib/strcasecmp.c)
 
-#
-# Using PRIVATE instead of PUBLIC will will break build with 1.1.1 version
-# on Windows. This glitch is specific to 1.1.1 3.x versions do build fine.
-# So let's keep PUBLIC here.
-#
-include_directories(PUBLIC ${OPENSSL_INCLUDE_DIR} . )
+include_directories(PRIVATE ${OPENSSL_INCLUDE_DIR} . )
 
 find_package(Threads)
 link_libraries(${CMAKE_THREAD_LIBS_INIT})
