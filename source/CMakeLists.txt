@@ -1,21 +1,91 @@
 #
-# make sure to set env. variables first:
-#	OPENSSL_ROOT_DIR - points to OpenSSL installation
-#		prefix with desired version
+# Configuration
+# =============
 #
-# to run performance test I suggest to build binaries outside of soruces.
-# run cmake as follows:
-#	cmake -S . -B ./build
-# option -B defines location of project files and resulting binaries.
-# Looks like cmake is not able to pickup OPENSSL_ROOT_DIR from env.
-# variables, it must be passed explicitly on command line as -DOPENSSL_ROOT_DIR
-#	cmake -S . -B ./build -DOPENSSL_ROOT_DIR=c:\Users\your\openssl.root\...
+# To run performance test, it is suggested to build binaries outside of soruces.
+# In the examples shown here, ./build is used with the normal CMake option to
+# indicate the build directory.
 #
-# then you can build tools using cmake:
+# Configuration may be tricky with regards to using your OpenSSL installation
+# of choice.  There are two ways:
+#
+# 1. Module mode:
+#
+#    - To use the system installation, or an installation in /usr/local,
+#      nothing special needs to be set
+#    - To use your own installation, such as in $HOME/.local, you can set
+#      CMAKE_PREFIX_PATH to that directory.  Alternatively, you can use
+#      OPENSSL_ROOT_DIR.
+#      Caveat: on Windows, it's safest to always use OPENSSL_ROOT_DIR
+#
+#    Configuration examples:
+#
+#    System installation:
+#
+#        cmake -S . -B ./build
+#
+#    Your own installation (example: in $HOME/.local/opt/openssl-3.2):
+#
+#        cmake -S . -B ./build -DCMAKE_PREFIX_PATH=$HOME/.local/opt/openssl-3.2
+#
+#      or:
+#
+#        cmake -S . -B ./build -DOPENSSL_ROOT_DIR=$HOME/.local/opt/openssl-3.2
+#
+#      or on Windows:
+#
+#        cmake -S . -B ./build -DOPENSSL_ROOT_DIR=c:\Users\your\openssl.root
+#
+# 2. Config mode:
+#
+#    Support for Config mode is a fairly new addition to OpenSSL (only supported
+#    by openSSL 3.3 and up).  It's only used by CMake when the Module mode hasn't
+#    found Find<Package>.cmake, or when explicitly told to use Config mode only.
+#
+#    These two variables are involved:
+#
+#    - OPENSSL_CONFIG_MODE
+#
+#      Set to some value that means True to CMake (1, or YES), to force Config mode
+#      to be used when looking for the openSSL package.
+#
+#    - CMAKE_PREFIX_PATH, if you want to use your own installation, or even just your
+#      uninstalled OpenSSL build.
+#
+#    Configuration examples:
+#
+#    System installation:
+#
+#        cmake -S . -B ./build -DOPENSSL_CONFIG_MODE=1
+#
+#    Your own installation (example: in $HOME/.local/opt/openssl-3.3):
+#
+#        cmake -S . -B ./build -DOPENSSL_CONFIG_MODE=1 -DCMAKE_PREFIX_PATH=$HOME/.local/opt/openssl-3.3
+#
+#    Your own uninstalled build (example: in $HOME/tmp/openssl-3.3-build):
+#
+#        cmake -S . -B ./build -DOPENSSL_CONFIG_MODE=1 -DCMAKE_PREFIX_PATH=$HOME/tmp/openssl-3.3-build
+#
+# Build
+# =====
+#
+# Build in default (Debug) mode:
+#
 #	cmake --build ./build
 #
-# On windows ask for release build:
+# Build in Release mode (only relevant for multi-configuration build generators,
+# such as the default on Windows):
+#
 #	cmake --build ./build --config Release
+#
+# Running
+# =======
+#
+# All programs that are built are in the build directory.
+#
+# Example:
+#
+#       ./build/randbytes 10
 #
 
 cmake_minimum_required(VERSION 3.10)
@@ -29,7 +99,13 @@ include_directories(PRIVATE ${OPENSSL_INCLUDE_DIR} . )
 find_package(Threads)
 link_libraries(${CMAKE_THREAD_LIBS_INIT})
 
-find_package(OpenSSL REQUIRED)
+# OpenSSL 3.3 and on have config mode files.
+if(OPENSSL_CONFIG_MODE)
+    set(OPENSSL_CONFIG_MODE CONFIG)
+else()
+    unset(OPENSSL_CONFIG_MODE)
+endif()
+find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
 
 if( "${OPENSSL_VERSION}" MATCHES 3\.* )
     add_executable(evp_fetch evp_fetch.c)
