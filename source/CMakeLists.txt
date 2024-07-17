@@ -94,8 +94,6 @@ project(perf-tools)
 add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 	perflib/time.c perflib/getopt.c perflib/basename.c perflib/strcasecmp.c)
 
-include_directories(PRIVATE ${OPENSSL_INCLUDE_DIR} . )
-
 find_package(Threads)
 link_libraries(${CMAKE_THREAD_LIBS_INIT})
 
@@ -107,7 +105,9 @@ else()
 endif()
 find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
 
-if( "${OPENSSL_VERSION}" MATCHES 3\.* )
+include_directories(PRIVATE ${OPENSSL_INCLUDE_DIR} . )
+
+if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(evp_fetch evp_fetch.c)
     target_include_directories(evp_fetch PRIVATE "$(PROJECT_BINARY_DIR)" "$(PROJECT_SOURCE_DIR)")
     target_link_libraries(evp_fetch PRIVATE perf OpenSSL::Crypto)
