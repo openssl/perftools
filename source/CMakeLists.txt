@@ -105,7 +105,7 @@ else()
 endif()
 find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
 
-include_directories(PRIVATE ${OPENSSL_INCLUDE_DIR} . )
+include_directories( ${OPENSSL_INCLUDE_DIR} . )
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(evp_fetch evp_fetch.c)
