@@ -87,6 +87,14 @@
 #
 #       ./build/randbytes 10
 #
+#
+# 32-bit builds
+# =============
+# To perform 32-bit build on windows you need to add
+# 	-DCMAKE_GENERATOR_PLATFORM=Win32
+# option on command line. This also assumes you have 32-bit version of
+# OpenSSL library ready in -DOPENSSL_ROOT_DIR path.
+#
 
 cmake_minimum_required(VERSION 3.10)
 project(perf-tools)
