@@ -137,8 +137,8 @@ evp_setpeer
 
 The evp_setpeer test repeatedly calls the EVP_PKEY_derive_set_peer() function
 on a memory BIO with a private key of desired type.  It does 10000
-repetitions divided evenly among each thread. The number of threads to use is
-provided by option -t. The test reports average time per call. Use option -k
+repetitions divided evenly among each thread. The last argument will be the
+number of threads run. The test reports average time per call. Use option -k
 to select key type for benchmark.  The list of keys for testing is as follows:
 dh, ec256, ec521, x25519.  To run benchmark for all keys using 4 threads, run
 evp_setpeer as follows:
