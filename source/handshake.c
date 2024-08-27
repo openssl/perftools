@@ -97,27 +97,13 @@ int main(int argc, char * const argv[])
             break;
         default:
             printf(
-                "Usage: %s [-t] [-s] threadcount certsdir\n", basename(argv[0]));
+                "Usage: %s [-t] [-s] certsdir threadcount\n", basename(argv[0]));
             printf("-t - terse output\n");
             printf("-s - disable context sharing\n");
             return EXIT_FAILURE;
         }
     }
 
-    if (argv[optind] == NULL) {
-        printf("threadcount argument missing\n");
-        goto err;
-    }
-    threadcount = atoi(argv[optind]);
-    if (threadcount < 1) {
-        printf("threadcount must be > 0\n");
-        goto err;
-    }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
-
-    optind++;
     if (argv[optind] == NULL) {
         printf("certsdir is missing\n");
         goto err;
@@ -128,12 +114,26 @@ int main(int argc, char * const argv[])
         printf("Failed to allocate cert/privkey\n");
         goto err;
     }
+    optind++;
 
+    if (argv[optind] == NULL) {
+        printf("threadcount argument missing\n");
+        goto err;
+    }
+    threadcount = atoi(argv[optind]);
+    if (threadcount < 1) {
+        printf("threadcount must be > 0\n");
+        goto err;
+    }
     times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
     if (times == NULL) {
         printf("Failed to create times array\n");
         goto err;
     }
+
+    num_calls = NUM_CALLS_PER_TEST;
+    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
+        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
 
     if (share_ctx == 1) {
         if (!perflib_create_ssl_ctx_pair(TLS_server_method(), TLS_client_method(),
