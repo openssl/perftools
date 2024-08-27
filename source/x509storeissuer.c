@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
             terse = 1;
             break;
         default:
-            printf("Usage: %s [-t] threadcount certsdir\n", basename(argv[0]));
+            printf("Usage: %s [-t] certsdir threadcount\n", basename(argv[0]));
             printf("-t - terse output\n");
             return EXIT_FAILURE;
         }
