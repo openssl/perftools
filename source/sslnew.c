@@ -123,6 +123,7 @@ int main(int argc, char *argv[])
     else
         printf("Average time per SSL/BIO creation call: %lfus\n",
                avcalltime);
+    rc = EXIT_SUCCESS;
 out:
     SSL_CTX_free(ctx);
     OPENSSL_free(times);
