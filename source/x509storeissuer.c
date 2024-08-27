@@ -87,6 +87,17 @@ int main(int argc, char *argv[])
     }
 
     if (argv[optind] == NULL) {
+        printf("certsdir is missing\n");
+        goto err;
+    }
+    cert = perflib_mk_file_path(argv[optind], "servercert.pem");
+    if (cert == NULL) {
+        printf("Failed to allocate cert\n");
+        goto err;
+    }
+    optind++;
+
+    if (argv[optind] == NULL) {
         printf("threadcount is missing\n");
         goto err;
     }
@@ -98,17 +109,6 @@ int main(int argc, char *argv[])
     num_calls = NUM_CALLS_PER_TEST;
     if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
         num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
-
-    optind++;
-    if (argv[optind] == NULL) {
-        printf("certsdir is missing\n");
-        goto err;
-    }
-    cert = perflib_mk_file_path(argv[optind], "servercert.pem");
-    if (cert == NULL) {
-        printf("Failed to allocate cert\n");
-        goto err;
-    }
 
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store)) {
