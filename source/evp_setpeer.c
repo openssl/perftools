@@ -102,8 +102,7 @@ static void report_result(int key_id, int terse)
     }
 
     if (terse)
-        printf("[%s] %lfus\n", sample_names[key_id],
-            get_avcalltime());
+        printf("%lf\n", get_avcalltime());
     else
         printf("Average time per %s evp_set_peer call: %lfus\n",
             sample_names[key_id], get_avcalltime());

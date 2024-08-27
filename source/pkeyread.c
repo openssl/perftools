@@ -184,8 +184,7 @@ static void report_result(int key_id, int format_id, int terse)
     }
 
     if (terse)
-	printf("[%s %s] %lfus\n", sample_names[key_id],
-	       format_names[format_id], get_avcalltime());
+	printf("%lf\n", get_avcalltime());
     else
 	printf("Average time per %s(%s) call: %lfus\n",
 	       format_names[format_id], sample_names[key_id], get_avcalltime());
