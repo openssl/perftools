@@ -227,7 +227,7 @@ my sub do_test {
 	close PIPE;
 
 	#
-	# need to port-process output for those tests
+	# need to post-process output for those tests
 	#
 	if ("$test_name" eq "rwlocks_wlock") {
 		#
