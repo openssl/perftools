@@ -111,7 +111,13 @@ endif()
 find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
 
 add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
-	perflib/time.c perflib/getopt.c perflib/basename.c perflib/strcasecmp.c)
+	perflib/time.c)
+
+if (WIN32)
+    target_source(perf PUBLIC perflib/getopt.c perflib/basename.c
+        perflib/strcasecmp.c)
+endif()
+
 target_include_directories(perf PUBLIC "$(PROJECT_SOURCE_DIR)")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 
