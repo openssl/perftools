@@ -118,7 +118,7 @@ if (WIN32)
         perflib/strcasecmp.c)
 endif()
 
-target_include_directories(perf PUBLIC "$(PROJECT_SOURCE_DIR)")
+target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
