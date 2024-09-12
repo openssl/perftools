@@ -2,7 +2,7 @@
 # Configuration
 # =============
 #
-# To run performance test, it is suggested to build binaries outside of soruces.
+# To run performance test, it is suggested to build binaries outside of sources.
 # In the examples shown here, ./build is used with the normal CMake option to
 # indicate the build directory.
 #
@@ -39,7 +39,7 @@
 # 2. Config mode:
 #
 #    Support for Config mode is a fairly new addition to OpenSSL (only supported
-#    by openSSL 3.3 and up).  It's only used by CMake when the Module mode hasn't
+#    by OpenSSL 3.3 and up).  It's only used by CMake when the Module mode hasn't
 #    found Find<Package>.cmake, or when explicitly told to use Config mode only.
 #
 #    These two variables are involved:
@@ -47,7 +47,7 @@
 #    - OPENSSL_CONFIG_MODE
 #
 #      Set to some value that means True to CMake (1, or YES), to force Config mode
-#      to be used when looking for the openSSL package.
+#      to be used when looking for the OpenSSL package.
 #
 #    - CMAKE_PREFIX_PATH, if you want to use your own installation, or even just your
 #      uninstalled OpenSSL build.
