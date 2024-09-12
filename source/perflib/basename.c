@@ -9,7 +9,6 @@
 
 #include <string.h>
 
-#include <openssl/crypto.h>
 
 /*
  * windows variant of basename(3). works on ASCIIZ only.
@@ -25,7 +24,7 @@ const char *basename(char *path)
 
     slash = strrchr(path, '/');
     bslash = strrchr(path, '\\');
-    rv = (const char *)((slash > bslash) ? slash : bslash);
+    rv = (slash > bslash) ? slash : bslash;
 
     /* no separator */
     if (rv == NULL)
@@ -39,7 +38,7 @@ const char *basename(char *path)
     * trailing separators ('/'  and '\\') are not counted as part of pathname,
     * we must chop them off here.
     */
-    while (rv > path && *rv == '/' && *rv == '\\')
+    while (rv > path && (*rv == '/' || *rv == '\\'))
         rv--;
     rv[1] = '\0';
 
