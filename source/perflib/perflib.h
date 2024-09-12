@@ -22,6 +22,8 @@
 
 typedef HANDLE thread_t;
 
+#  define strcasecmp(_a, _b) _stricmp((_a), (_b))
+
 # else
 
 #  include <pthread.h>

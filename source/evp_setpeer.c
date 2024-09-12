@@ -11,10 +11,10 @@
 #include <stdio.h>
 #include <string.h>
 #ifndef _WIN32
-#include <unistd.h>
+# include <unistd.h>
 #else
-#include <windows.h>
-#include "perflib/getopt.h"
+# include <windows.h>
+# include "perflib/getopt.h"
 #endif	/* _WIN32 */
 #include <openssl/evp.h>
 #include "perflib/perflib.h"
