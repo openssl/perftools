@@ -17,40 +17,40 @@ int optind = 0;
 
 int getopt(int argc, char * const argv[], const char *optstr)
 {
-	char	*o;
+    char	*o;
 
-	optind++;
+    optind++;
 
-	if (optind >= argc)
-		return (-1);
+    if (optind >= argc)
+        return -1;
 
-	optarg = argv[optind];
-	if (*optarg != '-') {
-		/* missing hyphen, then we are done */
-		optarg = NULL;
-		return (-1);
-	}
-	optarg++;
+    optarg = argv[optind];
+    if (*optarg != '-') {
+        /* missing hyphen, then we are done */
+        optarg = NULL;
+        return -1;
+    }
+    optarg++;
 
-	o = strchr(optstr, *optarg);
-	if (o == NULL) {
-		/* unknown option, report error */
-		optarg = NULL;
-		return ('?');
-	}
+    o = strchr(optstr, *optarg);
+    if (o == NULL) {
+        /* unknown option, report error */
+        optarg = NULL;
+        return '?';
+    }
 
-	if (o[1] == ':') {
-		/* option has argument */
-		optind++;
-		if (optind >= argc) {
-			/* but argument is missing, report error */
-			optarg = NULL;
-			return ('?');
-		}
-		optarg = argv[optind];
-	} else {
-		optarg = NULL;
-	}
+    if (o[1] == ':') {
+        /* option has argument */
+        optind++;
+        if (optind >= argc) {
+            /* but argument is missing, report error */
+            optarg = NULL;
+            return '?';
+        }
+        optarg = argv[optind];
+    } else {
+        optarg = NULL;
+    }
 
-	return (*o);
+    return *o;
 }

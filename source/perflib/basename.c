@@ -17,32 +17,31 @@
  */
 const char *basename(const char *path)
 {
-	const char *rv, *tmp;
-	const char *dirnamesep;
-	size_t dirseplen;
+    const char *rv, *tmp;
+    const char *dirnamesep;
+    size_t dirseplen;
 
-	dirnamesep = OPENSSL_info(OPENSSL_INFO_DIR_FILENAME_SEPARATOR);
-	if (dirnamesep == NULL)
-		return (NULL);
+    dirnamesep = OPENSSL_info(OPENSSL_INFO_DIR_FILENAME_SEPARATOR);
+    if (dirnamesep == NULL)
+        return NULL;
 
-	dirseplen = strlen(dirnamesep);
-	if (dirseplen == 1) {
+    dirseplen = strlen(dirnamesep);
+    if (dirseplen == 1) {
+        rv = (const char *)strrchr(path, *dirnamesep);
+        if (rv != NULL) {
+            rv++;
+            if (*rv == '\0')
+                rv = path;
+        }
+    } else {
+        rv = path;
+        while ((tmp = strstr(rv, dirnamesep)) != NULL) {
+            tmp += dirseplen;
+            rv = tmp;
+        }
+        if (*rv == '\0')
+            rv = path;
+    }
 
-		rv = (const char *)strrchr(path, *dirnamesep);
-		if (rv != NULL) {
-			rv++;
-			if (*rv == '\0')
-				rv = path;
-		}
-	} else {
-		rv = path;
-		while ((tmp = strstr(rv, dirnamesep)) != NULL) {
-			tmp += dirseplen;
-			rv = tmp;
-		}
-		if (*rv == '\0')
-			rv = path;
-	}
-
-	return (rv);
+    return rv;
 }
