@@ -9,7 +9,6 @@
 
 #include <string.h>
 
-
 /*
  * windows variant of basename(3). works on ASCIIZ only.
  * unlike unix there two variants of path separators on
