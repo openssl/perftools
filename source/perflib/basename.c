@@ -7,26 +7,42 @@
  * https://www.openssl.org/source/license.html
  */
 
-#ifdef	_WIN32
-
 #include <string.h>
+
+#include <openssl/crypto.h>
 
 /*
  * windows variant of basename(3). works on ASCIIZ only.
  * simple and perhaps naive implementation too.
  */
-const char * basename(const char *path)
+const char *basename(const char *path)
 {
-	const char *rv;
+	const char *rv, *tmp;
+	const char *dirnamesep;
+	size_t dirseplen;
 
-	rv = (const char *)strrchr(path, '\\');
-	if (rv != NULL) {
-		rv++;
+	dirnamesep = OPENSSL_info(OPENSSL_INFO_DIR_FILENAME_SEPARATOR);
+	if (dirnamesep == NULL)
+		return (NULL);
+
+	dirseplen = strlen(dirnamesep);
+	if (dirseplen == 1) {
+
+		rv = (const char *)strrchr(path, *dirnamesep);
+		if (rv != NULL) {
+			rv++;
+			if (*rv == '\0')
+				rv = path;
+		}
+	} else {
+		rv = path;
+		while ((tmp = strstr(rv, dirnamesep)) != NULL) {
+			tmp += dirseplen;
+			rv = tmp;
+		}
 		if (*rv == '\0')
 			rv = path;
 	}
 
 	return (rv);
 }
-
-#endif	/* _WIN32 */
