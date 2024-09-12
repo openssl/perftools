@@ -7,8 +7,6 @@
  * https://www.openssl.org/source/license.html
  */
 
-#ifdef	_WIN32
-
 #include <string.h>
 
 #include "getopt.h"
@@ -56,5 +54,3 @@ int getopt(int argc, char * const argv[], const char *optstr)
 
 	return (*o);
 }
-
-#endif	/* _WIN32 */

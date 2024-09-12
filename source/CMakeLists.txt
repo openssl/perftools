@@ -114,8 +114,7 @@ add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 	perflib/time.c)
 
 if (WIN32)
-    target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c
-        perflib/strcasecmp.c)
+    target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c)
 endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
