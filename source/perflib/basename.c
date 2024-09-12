@@ -13,35 +13,48 @@
 
 /*
  * windows variant of basename(3). works on ASCIIZ only.
- * simple and perhaps naive implementation too.
+ * unlike unix there two variants of path separators on
+ * on windows: slash and backslash.
  */
-const char *basename(const char *path)
+const char *basename(char *path)
 {
-    const char *rv, *tmp;
-    const char *dirnamesep;
-    size_t dirseplen;
+    char *slash, *bslash, *rv;
 
-    dirnamesep = OPENSSL_info(OPENSSL_INFO_DIR_FILENAME_SEPARATOR);
-    if (dirnamesep == NULL)
-        return NULL;
+    if (path == NULL || *path == '\0')
+        return ".";
 
-    dirseplen = strlen(dirnamesep);
-    if (dirseplen == 1) {
-        rv = (const char *)strrchr(path, *dirnamesep);
-        if (rv != NULL) {
-            rv++;
-            if (*rv == '\0')
-                rv = path;
-        }
-    } else {
-        rv = path;
-        while ((tmp = strstr(rv, dirnamesep)) != NULL) {
-            tmp += dirseplen;
-            rv = tmp;
-        }
-        if (*rv == '\0')
-            rv = path;
-    }
+    slash = strrchr(path, '/');
+    bslash = strrchr(path, '\\');
+    rv = (const char *)((slash > bslash) ? slash : bslash);
 
-    return rv;
+    /* no separator */
+    if (rv == NULL)
+        return (const char *)path;
+
+    /* separator followed by filename */
+    if (rv[1] != '\0')
+        return (const char *)&rv[1];
+
+   /*
+    * trailing separators ('/'  and '\\') are not counted as part of pathname,
+    * we must chop them off here.
+    */
+    while (rv > path && *rv == '/' && *rv == '\\')
+        rv--;
+    rv[1] = '\0';
+
+    /*
+     * search for preceding separator
+     */
+    while (rv > path && *rv != '/' && *rv != '\\')
+        rv--;
+
+    /*
+     * move to filename path component if there is any, return the separator
+     * otherwise
+     */
+    if ((*rv == '/' || *rv == '\\') && (rv[1] != '\0'))
+        rv++;
+
+    return (const char *)rv;
 }
