@@ -12,7 +12,7 @@
 # pragma once
 
 /*
- * non-posix impleementation, it may return NULL, when arg is NULL or empty
+ * non-POSIX implementation, it may return NULL, when arg is NULL or empty
  * string.
  */
 extern char *basename(char *);
