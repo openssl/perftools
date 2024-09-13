@@ -14,12 +14,12 @@
  * unlike unix there two variants of path separators on
  * on windows: slash and backslash.
  */
-const char *basename(char *path)
+char *basename(char *path)
 {
     char *slash, *bslash, *rv;
 
-    if (path == NULL || *path == '\0')
-        return ".";
+    if (path == NULL)
+        return NULL;
 
     slash = strrchr(path, '/');
     bslash = strrchr(path, '\\');
@@ -27,11 +27,11 @@ const char *basename(char *path)
 
     /* no separator */
     if (rv == NULL)
-        return (const char *)path;
+        return path;
 
     /* separator followed by filename */
     if (rv[1] != '\0')
-        return (const char *)&rv[1];
+        return &rv[1];
 
    /*
     * trailing separators ('/'  and '\\') are not counted as part of pathname,
@@ -54,5 +54,5 @@ const char *basename(char *path)
     if ((*rv == '/' || *rv == '\\') && (rv[1] != '\0'))
         rv++;
 
-    return (const char *)rv;
+    return rv;
 }
