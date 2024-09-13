@@ -11,6 +11,10 @@
 # define OSSL_PERFLIB_BASENAME_H
 # pragma once
 
-extern const char *basename(const char *);
+/*
+ * non-posix impleementation, it may return NULL, when arg is NULL or empty
+ * string.
+ */
+extern char *basename(char *);
 
 #endif
