@@ -23,6 +23,20 @@ char *basename(char *path)
 
     slash = strrchr(path, '/');
     bslash = strrchr(path, '\\');
+    /*
+     * We need to 'normalize' slash and bslash, because comparison between NULL
+     * and address is considered as undefined behavior (C11 6.5.8 relational
+     * operators).  if both are NULL then there is no separator.  If we found
+     * found at least one separator then we can assume the missing separator is
+     * the leftmost one (equal to path).  Then we can proceed to pointer
+     * comparison to see which separator is the last one (the rightmost).
+     */
+    if (slash == NULL && bslash == NULL)
+        return path;
+    if (slash == NULL)
+        slash = path;
+    if (bslash == NULL)
+        bslash = path;
     rv = (slash > bslash) ? slash : bslash;
 
     /* no separator */
