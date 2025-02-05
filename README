@@ -104,7 +104,8 @@ The test takes the number of threads to use as an argument and the test reports
 the average time take to execute a block of 1000 X509_STORE_CTX_get1_issuer()
 calls.
 
-providerdoall -------------
+providerdoall
+-------------
 
 The providerdoall test repeatedly calls the OSSL_PROVIDER_do_all() function.
 It does 100000 repetitions divided evenly among each thread. The number of
