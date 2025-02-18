@@ -143,3 +143,18 @@ to select key type for benchmark.  The list of keys for testing is as follows:
 dh, ec256, ec521, x25519.  To run benchmark for all keys using 4 threads, run
 evp_setpeer as follows:
     ./evp_setpeer -k all -t 4
+
+writeread
+---------
+
+Performs an in-memory client and server handshake and measures the average
+time taken for a single sequence of calling SSL_write_ex() on the client and
+SSL_read_ex() on the server.  In total 1000000 writes and reads are performed
+divided evenly among each thread. It take 4 optional and 2 required arguments:
+writeread [-t] [-s] [-d] [-b size] <certsdir> <threadcount>
+-t - produce terse output.
+-s - create an ssl_ctx per connection, rather than a single thread-shared ctx.
+-d - use DTLS as connection method.
+-b - size of buffer to write and read, default is 1024 bytes.
+certsdir - directory where the test can locate servercert.pem and serverkey.pem.
+threadcount - number of concurrent threads to run in test.
