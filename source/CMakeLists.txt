@@ -154,3 +154,6 @@ target_link_libraries(pkeyread PRIVATE perf)
 
 add_executable(evp_setpeer evp_setpeer.c)
 target_link_libraries(evp_setpeer PRIVATE perf)
+
+add_executable(writeread writeread.c)
+target_link_libraries(writeread PRIVATE perf)
