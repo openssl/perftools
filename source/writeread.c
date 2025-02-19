@@ -135,45 +135,45 @@ int main(int argc, char * const argv[])
         case 'b':
             buf_size = atoi(optarg);
             if (buf_size < 1) {
-                printf("Buffer size argument must be > 0\n");
+                fprintf(stderr, "Buffer size argument must be > 0\n");
                 return EXIT_FAILURE;
             }
             break;
         default:
-            printf("Usage: %s [-t] [-s] [-d] [-b size] certsdir threadcount\n",
-                   basename(argv[0]));
-            printf("-t - terse output\n");
-            printf("-s - disable context sharing\n");
-            printf("-d - use DTLS as connection method\n");
-            printf("-b - size of buffer to write and read (Default: 1024)\n");
+            fprintf(stderr, "Usage: %s [-t] [-s] [-d] [-b size] certsdir threadcount\n",
+                    basename(argv[0]));
+            fprintf(stderr, "-t - terse output\n");
+            fprintf(stderr, "-s - disable context sharing\n");
+            fprintf(stderr, "-d - use DTLS as connection method\n");
+            fprintf(stderr, "-b - size of buffer to write and read (Default: 1024)\n");
             return EXIT_FAILURE;
         }
     }
 
     if (argv[optind] == NULL) {
-        printf("certsdir is missing\n");
+        fprintf(stderr, "certsdir is missing\n");
         goto err;
     }
     cert = perflib_mk_file_path(argv[optind], "servercert.pem");
     privkey = perflib_mk_file_path(argv[optind], "serverkey.pem");
     if (cert == NULL || privkey == NULL) {
-        printf("Failed to allocate cert/privkey\n");
+        fprintf(stderr, "Failed to allocate cert/privkey\n");
         goto err;
     }
     optind++;
 
     if (argv[optind] == NULL) {
-        printf("threadcount argument missing\n");
+        fprintf(stderr, "threadcount argument missing\n");
         goto err;
     }
     threadcount = atoi(argv[optind]);
     if (threadcount < 1) {
-        printf("threadcount must be > 0\n");
+        fprintf(stderr, "threadcount must be > 0\n");
         goto err;
     }
     times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
     if (times == NULL) {
-        printf("Failed to create times array\n");
+        fprintf(stderr, "Failed to create times array\n");
         goto err;
     }
 
@@ -184,18 +184,18 @@ int main(int argc, char * const argv[])
     if (share_ctx == 1) {
         if (!perflib_create_ssl_ctx_pair(smethod, cmethod, 0, 0,
                                          &sctx, &cctx, cert, privkey)) {
-            printf("Failed to create SSL_CTX pair\n");
+            fprintf(stderr, "Failed to create SSL_CTX pair\n");
             goto err;
         }
     }
 
     if (!perflib_run_multi_thread_test(do_writeread, threadcount, &duration)) {
-        printf("Failed to run the test\n");
+        fprintf(stderr, "Failed to run the test\n");
         goto err;
     }
 
     if (err) {
-        printf("Error during test\n");
+        fprintf(stderr, "Error during test\n");
         goto err;
     }
 
