@@ -97,10 +97,12 @@ x509storeissuer
 
 Runs the function call X509_STORE_CTX_get1_issuer() repeatedly in a loop (which
 is used in certificate chain building as part of a verify operation). The test
-assumes that the default certificates directly exists but is empty. For a
-default configuration this is "/usr/local/ssl/certs". The test takes the number
-of threads to use as an argument and the test reports the average time take to
-execute a block of 1000 X509_STORE_CTX_get1_issuer() calls.
+assumes that the default certificates directory exists and contains the
+file servercert.pem (which can be copied from test/certs/servercert.pem, or
+created on your own.
+The test takes the number of threads to use as an argument and the test reports
+the average time take to execute a block of 1000 X509_STORE_CTX_get1_issuer()
+calls.
 
 providerdoall
 -------------
