@@ -26,9 +26,14 @@
 size_t num_calls;
 OSSL_TIME *times;
 
+enum {
+    ALGO_X25519,
+} algorithm = ALGO_X25519;
+const char *alg_name = "X25519";
+
 int err = 0;
 
-static unsigned char buf[32] = {
+static unsigned char key_x25519[32] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
     0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
     0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f
@@ -41,16 +46,43 @@ void do_newrawkey(size_t num)
     size_t i;
     EVP_PKEY *pkey;
     OSSL_TIME start, end;
+    const unsigned char *key_data = key_x25519;
+    size_t key_len = sizeof(key_x25519);
+
+    switch (algorithm) {
+#if OPENSSL_VERSION_NUMBER >= 0x30500000L
+        case ALGO_ML_KEM_512:
+            key_data = key_ml_kem512;
+            key_len = sizeof(key_ml_kem512);
+            break;
+        case ALGO_ML_KEM_768:
+            key_data = key_ml_kem768;
+            key_len = sizeof(key_ml_kem768);
+            break;
+        case ALGO_ML_KEM_1024:
+            key_data = key_ml_kem1024;
+            key_len = sizeof(key_ml_kem1024);
+            break;
+#endif
+        /*
+         * x25519 is the default algorithm
+         */
+        default:
+            break;
+    }
 
     start = ossl_time_now();
 
     for (i = 0; i < num_calls / threadcount; i++) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-        pkey = EVP_PKEY_new_raw_public_key_ex(NULL, "X25519", NULL, buf,
-                                              sizeof(buf));
+        pkey = EVP_PKEY_new_raw_public_key_ex(NULL, alg_name, NULL, key_data,
+                                              key_len);
 #else
-        pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, buf,
-                                           sizeof(buf));
+        /*
+         * For OpenSSL versions < 3.0, we test only x25519
+         */
+        pkey = EVP_PKEY_new_raw_public_key(EVP_PKEY_X25519, NULL, key_data,
+                                           sizeof(key_data));
 #endif
         if (pkey == NULL)
             err = 1;
@@ -72,14 +104,24 @@ int main(int argc, char *argv[])
     int rc = EXIT_FAILURE;
     int opt;
 
-    while ((opt = getopt(argc, argv, "t")) != -1) {
+    while ((opt = getopt(argc, argv, "ta:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
             break;
+        case 'a':
+            if (strcmp(optarg, "x25519") == 0) {
+                algorithm = ALGO_X25519;
+                alg_name = "X25519";
+            } else {
+                printf("Unknown algorithm %s\n", optarg);
+                return EXIT_FAILURE;
+            }
+            break;
         default:
-            printf("Usage: %s [-t] threadcount\n", basename(argv[0]));
+            printf("Usage: %s [-t] [-a algorithm] threadcount\n", basename(argv[0]));
             printf("-t - terse output\n");
+            printf("-a algorithm - specify the algorithm to test (default: x25519)\n");
             return EXIT_FAILURE;
         }
     }
@@ -130,8 +172,8 @@ int main(int argc, char *argv[])
     if (terse)
         printf("%lf\n", av);
     else
-        printf("Average time per EVP_PKEY_new_raw_public_key_ex() call: %lfus\n",
-               av);
+        printf("Average time per EVP_PKEY_new_raw_public_key_ex() call for algorithm %s: %lfus\n",
+               alg_name, av);
 
     rc = EXIT_SUCCESS;
 out:
