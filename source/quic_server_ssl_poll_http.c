@@ -348,8 +348,8 @@ struct poll_event_stream {
 
 struct poll_event_response {
     poll_event_base;
-    struct poll_event_connection *per_conn;
-    unsigned int per_len;
+    struct poll_event_connection *per_pec;
+    size_t per_len;
 };
 /*
  * Response buffer.
@@ -771,7 +771,7 @@ new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
     t = time(&t);
     ctime_r(&t, date_str);
     hlen = snprintf(rtf->rtf_headers, sizeof (rtf->rtf_headers),
-                    "GET %s HTTP/1.0 200 OK\r\n"
+                    "GET %s HTTP/1.0K\r\n"
                     "Content-Type: text/plain\r\n"
                     "Content-Length: %zu\r\n"
                     "Date: %s\r\n"
@@ -1380,12 +1380,6 @@ get_response_from_pec(struct poll_event_connection *pec, int stype)
 }
 
 static void
-app_ondestroy_cb(struct poll_event *pe)
-{
-    rb_destroy((struct response_buffer *)pe->pe_appdata);
-}
-
-static void
 app_destroy_qconn(struct poll_event *pe)
 {
     struct poll_event_connection *pec;
@@ -1452,6 +1446,12 @@ app_handle_qconn_error(struct poll_event *pe)
 /*
  * HTTP/1.0 server application
  */
+static void
+srvapp_ondestroy_cb(struct poll_event *pe)
+{
+    rb_destroy((struct response_buffer *)pe->pe_appdata);
+}
+
 static int
 srvapp_handle_stream_error(struct poll_event *pe)
 {
@@ -1750,7 +1750,7 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
     if (qconn_pe != NULL) {
         qs_pe->pe_cb_error = srvapp_handle_stream_error;
         qs_pe->pe_cb_out = srvapp_write_cb; /* unidirectional stream is outbound */
-        qs_pe->pe_cb_ondestroy = app_ondestroy_cb;
+        qs_pe->pe_cb_ondestroy = srvapp_ondestroy_cb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_EW;
 
         if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
@@ -1812,7 +1812,7 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
     if (qs_pe != NULL) {
         qs_pe->pe_cb_error = srvapp_handle_stream_error;
         qs_pe->pe_cb_in = srvapp_read_cb;
-        qs_pe->pe_cb_ondestroy = app_ondestroy_cb;
+        qs_pe->pe_cb_ondestroy = srvapp_ondestroy_cb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
         add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
 
@@ -1877,6 +1877,7 @@ run_quic_server(SSL_CTX *ctx, struct poll_manager *pm, int fd)
     struct poll_event *pe;
     struct poll_event_listener *listener_pe = NULL;
     size_t poll_items;
+    struct timeval tv = { 1, 0 };
 
     /* Create a new QUIC listener */
     if ((listener = SSL_new_listener(ctx, 0)) == NULL)
@@ -1921,7 +1922,7 @@ run_quic_server(SSL_CTX *ctx, struct poll_manager *pm, int fd)
     while (stop_server == 0 && pm->pm_continue) {
         rebuild_poll_set(pm);
         ok = SSL_poll((SSL_POLL_ITEM *)pm->pm_poll_set, pm->pm_event_count,
-                      sizeof (struct poll_event), NULL, 0, &poll_items);
+                      sizeof (struct poll_event), &tv, 0, &poll_items);
 
         if (ok == 0 && poll_items == 0)
             break;
@@ -2219,22 +2220,36 @@ clntapp_write_cb(struct poll_event *pe)
 static int
 clntapp_read_cb(struct poll_event *pe)
 {
-    struct poll_event_stream *pes = pe_to_stream(pe);
+    struct poll_event_response *per;
     char devnull[16384];
     size_t read_len;
     int rv;
 
-    if (pes == NULL)
+    per = (struct poll_event_response *) pe_to_stream(pe);
+    if (per == NULL) {
+        DPRINTFC(stderr, "%s unexpected event type (want stream, got %s)\n",
+                 __func__, pe_type_to_name(pe));
         return -1;
+    }
 
     rv = SSL_read_ex(get_ssl_from_pe(pe), devnull, sizeof (devnull), &read_len);
-    if (rv == 0)
+    if ((rv == 0) || (read_len == 0)) {
         rv = -1; /* stream is done, tell poll manager to remove it */
-    else
+        DPRINTFC(stderr, "%s received: %zu\n", __func__, per->per_len);
+    } else {
         rv = 0;	/* keep polling */
-    pes->pes_wpos_sz += read_len;
+        per->per_len += read_len;
+    }
 
-    return 0;
+    return rv;
+}
+
+static void
+clntapp_ondestroy_cb(struct poll_event *pe)
+{
+    struct poll_event_response *per = (struct poll_event_response *)pe;
+    rb_destroy((struct response_buffer *)pe->pe_appdata);
+    SSL_shutdown(get_ssl_from_pe((struct poll_event *)per->per_pec));
 }
 
 static int
@@ -2252,6 +2267,7 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     assert(pec != NULL);
 
     qconn = get_ssl_from_pe(qconn_pe);
+    qconn_pe->pe_want_events &= ~SSL_POLL_EVENT_OSB;	/* todo: multistream */
 
     if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU)
         qs = SSL_new_stream(qconn, SSL_STREAM_FLAG_UNI);
@@ -2261,11 +2277,12 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
         return -1;
 
     per = new_response_pe(qs);
+    per->per_pec = pec;
     qs_pe = (struct poll_event *)per;
     if (qs_pe != NULL) {
         qs_pe->pe_cb_error = clntapp_handle_stream_error;
         qs_pe->pe_cb_out = clntapp_write_cb;
-        qs_pe->pe_cb_ondestroy = app_ondestroy_cb;
+        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_cb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_EW;
 
         if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
@@ -2273,7 +2290,7 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
         } else if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSB) {
             /* we will enable read side for bi-directional stream */
             qs_pe->pe_type = PE_STREAM;
-            qs_pe->pe_cb_out = clntapp_read_cb;
+            qs_pe->pe_cb_in = clntapp_read_cb;
             qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
         }
 
@@ -2324,11 +2341,11 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
     if (qs == NULL)
         return -1;
 
-    qs_pe = (struct poll_event *)new_stream_pe(qs);
+    qs_pe = (struct poll_event *)new_response_pe(qs);
     if (qs_pe != NULL) {
         qs_pe->pe_cb_error = clntapp_handle_stream_error;
         qs_pe->pe_cb_in = clntapp_read_cb;
-        qs_pe->pe_cb_ondestroy = app_ondestroy_cb;
+        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_cb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
         add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
 
@@ -2520,6 +2537,10 @@ create_client_pe(SSL_CTX *ctx)
     qc_pe->pe_cb_out = clntapp_new_stream_cb;
     qc_pe->pe_cb_error = app_handle_qconn_error;
     qc_pe->pe_cb_ondestroy = app_destroy_qconn;
+    /*
+     * client wants to send request, it needs to create outbound stream.
+     */
+    qc_pe->pe_want_events |= SSL_POLL_EVENT_OSB;
 
     return qc_pe;
 
@@ -2543,7 +2564,7 @@ client_thread(void)
     if (ctx == NULL)
         errx(1, "%s SSL_CTX_new() failed", __func__);
 
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
     if (!SSL_CTX_set_default_verify_paths(ctx))
         errx(1, "%s SSL_CTX_set_default_verify_paths() failed", __func__);
@@ -2561,6 +2582,8 @@ client_thread(void)
     }
 
     add_pe_to_pm(pm, pec);
+    rebuild_poll_set(pm);
+    SSL_connect(get_ssl_from_pe(pec));
 
     rv = run_quic_client(pm);
 
@@ -2605,6 +2628,7 @@ main(int argc, char *argv[])
 
     if (perflib_run_thread(&srv_thrd, &targ) != 0) {
         /* success do the client job */
+        client_thread();
         stop_server = 1;
         perflib_wait_for_thread(srv_thrd);
         res = EXIT_SUCCESS;
