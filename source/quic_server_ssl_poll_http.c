@@ -126,7 +126,7 @@
     struct name { \
         struct type *tqh_first; /* first element */ \
         struct type **tqh_last; /* addr of last next element */ \
-        unsigned int tqh_count; /* number of members on queue */ \
+        size_t tqh_count; /* number of members on queue */ \
     }
 
 #define POLL_TAILQ_HEAD_INITIALIZER(head) \
@@ -1931,8 +1931,8 @@ run_quic_server(SSL_CTX *ctx, struct poll_manager *pm, int fd)
             if (pe->pe_poll_item.revents == 0)
                 continue;
             DPRINTFS(stderr, "%s %s (%p) " POLL_FMT "\n", __func__,
-                   S pe_type_to_name(pe), pe,
-                   S POLL_PRINTA(pe->pe_poll_item.revents));
+                     pe_type_to_name(pe), pe,
+                     POLL_PRINTA(pe->pe_poll_item.revents));
             pe->pe_self->pe_poll_item.revents = pe->pe_poll_item.revents;
             if (pe->pe_poll_item.revents & SSL_POLL_ERROR)
                 e = pe->pe_cb_error(pe->pe_self);
@@ -1952,7 +1952,6 @@ run_quic_server(SSL_CTX *ctx, struct poll_manager *pm, int fd)
 err:
     SSL_free(listener);
     destroy_pe((struct poll_event *)listener_pe);
-    destroy_poll_manager(pm);
     return ok;
 }
 
@@ -2105,8 +2104,8 @@ clntapp_handle_stream_error(struct poll_event *pe)
         rv = -1; /* tell pm to stop polling and destroy stream/event */
     } else {
         DPRINTFC(stderr, "%s unexpected failure on writer/reader %p (%s) "
-                CPOLL_FMT "\n", __func__, pe, pe_type_to_name(pe),
-                CPOLL_PRINTA(pe->pe_poll_item.revents));
+                 POLL_FMT "\n", __func__, pe, pe_type_to_name(pe),
+                 POLL_PRINTA(pe->pe_poll_item.revents));
         rv = -1; /* tell pm to stop polling and destroy stream/event */
     }
 
@@ -2179,8 +2178,8 @@ clntapp_write_cb(struct poll_event *pe)
                  pe, pe_type_to_name(pe));
         rv = SSL_stream_conclude(get_ssl_from_pe(pe), 0);
         if (rv == 0) {
-            DPRINTFC(stderr, "%s Wow, stream conclude failed\n", __func__,
-                     pe, pe_type_to_name(pe));
+            DPRINTFC(stderr, "%s Wow, stream conclude failed %p (%s)\n",
+                     __func__, pe, pe_type_to_name(pe));
             return -1;
         }
         pe_disable_write(pe);
@@ -2408,7 +2407,7 @@ create_socket_bio(const char *hostname, const char *port, int family,
 
     if (!BIO_lookup_ex(hostname, port, BIO_LOOKUP_CLIENT, family, SOCK_DGRAM, 0,
                        &res)) {
-        DPRINTFC("%s BIO_lookp_ex failed\n", __func__);
+        DPRINTFC(stderr, "%s BIO_lookp_ex failed\n", __func__);
         return NULL;
     }
 
@@ -2436,7 +2435,7 @@ create_socket_bio(const char *hostname, const char *port, int family,
         *peer_addr = BIO_ADDR_dup(BIO_ADDRINFO_address(ai));
         if (*peer_addr == NULL) {
             BIO_closesocket(sock);
-            DPRINTFC("%s could not allocate peer_addr\n", __func__);
+            DPRINTFC(stderr, "%s could not allocate peer_addr\n", __func__);
             return NULL;
         }
     }
@@ -2444,14 +2443,14 @@ create_socket_bio(const char *hostname, const char *port, int family,
     BIO_ADDRINFO_free(res);
 
     if (sock == -1) {
-        DPRINTFC("%s could not connect to %s:%s\n", __func__, hostname,
-            portstr);
+        DPRINTFC(stderr, "%s could not connect to %s:%s\n", __func__, hostname,
+                 portstr);
         return NULL;
     }
 
     bio = BIO_new(BIO_s_datagram());
     if (bio == NULL) {
-        DPRINTFC("%s could create bio for socket\n", __func__);
+        DPRINTFC(stderr, "%s could create bio for socket\n", __func__);
         BIO_closesocket(sock);
         return NULL;
     }
@@ -2472,48 +2471,48 @@ create_client_pe(SSL_CTX *ctx)
 
     qconn = SSL_new(ctx);
     if (qconn == NULL) {
-        DPRINTFC("%s SSL_new() failed\n", __func__);
+        DPRINTFC(stderr, "%s SSL_new() failed\n", __func__);
         goto fail;
     }
 
     bio = create_socket_bio(hostname, portstr, AF_INET, &peer_addr);
     if (bio == NULL) {
-        DPRINTFC("%s no bio\n", __func__);
+        DPRINTFC(stderr, "%s no bio\n", __func__);
         goto fail;
     }
     SSL_set_bio(qconn, bio, bio);
     bio = NULL;
 
     if (SSL_set_tlsext_host_name(qconn, hostname) == 0) {
-        DPRINTFC("%s SSL_set_tlsext_host_name() failed\n", __func__);
+        DPRINTFC(stderr, "%s SSL_set_tlsext_host_name() failed\n", __func__);
         goto fail;
     }
 
     if (SSL_set1_host(qconn, hostname) == 0) {
-        DPRINTFC("%s SSL_set1_host() failed\n", __func__);
+        DPRINTFC(stderr, "%s SSL_set1_host() failed\n", __func__);
         goto fail;
     }
 
     /* SSL_set_alpn_protos returns 0 for success! */
     if (SSL_set_alpn_protos(qconn, alpn, sizeof(alpn)) != 0) {
-        DPRINTFC("%s SSL_set_alpn_protos() failed\n", __func__);
+        DPRINTFC(stderr, "%s SSL_set_alpn_protos() failed\n", __func__);
         goto fail;
     }
 
     /* Set the IP address of the remote peer */
     if (SSL_set1_initial_peer_addr(qconn, peer_addr) == 0) {
-        DPRINTFC("%s SSL_set1_initial_peer_addr() failed\n", __func__);
+        DPRINTFC(stderr, "%s SSL_set1_initial_peer_addr() failed\n", __func__);
         goto fail;
     }
 
     if (SSL_set_blocking_mode(qconn, 0) == 0) {
-        DPRINTFC("%s SSL_set_blocking_mode() failed\n", __func__);
+        DPRINTFC(stderr, "%s SSL_set_blocking_mode() failed\n", __func__);
         goto fail;
     }
 
     qc_pe = new_qconn_pe(qconn);
     if (qc_pe == NULL) {
-        DPRINTFC("%s new_qconn_pe() failed\n", __func__);
+        DPRINTFC(stderr, "%s new_qconn_pe() failed\n", __func__);
         goto fail;
     }
 
@@ -2604,7 +2603,7 @@ main(int argc, char *argv[])
         errx(res, "Failed to create context");
     }
 
-    if (perflib_run_thread(&srv_thrd, &targ) == 0) {
+    if (perflib_run_thread(&srv_thrd, &targ) != 0) {
         /* success do the client job */
         stop_server = 1;
         perflib_wait_for_thread(srv_thrd);
@@ -2612,6 +2611,7 @@ main(int argc, char *argv[])
     }
 
     SSL_CTX_free(server_ctx);
+    server_ctx = NULL;
     
     return res;
 }
