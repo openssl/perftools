@@ -68,8 +68,14 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/quic.h>
-
 #include "perflib/perflib.h"
+
+#ifndef _WIN32
+# include <unistd.h>
+#else
+# include <windows.h>
+# include "perflib/getopt.h"
+#endif	/* _WIN32 */
 
 /*
  * This is a simple non-blocking QUIC HTTP/1.0 server application.
@@ -403,6 +409,17 @@ static const char *hostname = "localhost";
 static const char *portstr = "8000";
 static SSL_CTX *server_ctx;
 static int stop_server = 0;
+
+/* 100 MB cap on stream size */
+#define	STREAM_SZ_CAP	100 * 1024 * 1024
+static struct client_config {
+    const char *cc_portstr;
+    unsigned int cc_clients;
+    unsigned int cc_bstreams;
+    unsigned int cc_ustreams;
+    unsigned int cc_rep_sz;
+    unsigned int cc_req_sz;
+} client_config;
 
 #ifdef _WIN32
 static const char *progname;
@@ -2594,17 +2611,45 @@ client_thread(void)
     return rv;
 }
 
+static void usage(const char *progname)
+{
+    fprintf(stderr, "%s -p portnum -c connections -b bidi_stream_count "
+                    "-u uni_stream_count -s base_size "
+                    "path/to/cert path/to/certkey\n"
+                    "\t-p port number to use (<1, 65535>), default 8000\n"
+                    "\t-c number of connections to establish, default 10\n"
+                    "\t-b number of bidirectional streams to use, default 10\n"
+                    "\t-u number of unidirectional streams to use, default 10\n"
+                    "\t-s data size to request, default 64\n"
+                    "\t-w request body size, default 64\n"
+                    "program creates server and client thread.\n"
+                    "client establishes `c` connections to server\n"
+                    "Each connection caries `b` `and `u` streams to request data\n"
+                    "from server. Initial size to download is `s` bytes. The second\n"
+                    "stream then carries `s` * 2, third `s` * 3, etc.\n"
+                    "Request body increases usinging the same pattern starting with\n"
+                    "`w` size.\n", __func__);
+    exit(1);
+}
+
 /* Minimal QUIC HTTP/1.0 server. */
 int
 main(int argc, char *argv[])
 {
     int res = EXIT_FAILURE;
+    int ch;
     unsigned long port;
     thread_t srv_thrd;
     struct thread_arg_st targ = {
         server_thread,
         0
     };
+    int ccount = 0;
+    const char *ccountstr = "10";
+    const char *bstreamstr = "10";
+    const char *ustreamstr = "10";
+    const char *rep_sizestr = "64";
+    const char *req_sizestr = "64";
 
 #ifdef _WIN32
     progname = argv[0];
@@ -2613,18 +2658,68 @@ main(int argc, char *argv[])
     if (argc != 4)
         errx(res, "usage: %s <port> <server.crt> <server.key>", argv[0]);
 
-    portstr = argv[1];
-    /* Parse port number from command line arguments. */
-    port = strtoul(argv[1], NULL, 0);
-    if (port == 0 || port > UINT16_MAX)
-        errx(res, "Failed to parse port number");
-    targ.num = port;
+    while ((ch = getopt(argc, argv, "p:c:b:u:s:")) != -1) {
+        switch (ch) {
+        case 'p':
+            portstr = optarg;
+            break;
+        case 'c':
+            ccountstr = optarg;
+            break;
+        case 'b':
+            bstreamstr = optarg;
+            break;
+        case 'u':
+            ustreamstr = optarg;
+            break;
+        case 's':
+            rep_sizestr = optarg;
+            break;
+        case 'w':
+            req_sizestr = optarg;
+            break;
+        default:
+            usage(argv[0]);
+        }
+    }
+
+    if ((argv[optind] == NULL) || (argv[optind + 1] == NULL))
+        usage(argv[0]);
 
     /* Create SSL_CTX that supports QUIC. */
-    if ((server_ctx = create_srv_ctx(argv[2], argv[3])) == NULL) {
+    if ((server_ctx = create_srv_ctx(argv[optind], argv[optind + 1])) == NULL) {
         ERR_print_errors_fp(stderr);
         errx(res, "Failed to create context");
     }
+
+    /* Parse port number from command line arguments. */
+    port = strtoul(portstr, NULL, 0);
+    if (port == 0 || port > UINT16_MAX)
+        errx(res, "Failed to parse port number");
+    targ.num = port;
+    client_config.cc_portstr = portstr;
+
+    client_config.cc_clients = strtoul(ccountstr, NULL, 0);
+    if (client_config.cc_clients <= 0 || client_config.cc_clients > 100)
+        errx(res, "number of clients must be in <1, 100>");
+
+    client_config.cc_bstreams = strtoul(bstreamstr, NULL, 0);
+    if (client_config.cc_bstreams <= 0 || client_config.cc_bstreams > 1000)
+        errx(res, "number of bidi streams must be in <1, 1000>");
+
+    client_config.cc_ustreams = strtoul(ustreamstr, NULL, 0);
+    if (client_config.cc_ustreams <= 0 || client_config.cc_ustreams > 1000)
+        errx(res, "number of bidi streams must be in <1, 1000>");
+
+    client_config.cc_rep_sz = strtoul(rep_sizestr, NULL, 0);
+    if (client_config.cc_rep_sz <= 0 || client_config.cc_rep_sz > STREAM_SZ_CAP)
+        errx(res, "data size to request outside of range <1, %u>",
+             STREAM_SZ_CAP);
+
+    client_config.cc_req_sz = strtoul(req_sizestr, NULL, 0);
+    if (client_config.cc_rep_sz < 0 || client_config.cc_rep_sz > STREAM_SZ_CAP)
+        errx(res, "request payload  size is outside of range <0, %u>",
+             STREAM_SZ_CAP);
 
     if (perflib_run_thread(&srv_thrd, &targ) != 0) {
         /* success do the client job */
