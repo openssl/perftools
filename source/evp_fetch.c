@@ -108,6 +108,14 @@ static struct fetch_data_entry fetch_entries[] = {
     {FETCH_PQ_SIGNATURE, "ML-DSA-65", NULL},
     {FETCH_PQ_SIGNATURE, "ML-DSA-87", NULL},
 #endif
+#ifndef OPENSSL_NO_SLH_DSA
+    {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-128s", NULL},
+    {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-192s", NULL},
+    {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-256s", NULL},
+    {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-128f", NULL},
+    {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-192f", NULL},
+    {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-256f", NULL},
+#endif
 };
 
 void do_fetch(size_t num)
