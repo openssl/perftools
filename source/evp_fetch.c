@@ -43,6 +43,7 @@ typedef enum {
     FETCH_KDF,
     FETCH_MAC,
     FETCH_RAND,
+    FETCH_PQ_KEM,
     FETCH_END
 } fetch_type_t;
 
@@ -56,7 +57,8 @@ struct fetch_type_map type_map[] = {
     { "CIPHER", FETCH_CIPHER },
     { "KDF"   , FETCH_KDF },
     { "MAC"   , FETCH_MAC },
-    { "RAND"  , FETCH_RAND }
+    { "RAND"  , FETCH_RAND },
+    { "KEM"   , FETCH_PQ_KEM },
 };
 
 fetch_type_t exclusive_fetch_type = FETCH_END;
@@ -93,6 +95,11 @@ static struct fetch_data_entry fetch_entries[] = {
     {FETCH_MAC, OSSL_MAC_NAME_HMAC, NULL},
 #ifndef OPENSSL_NO_POLY1305
     {FETCH_MAC, OSSL_MAC_NAME_POLY1305, NULL},
+#endif
+#ifndef OPENSSL_NO_ML_KEM
+    {FETCH_PQ_KEM, "ML-KEM-512", NULL},
+    {FETCH_PQ_KEM, "ML-KEM-768", NULL},
+    {FETCH_PQ_KEM, "ML-KEM-1024", NULL},
 #endif
 };
 
@@ -181,6 +188,17 @@ void do_fetch(size_t num)
                 return;
             }
             EVP_RAND_free(rnd);
+            break;
+        }
+        case FETCH_PQ_KEM: {
+            EVP_KEM *kem = EVP_KEM_fetch(ctx, fetch_alg,
+                                         fetch_entries[j].propq);
+            if (kem == NULL) {
+                fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
+                err = 1;
+                return;
+            }
+            EVP_KEM_free(kem);
             break;
         }
         default:
