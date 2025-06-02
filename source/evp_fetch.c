@@ -44,6 +44,7 @@ typedef enum {
     FETCH_MAC,
     FETCH_RAND,
     FETCH_PQ_KEM,
+    FETCH_PQ_SIGNATURE,
     FETCH_END
 } fetch_type_t;
 
@@ -53,12 +54,13 @@ struct fetch_type_map {
 };
 
 struct fetch_type_map type_map[] = {
-    { "MD"    , FETCH_MD },
-    { "CIPHER", FETCH_CIPHER },
-    { "KDF"   , FETCH_KDF },
-    { "MAC"   , FETCH_MAC },
-    { "RAND"  , FETCH_RAND },
-    { "KEM"   , FETCH_PQ_KEM },
+    { "MD"        , FETCH_MD },
+    { "CIPHER"    , FETCH_CIPHER },
+    { "KDF"       , FETCH_KDF },
+    { "MAC"       , FETCH_MAC },
+    { "RAND"      , FETCH_RAND },
+    { "KEM"       , FETCH_PQ_KEM },
+    { "SIGNATURE" , FETCH_PQ_SIGNATURE },
 };
 
 fetch_type_t exclusive_fetch_type = FETCH_END;
@@ -100,6 +102,11 @@ static struct fetch_data_entry fetch_entries[] = {
     {FETCH_PQ_KEM, "ML-KEM-512", NULL},
     {FETCH_PQ_KEM, "ML-KEM-768", NULL},
     {FETCH_PQ_KEM, "ML-KEM-1024", NULL},
+#endif
+#ifndef OPENSSL_NO_ML_DSA
+    {FETCH_PQ_SIGNATURE, "ML-DSA-44", NULL},
+    {FETCH_PQ_SIGNATURE, "ML-DSA-65", NULL},
+    {FETCH_PQ_SIGNATURE, "ML-DSA-87", NULL},
 #endif
 };
 
@@ -199,6 +206,17 @@ void do_fetch(size_t num)
                 return;
             }
             EVP_KEM_free(kem);
+            break;
+        }
+        case FETCH_PQ_SIGNATURE: {
+            EVP_SIGNATURE *sig = EVP_SIGNATURE_fetch(ctx, fetch_alg,
+                                                     fetch_entries[j].propq);
+            if (sig == NULL) {
+                fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
+                err = 1;
+                return;
+            }
+            EVP_SIGNATURE_free(sig);
             break;
         }
         default:
