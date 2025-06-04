@@ -27,6 +27,7 @@ int err = 0;
 
 static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
+static int per_thread_ossl_lib_ctx = 0;
 static char *cert = NULL;
 static char *privkey = NULL;
 
@@ -82,6 +83,57 @@ static void do_handshake(size_t num)
         err = 1;
 }
 
+static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
+{
+    SSL *clientssl = NULL, *serverssl = NULL;
+    int ret = 1;
+    size_t i;
+    OSSL_TIME start, end;
+    OSSL_LIB_CTX *libctx = NULL;
+    SSL_CTX *lsctx = NULL;
+    SSL_CTX *lcctx = NULL;
+
+    start = ossl_time_now();
+
+    libctx = OSSL_LIB_CTX_new();
+    if (libctx == NULL) {
+        fprintf(stderr, "%s:%d: Failed to create ossl lib context\n", __FILE__, __LINE__);
+        err = 1;
+        return;
+    }
+
+    for (i = 0; i < num_calls / threadcount; i++) {
+        if (!perflib_create_ossl_lib_ctx_pair(libctx,
+                                              TLS_server_method(),
+                                              TLS_client_method(),
+                                              0, 0, &lsctx, &lcctx, cert,
+                                              privkey)) {
+            fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
+            err = 1;
+            return;
+        }
+
+
+        ret = perflib_create_ssl_objects(lsctx, lcctx, &serverssl, &clientssl,
+                                         NULL, NULL);
+        ret &= perflib_create_ssl_connection(serverssl, clientssl,
+                                             SSL_ERROR_NONE);
+        perflib_shutdown_ssl_connection(serverssl, clientssl);
+        serverssl = clientssl = NULL;
+        SSL_CTX_free(lsctx);
+        SSL_CTX_free(lcctx);
+        lsctx = lcctx = NULL;
+    }
+
+    end = ossl_time_now();
+    times[num] = ossl_time_subtract(end, start);
+
+    if (!ret)
+        err = 1;
+
+    OSSL_LIB_CTX_free(libctx);
+}
+
 int main(int argc, char * const argv[])
 {
     double persec;
@@ -92,7 +144,7 @@ int main(int argc, char * const argv[])
     int terse = 0;
     int opt;
 
-    while ((opt = getopt(argc, argv, "ts")) != -1) {
+    while ((opt = getopt(argc, argv, "tsp")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -100,11 +152,15 @@ int main(int argc, char * const argv[])
         case 's':
             share_ctx = 0;
             break;
+        case 'p':
+            per_thread_ossl_lib_ctx = 1;
+            break;
         default:
             printf(
                 "Usage: %s [-t] [-s] certsdir threadcount\n", basename(argv[0]));
             printf("-t - terse output\n");
             printf("-s - disable context sharing\n");
+            printf("-p - use ossl_lib_ctx per thread\n");
             return EXIT_FAILURE;
         }
     }
@@ -140,17 +196,30 @@ int main(int argc, char * const argv[])
     if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
         num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
 
-    if (share_ctx == 1) {
-        if (!perflib_create_ssl_ctx_pair(TLS_server_method(), TLS_client_method(),
-                                         0, 0, &sctx, &cctx, cert, privkey)) {
-            printf("Failed to create SSL_CTX pair\n");
+    if (per_thread_ossl_lib_ctx) {
+        int ret;
+
+        ret = perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
+                                            threadcount, &duration);
+        if (!ret) {
+            printf("Failed to run the test\n");
             goto err;
         }
     }
 
-    if (!perflib_run_multi_thread_test(do_handshake, threadcount, &duration)) {
-        printf("Failed to run the test\n");
-        goto err;
+    if (!per_thread_ossl_lib_ctx) {
+        if (share_ctx == 1) {
+            if (!perflib_create_ssl_ctx_pair(TLS_server_method(), TLS_client_method(),
+                                             0, 0, &sctx, &cctx, cert, privkey)) {
+                printf("Failed to create SSL_CTX pair\n");
+                goto err;
+            }
+        }
+
+        if (!perflib_run_multi_thread_test(do_handshake, threadcount, &duration)) {
+            printf("Failed to run the test\n");
+            goto err;
+        }
     }
 
     if (err) {
