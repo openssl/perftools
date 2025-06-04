@@ -14,6 +14,83 @@
 #include <openssl/ssl.h>
 #include "perflib/perflib.h"
 
+
+static int perflib_use_certificate(SSL_CTX *serverctx, SSL_CTX *clientctx,
+                                   int min_proto_version, int max_proto_version,
+                                   SSL_CTX **sctx, SSL_CTX **cctx,
+                                   char *certfile, char *privkeyfile)
+{
+    if (serverctx != NULL
+        && ((min_proto_version > 0
+             && !SSL_CTX_set_min_proto_version(serverctx,
+                                               min_proto_version))
+            || (max_proto_version > 0
+                && !SSL_CTX_set_max_proto_version(serverctx,
+                                                  max_proto_version))))
+        goto err;
+
+    if (clientctx != NULL
+        && ((min_proto_version > 0
+             && !SSL_CTX_set_min_proto_version(clientctx,
+                                               min_proto_version))
+            || (max_proto_version > 0
+                && !SSL_CTX_set_max_proto_version(clientctx,
+                                                  max_proto_version))))
+        goto err;
+
+    if (serverctx != NULL && certfile != NULL && privkeyfile != NULL) {
+        if (SSL_CTX_use_certificate_file(serverctx, certfile,
+                                         SSL_FILETYPE_PEM) != 1
+            || SSL_CTX_use_PrivateKey_file(serverctx, privkeyfile,
+                                           SSL_FILETYPE_PEM) != 1
+            || SSL_CTX_check_private_key(serverctx) != 1)
+            goto err;
+    }
+
+    if (sctx != NULL)
+        *sctx = serverctx;
+    if (cctx != NULL)
+        *cctx = clientctx;
+    return 1;
+
+ err:
+    if (sctx != NULL && *sctx == NULL)
+        SSL_CTX_free(serverctx);
+    if (cctx != NULL && *cctx == NULL)
+        SSL_CTX_free(clientctx);
+    return 0;
+}
+
+int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
+                                     const SSL_METHOD *cm, int min_proto_version,
+                                     int max_proto_version, SSL_CTX **sctx, SSL_CTX **cctx,
+                                     char *certfile, char *privkeyfile)
+{
+    SSL_CTX *serverctx = NULL;
+    SSL_CTX *clientctx = NULL;
+
+    if (sctx != NULL) {
+        if (*sctx != NULL)
+            serverctx = *sctx;
+        else if ((serverctx = SSL_CTX_new_ex(libctx, NULL, sm)) == NULL) {
+            goto err;
+        }
+    }
+
+    if (cctx != NULL) {
+        if (*cctx != NULL)
+            clientctx = *cctx;
+        else if ((clientctx = SSL_CTX_new_ex(libctx, NULL, cm)) == NULL)
+            goto err;
+    }
+
+    return perflib_use_certificate(serverctx, clientctx, min_proto_version,
+                                   max_proto_version, sctx, cctx, certfile,
+                                   privkeyfile);
+ err:
+    return 0;
+}
+
 int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm,
                                 const SSL_METHOD *cm, int min_proto_version,
                                 int max_proto_version, SSL_CTX **sctx,
@@ -37,44 +114,10 @@ int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm,
             goto err;
     }
 
-    if (serverctx != NULL
-            && ((min_proto_version > 0
-                 && !SSL_CTX_set_min_proto_version(serverctx,
-                                                   min_proto_version))
-                || (max_proto_version > 0
-                    && !SSL_CTX_set_max_proto_version(serverctx,
-                                                      max_proto_version))))
-        goto err;
-
-    if (clientctx != NULL
-        && ((min_proto_version > 0
-             && !SSL_CTX_set_min_proto_version(clientctx,
-                                               min_proto_version))
-            || (max_proto_version > 0
-                && !SSL_CTX_set_max_proto_version(clientctx,
-                                                  max_proto_version))))
-        goto err;
-
-    if (serverctx != NULL && certfile != NULL && privkeyfile != NULL) {
-        if (SSL_CTX_use_certificate_file(serverctx, certfile,
-                                         SSL_FILETYPE_PEM) != 1
-                || SSL_CTX_use_PrivateKey_file(serverctx, privkeyfile,
-                                               SSL_FILETYPE_PEM) != 1
-                || SSL_CTX_check_private_key(serverctx) != 1)
-            goto err;
-    }
-
-    if (sctx != NULL)
-        *sctx = serverctx;
-    if (cctx != NULL)
-        *cctx = clientctx;
-    return 1;
-
+    return perflib_use_certificate(serverctx, clientctx, min_proto_version,
+                                   max_proto_version, sctx, cctx, certfile,
+                                   privkeyfile);
  err:
-    if (sctx != NULL && *sctx == NULL)
-        SSL_CTX_free(serverctx);
-    if (cctx != NULL && *cctx == NULL)
-        SSL_CTX_free(clientctx);
     return 0;
 }
 

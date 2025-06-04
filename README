@@ -55,12 +55,16 @@ and two required arguments:
 handshake [-t] [-s] <certsdir> <threadcount>
 -t - produce terse output
 -s - create an ssl_ctx per connection, rather than a single thread-shared ctx
+-p - use ossl_lib_ctx per thread
 certsdir - Directory where the test can locate servercert.pem and serverkey.pem
 threadcount - Number of concurrent threads to run in test
 
 The output is two values: the average time taken for a single handshake in us,
 and the average number of simultaneous handshakes per second performed over the
 course of the test.
+
+Note: Note on OpenSSL earlier than 3.6 you might hit the thread key local storage
+limit with higher number of threads.
 
 sslnew
 ------
