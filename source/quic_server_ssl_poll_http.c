@@ -128,17 +128,17 @@
 /*
  * Tail queue definitions.
  */
-#define POLL_TAILQ_HEAD(name, type) \
+#define QPOLL_TAILQ_HEAD(name, type) \
     struct name { \
         struct type *tqh_first; /* first element */ \
         struct type **tqh_last; /* addr of last next element */ \
         size_t tqh_count; /* number of members on queue */ \
     }
 
-#define POLL_TAILQ_HEAD_INITIALIZER(head) \
+#define QPOLL_TAILQ_HEAD_INITIALIZER(head) \
     { NULL, &(head).tqh_first, 0 }
 
-#define POLL_TAILQ_ENTRY(type) \
+#define QPOLL_TAILQ_ENTRY(type) \
     struct { \
         struct type *tqe_next; /* next element */ \
         struct type **tqe_prev; /* address of previous next element */ \
@@ -147,33 +147,33 @@
 /*
  * Tail queue access methods.
  */
-#define POLL_TAILQ_FIRST(head) ((head)->tqh_first)
-#define POLL_TAILQ_END(head) NULL
-#define POLL_TAILQ_NEXT(elm, field) ((elm)->field.tqe_next)
-#define POLL_TAILQ_LAST(head, headname) \
+#define QPOLL_TAILQ_FIRST(head) ((head)->tqh_first)
+#define QPOLL_TAILQ_END(head) NULL
+#define QPOLL_TAILQ_NEXT(elm, field) ((elm)->field.tqe_next)
+#define QPOLL_TAILQ_LAST(head, headname) \
     (*(((struct headname *)((head)->tqh_last))->tqh_last))
-#define POLL_TAILQ_COUNT(head) ((head)->tqh_count)
+#define QPOLL_TAILQ_COUNT(head) ((head)->tqh_count)
 
 /* XXX */
-#define POLL_TAILQ_PREV(elm, headname, field) \
+#define QPOLL_TAILQ_PREV(elm, headname, field) \
     (*(((struct headname *)((elm)->field.tqe_prev))->tqh_last))
-#define POLL_TAILQ_EMPTY(head) (POLL_TAILQ_FIRST(head) == POLL_TAILQ_END(head))
+#define QPOLL_TAILQ_EMPTY(head) (QPOLL_TAILQ_FIRST(head) == QPOLL_TAILQ_END(head))
 
-#define POLL_TAILQ_FOREACH(var, head, field) \
-    for ((var) = POLL_TAILQ_FIRST(head); \
-         (var) != POLL_TAILQ_END(head); \
-         (var) = POLL_TAILQ_NEXT(var, field))
+#define QPOLL_TAILQ_FOREACH(var, head, field) \
+    for ((var) = QPOLL_TAILQ_FIRST(head); \
+         (var) != QPOLL_TAILQ_END(head); \
+         (var) = QPOLL_TAILQ_NEXT(var, field))
 
-#define POLL_TAILQ_FOREACH_SAFE(var, head, field, tvar) \
-    for ((var) = POLL_TAILQ_FIRST(head); \
-         (var) != POLL_TAILQ_END(head) && \
-         ((tvar) = POLL_TAILQ_NEXT(var, field), 1); \
+#define QPOLL_TAILQ_FOREACH_SAFE(var, head, field, tvar) \
+    for ((var) = QPOLL_TAILQ_FIRST(head); \
+         (var) != QPOLL_TAILQ_END(head) && \
+         ((tvar) = QPOLL_TAILQ_NEXT(var, field), 1); \
          (var) = (tvar))
 
 /*
  * Tail queue functions.
  */
-#define POLL_TAILQ_INIT(head) \
+#define QPOLL_TAILQ_INIT(head) \
     do { \
         (head)->tqh_first = NULL; \
         (head)->tqh_last = &(head)->tqh_first; \
@@ -181,7 +181,7 @@
         (head)->tqh_count = 0; \
     } while (0)
 
-#define POLL_TAILQ_INSERT_HEAD(head, elm, field) \
+#define QPOLL_TAILQ_INSERT_HEAD(head, elm, field) \
     do { \
         if (((elm)->field.tqe_next = (head)->tqh_first) != NULL) \
             (head)->tqh_first->field.tqe_prev = &(elm)->field.tqe_next; \
@@ -192,7 +192,7 @@
         (head)->tqh_count++; \
     } while (0)
 
-#define POLL_TAILQ_INSERT_TAIL(head, elm, field) \
+#define QPOLL_TAILQ_INSERT_TAIL(head, elm, field) \
     do { \
         (elm)->field.tqe_next = NULL; \
         (elm)->field.tqe_prev = (head)->tqh_last; \
@@ -201,7 +201,7 @@
         (head)->tqh_count++; \
     } while (0)
 
-#define POLL_TAILQ_REMOVE(head, elm, field) \
+#define QPOLL_TAILQ_REMOVE(head, elm, field) \
     do { \
         if (((elm)->field.tqe_next) != NULL) \
             (elm)->field.tqe_next->field.tqe_prev = (elm)->field.tqe_prev; \
@@ -230,13 +230,12 @@
  */
 #define poll_event_base \
     SSL_POLL_ITEM pe_poll_item; \
-    POLL_TAILQ_ENTRY(poll_event) pe_tqe; \
+    QPOLL_TAILQ_ENTRY(poll_event) pe_tqe; \
     uint64_t pe_want_events; \
     uint64_t pe_want_mask; \
     struct poll_manager *pe_my_pm; \
     unsigned char pe_type; \
     struct poll_event *pe_self; \
-    void *pe_appdata; \
     int(*pe_cb_in)(struct poll_event *); \
     int(*pe_cb_out)(struct poll_event *); \
     int(*pe_cb_error)(struct poll_event *); \
@@ -261,22 +260,22 @@ struct poll_event_listener {
  * This request-reply handling is more tricky with uni-directional streams.
  * We need a pair of streams: server reads a request from one stream and
  * then must create a stream for reply. For echo-reply server we need to
- * pass data we read from input stream to output stream. The poll_event_context
+ * pass data we read from input stream to output stream. The poll_stream_context
  * here is to do it for us. The echo-reply server handling with simplex
  * (unidirectional) streams goes as follows:
  *    - we read data from input stream and parse request
  *    - then we request poll manager to create an outbound stream,
- *      at this point we also create a response (response_buffer).
+ *      at this point we also create a response (rr_buffer).
  *      the response buffer is added to connection.
  *    - connection keeps list of responses to be dispatched because
  *      client may establish more streams to send more requests
  *    - once outbound stream is created, poll manager moves response
  *      connection to outbound stream.
  */
-struct poll_event_context {
-    POLL_TAILQ_ENTRY(poll_event_context) peccx_tqe;
-    void *peccx;
-    void(*peccx_cb_ondestroy)(void *);
+struct poll_stream_context {
+    QPOLL_TAILQ_ENTRY(poll_stream_context) pscx_tqe;
+    void *pscx;
+    void(*pscx_cb_ondestroy)(void *);
 };
 
 /*
@@ -291,13 +290,16 @@ struct poll_event_context {
  *      bumped down when stream is created
  *    - pec_want_unistream bumped up when application requests simplex stream.
  *      bumped down when stream is created
+ *
+ * the pec_cs member holds rx, tx counters so we can collect stats.
  */
 struct poll_event_connection {
     poll_event_base;
-    POLL_TAILQ_HEAD(, poll_event_context) pec_stream_cx;
-    POLL_TAILQ_HEAD(, poll_event_context) pec_unistream_cx;
+    QPOLL_TAILQ_HEAD(, poll_stream_context) pec_stream_cx;
+    QPOLL_TAILQ_HEAD(, poll_stream_context) pec_unistream_cx;
     uint64_t pec_want_stream;
     uint64_t pec_want_unistream;
+    struct client_stats *pec_cs;
 };
 
 /*
@@ -325,7 +327,7 @@ struct poll_event_connection {
  *    - pm qconn
  */
 struct poll_manager {
-    POLL_TAILQ_HEAD(pm, poll_event) pm_head;
+    QPOLL_TAILQ_HEAD(pm, poll_event) pm_head;
     unsigned int pm_event_count;
     struct poll_event *pm_poll_set;
     unsigned int pm_poll_set_sz;
@@ -343,55 +345,76 @@ struct poll_manager {
 #define SSL_POLL_OUT (SSL_POLL_EVENT_W | SSL_POLL_EVENT_OSB | \
                       SSL_POLL_EVENT_OSU)
 
-struct poll_event_stream {
+struct poll_event_sstream {
     poll_event_base;
-    struct poll_event_connection *pes_conn;
-    char *pes_wpos;
-    unsigned int pes_wpos_sz;
-    int pes_got_request;
-    char pes_reqbuf[8192];
+    struct poll_event_connection *pess_conn;
+    struct rr_buffer *pess_rb;
+    char *pess_wpos;
+    unsigned int pess_wpos_sz;
+    int pess_got_request;
+    char pess_reqbuf[8192];
 };
 
-struct poll_event_response {
+struct poll_event_sustream {
     poll_event_base;
-    struct poll_event_connection *per_pec;
-    size_t per_len;
+    struct poll_event_connection *pesu_pec;
+    struct rr_buffer *pesu_rb;
+    char *pesu_wpos;
 };
+
+struct poll_event_cstream {
+    poll_event_base;
+    struct poll_event_connection *pecs_pec;
+    struct rr_buffer *pecs_rb;
+    struct stream_stats *pecs_ss;
+};
+
+struct poll_event_custream {
+    poll_event_base;
+    struct poll_event_connection *pecsu_pec;
+    struct stream_stats *pecsu_ss;
+};
+
+struct client_context {
+    struct stream_stats *ccx_ss;
+    struct rr_buffer *ccx_rb;
+};
+
 /*
- * Response buffer.
+ * request/response buffer (a.k.a. rr_buffer)
  */
 enum {
     RB_TYPE_NONE,
     RB_TYPE_TEXT_SIMPLE,
     RB_TYPE_TEXT_FULL
 };
-#define response_buffer_base \
+#define rr_buffer_base \
     unsigned char rb_type; \
     unsigned int rb_rpos; \
-    void (*rb_advrpos_cb)(struct response_buffer *, unsigned int);\
-    unsigned int (*rb_read_cb)(struct response_buffer *, char *, \
+    void (*rb_advrpos_cb)(struct rr_buffer *, unsigned int);\
+    unsigned int (*rb_read_cb)(struct rr_buffer *, char *, \
                                unsigned int); \
-    int (*rb_eof_cb)(struct response_buffer *); \
-    void (*rb_ondestroy_cb)(struct response_buffer *)
+    int (*rb_eof_cb)(struct rr_buffer *); \
+    void (*rb_ondestroy_cb)(struct rr_buffer *)
 
 /*
  * request/response buffer makes no difference,
  * creating alias here so the code reads better.
  */
-#define request_buffer response_buffer
-struct response_buffer {
-    response_buffer_base;
+#define request_buffer rr_buffer
+struct rr_buffer {
+    rr_buffer_base;
 };
 
-struct response_txt_simple {
-    response_buffer_base;
+struct rr_txt_simple {
+    rr_buffer_base;
     char *rts_pattern;
     unsigned int rts_pattern_len;
     unsigned int rts_len;
 };
 
-struct response_txt_full {
-    response_buffer_base;
+struct rr_txt_full {
+    rr_buffer_base;
     char rtf_headers[1024];
     char *rtf_pattern;
     unsigned int rtf_pattern_len;
@@ -399,7 +422,7 @@ struct response_txt_full {
     unsigned int rtf_len; /* headers + data */
 };
 
-#define request_txt_full	response_txt_full
+#define request_txt_full	rr_txt_full
 
 static void destroy_pe(struct poll_event *);
 static int pe_return_error(struct poll_event *);
@@ -419,7 +442,34 @@ static struct client_config {
     unsigned int cc_ustreams;
     unsigned int cc_rep_sz;
     unsigned int cc_req_sz;
+    int cc_shuffle;
 } client_config;
+#define STREAM_COUNT (client_config.cc_ustreams + client_config.cc_bstreams)
+
+enum {
+    SS_UNISTREAM,
+    SS_BIDISTREAM
+};
+
+#define SS_TYPE_TO_SFLAG(_t_) (((_t_) == SS_UNISTREAM) ? \
+    SSL_STREAM_FLAG_UNI : 0)
+#define SS_TYPE_TO_POLLEV(_t_) (((_t_) == SS_UNISTREAM) ? \
+    SSL_POLL_EVENT_OSU : SSL_POLL_EVENT_OSB)
+struct stream_stats {
+    size_t ss_req_sz;
+    size_t ss_body_sz;
+    size_t ss_rx;
+    size_t ss_tx;
+    char ss_type;
+    QPOLL_TAILQ_ENTRY(stream_stats) ss_tqe;
+};
+
+struct client_stats {
+    size_t cs_rx;
+    size_t cs_tx;
+    QPOLL_TAILQ_HEAD(, stream_stats) cs_todo;
+    QPOLL_TAILQ_HEAD(, stream_stats) cs_done;
+};
 
 #ifdef _WIN32
 static const char *progname;
@@ -475,57 +525,58 @@ enum pe_types {
     PE_NONE,
     PE_LISTENER,
     PE_CONNECTION,
-    PE_STREAM,
-    PE_STREAM_UNI_IN,
-    PE_STREAM_UNI_OUT,
+    PE_SSTREAM,
+    PE_SUSTREAM,
+    PE_CSTREAM,
+    PE_CUSTREAM,
     PE_INVALID
 };
 
-static struct response_txt_simple *
-rb_to_txt_simple(struct response_buffer *rb)
+static struct rr_txt_simple *
+rb_to_txt_simple(struct rr_buffer *rb)
 {
     if (rb == NULL || rb->rb_type != RB_TYPE_TEXT_SIMPLE)
         return NULL;
 
-    return (struct response_txt_simple *)rb;
+    return (struct rr_txt_simple *)rb;
 }
 
-static struct response_txt_full *
-rb_to_txt_full(struct response_buffer *rb)
+static struct rr_txt_full *
+rb_to_txt_full(struct rr_buffer *rb)
 {
     if (rb == NULL || rb->rb_type != RB_TYPE_TEXT_FULL)
         return NULL;
 
-    return (struct response_txt_full *)rb;
+    return (struct rr_txt_full *)rb;
 }
 
 static void
-rb_advrpos_cb(struct response_buffer *rb, unsigned int rpos)
+rb_advrpos_cb(struct rr_buffer *rb, unsigned int rpos)
 {
-    /* we assume base response_buffer is unlimited */
+    /* we assume base rr_buffer is unlimited */
     rb->rb_rpos += rpos;
 }
 
 static void
-rb_ondestroy_cb(struct response_buffer *rb)
+rb_ondestroy_cb(struct rr_buffer *rb)
 {
     OPENSSL_free(rb);
 }
 
 static unsigned int
-rb_null_read_cb(struct response_buffer *rb, char *buf, unsigned int buf_sz)
+rb_null_read_cb(struct rr_buffer *rb, char *buf, unsigned int buf_sz)
 {
     return 0;
 }
 
 static int
-rb_eof_cb(struct response_buffer *rb)
+rb_eof_cb(struct rr_buffer *rb)
 {
     return 1;
 }
 
 static void
-rb_init(struct response_buffer *rb)
+rb_init(struct rr_buffer *rb)
 {
     rb->rb_type = RB_TYPE_NONE;
     rb->rb_advrpos_cb = rb_advrpos_cb;
@@ -536,14 +587,14 @@ rb_init(struct response_buffer *rb)
 }
 
 static void
-rb_advrpos(struct response_buffer *rb, unsigned int rpos)
+rb_advrpos(struct rr_buffer *rb, unsigned int rpos)
 {
     if (rb != NULL)
         rb->rb_advrpos_cb(rb, rpos);
 }
 
 static unsigned int
-rb_read(struct response_buffer *rb, char *buf, unsigned int buf_sz)
+rb_read(struct rr_buffer *rb, char *buf, unsigned int buf_sz)
 {
     if (rb != NULL)
         return rb->rb_read_cb(rb, buf, buf_sz);
@@ -552,7 +603,7 @@ rb_read(struct response_buffer *rb, char *buf, unsigned int buf_sz)
 }
 
 static unsigned int
-rb_eof(struct response_buffer *rb)
+rb_eof(struct rr_buffer *rb)
 {
     if (rb != NULL)
         return rb->rb_eof_cb(rb);
@@ -561,16 +612,16 @@ rb_eof(struct response_buffer *rb)
 }
 
 static void
-rb_destroy(struct response_buffer *rb)
+rb_destroy(struct rr_buffer *rb)
 {
     if (rb != NULL)
         rb->rb_ondestroy_cb(rb);
 }
 
 static int
-rb_txt_simple_eof_cb(struct response_buffer *rb)
+rb_txt_simple_eof_cb(struct rr_buffer *rb)
 {
-    struct response_txt_simple *rts = rb_to_txt_simple(rb);
+    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
 
     if (rb_to_txt_full(rb) == NULL)
         return 1;
@@ -582,10 +633,10 @@ rb_txt_simple_eof_cb(struct response_buffer *rb)
 }
 
 static unsigned int
-rb_txt_simple_read_cb(struct response_buffer *rb, char *buf,
+rb_txt_simple_read_cb(struct rr_buffer *rb, char *buf,
                       unsigned int buf_sz)
 {
-    struct response_txt_simple *rts = rb_to_txt_simple(rb);
+    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
     unsigned int i = rb->rb_rpos;
     unsigned int rv = 0;
 
@@ -602,9 +653,9 @@ rb_txt_simple_read_cb(struct response_buffer *rb, char *buf,
 }
 
 static void
-rb_txt_simple_ondestroy_cb(struct response_buffer *rb)
+rb_txt_simple_ondestroy_cb(struct rr_buffer *rb)
 {
-    struct response_txt_simple *rts = rb_to_txt_simple(rb);
+    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
 
     if (rts != NULL) {
         OPENSSL_free(rts->rts_pattern);
@@ -613,9 +664,9 @@ rb_txt_simple_ondestroy_cb(struct response_buffer *rb)
 }
 
 static void
-rb_txt_simple_advrpos_cb(struct response_buffer *rb, unsigned int sz)
+rb_txt_simple_advrpos_cb(struct rr_buffer *rb, unsigned int sz)
 {
-    struct response_txt_simple *rts = rb_to_txt_simple(rb);
+    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
 
     if (rts != NULL) {
         rb->rb_rpos += sz;
@@ -624,13 +675,13 @@ rb_txt_simple_advrpos_cb(struct response_buffer *rb, unsigned int sz)
     }
 }
 
-static __attribute__((unused)) struct response_txt_simple *
+static __attribute__((unused)) struct rr_txt_simple *
 new_txt_simple_respoonse(const char *fill_pattern, unsigned int fsize)
 {
-    struct response_txt_simple *rts;
-    struct response_buffer *rb;
+    struct rr_txt_simple *rts;
+    struct rr_buffer *rb;
 
-    rts = OPENSSL_malloc(sizeof (struct response_txt_simple));
+    rts = OPENSSL_malloc(sizeof (struct rr_txt_simple));
     if (rts == NULL)
         return NULL;
 
@@ -641,7 +692,7 @@ new_txt_simple_respoonse(const char *fill_pattern, unsigned int fsize)
     rts->rts_pattern_len = strlen(fill_pattern);
     rts->rts_len = fsize;
 
-    rb = (struct response_buffer *)rts;
+    rb = (struct rr_buffer *)rts;
     rb_init(rb);
     rb->rb_type = RB_TYPE_TEXT_SIMPLE;
     rb->rb_eof_cb = rb_txt_simple_eof_cb;
@@ -653,9 +704,9 @@ new_txt_simple_respoonse(const char *fill_pattern, unsigned int fsize)
 }
 
 static int
-rb_txt_full_eof_cb(struct response_buffer *rb)
+rb_txt_full_eof_cb(struct rr_buffer *rb)
 {
-    struct response_txt_full *rtf = rb_to_txt_full(rb);
+    struct rr_txt_full *rtf = rb_to_txt_full(rb);
 
     if (rtf == NULL)
         return 1;
@@ -667,9 +718,9 @@ rb_txt_full_eof_cb(struct response_buffer *rb)
 }
 
 static void
-rb_txt_full_ondestroy_cb(struct response_buffer *rb)
+rb_txt_full_ondestroy_cb(struct rr_buffer *rb)
 {
-    struct response_txt_full *rtf = rb_to_txt_full(rb);
+    struct rr_txt_full *rtf = rb_to_txt_full(rb);
 
     if (rtf != NULL) {
         OPENSSL_free(rtf->rtf_pattern);
@@ -678,9 +729,9 @@ rb_txt_full_ondestroy_cb(struct response_buffer *rb)
 }
 
 static unsigned int
-rb_txt_full_read_cb(struct response_buffer *rb, char *buf, unsigned int buf_sz)
+rb_txt_full_read_cb(struct rr_buffer *rb, char *buf, unsigned int buf_sz)
 {
-    struct response_txt_full *rtf = rb_to_txt_full(rb);
+    struct rr_txt_full *rtf = rb_to_txt_full(rb);
     unsigned int i = rb->rb_rpos;
     unsigned int j;
     unsigned int rv = 0;
@@ -705,9 +756,9 @@ rb_txt_full_read_cb(struct response_buffer *rb, char *buf, unsigned int buf_sz)
 }
 
 static void
-rb_txt_full_advrpos_cb(struct response_buffer *rb, unsigned int sz)
+rb_txt_full_advrpos_cb(struct rr_buffer *rb, unsigned int sz)
 {
-    struct response_txt_full *rtf = rb_to_txt_full(rb);
+    struct rr_txt_full *rtf = rb_to_txt_full(rb);
 
     if (rtf != NULL) {
         rb->rb_rpos += sz;
@@ -716,16 +767,16 @@ rb_txt_full_advrpos_cb(struct response_buffer *rb, unsigned int sz)
     }
 }
 
-static struct response_txt_full *
-new_txt_full_respoonse(const char *fill_pattern, unsigned int fsize)
+static struct rr_txt_full *
+new_txt_full_rrbuff(const char *fill_pattern, unsigned int fsize)
 {
-    struct response_txt_full *rtf;
-    struct response_buffer *rb;
+    struct rr_txt_full *rtf;
+    struct rr_buffer *rb;
     char date_str[80];
     int hlen;
     time_t t;
 
-    rtf = OPENSSL_malloc(sizeof (struct response_txt_full));
+    rtf = OPENSSL_malloc(sizeof (struct rr_txt_full));
     if (rtf == NULL)
         return NULL;
 
@@ -753,7 +804,7 @@ new_txt_full_respoonse(const char *fill_pattern, unsigned int fsize)
 
     rtf->rtf_len = rtf->rtf_hdr_len + fsize;
 
-    rb = (struct response_buffer *)rtf;
+    rb = (struct rr_buffer *)rtf;
     rb_init(rb);
     rb->rb_type = RB_TYPE_TEXT_FULL;
     rb->rb_eof_cb = rb_txt_full_eof_cb;
@@ -768,7 +819,7 @@ static struct request_txt_full *
 new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
 {
     struct request_txt_full *rtf;
-    struct response_buffer *rb;
+    struct rr_buffer *rb;
     char date_str[80];
     int hlen;
     time_t t;
@@ -802,7 +853,7 @@ new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
 
     rtf->rtf_len = rtf->rtf_hdr_len + body_len;
 
-    rb = (struct response_buffer *)rtf;
+    rb = (struct rr_buffer *)rtf;
     rb_init(rb);
     rb->rb_type = RB_TYPE_TEXT_FULL;
     rb->rb_eof_cb = rb_txt_full_eof_cb;
@@ -820,9 +871,10 @@ pe_type_to_name(const struct poll_event *pe)
         "none",
         "listener",
         "connection",
-        "stream (bidi)",
-        "stream (in)",
-        "stream (out)",
+        "server stream (bidi)",
+        "server stream (uni)",
+        "client stream (bidi)",
+        "client stream (uni)",
         "invalid"
     };
 
@@ -839,6 +891,42 @@ pe_to_connection(struct poll_event *pe)
         return NULL;
 
     return ((struct poll_event_connection *)pe);
+}
+
+static struct poll_event_sstream *
+pe_to_sstream(struct poll_event *pe)
+{
+    if ((pe == NULL) || (pe->pe_type != PE_SSTREAM))
+        return NULL;
+
+    return ((struct poll_event_sstream *)pe);
+}
+
+static struct poll_event_sustream *
+pe_to_sustream(struct poll_event *pe)
+{
+    if ((pe == NULL) || (pe->pe_type != PE_SUSTREAM))
+        return NULL;
+
+    return ((struct poll_event_sustream *)pe);
+}
+
+static struct poll_event_cstream *
+pe_to_cstream(struct poll_event *pe)
+{
+    if ((pe == NULL) || (pe->pe_type != PE_CSTREAM))
+        return NULL;
+
+    return ((struct poll_event_cstream *)pe);
+}
+
+static struct poll_event_custream *
+pe_to_custream(struct poll_event *pe)
+{
+    if ((pe == NULL) || (pe->pe_type != PE_CUSTREAM))
+        return NULL;
+
+    return ((struct poll_event_custream *)pe);
 }
 
 static void
@@ -859,12 +947,13 @@ new_pe(SSL *ssl)
 {
     struct poll_event *pe;
 
-    if (ssl == NULL)
-        return NULL;
-
-    pe = OPENSSL_zalloc(sizeof (struct poll_event));
-    if (pe != NULL)
-        init_pe(pe, ssl);
+    if (ssl != NULL) {
+        pe = OPENSSL_zalloc(sizeof (struct poll_event));
+        if (pe != NULL)
+            init_pe(pe, ssl);
+    } else {
+        pe = NULL;
+    }
 
     return pe;
 }
@@ -872,11 +961,12 @@ new_pe(SSL *ssl)
 static struct poll_event_listener *
 new_listener_pe(SSL *ssl_listener)
 {
-    struct poll_event *listener_pe = new_pe(ssl_listener);
+    struct poll_event *listener_pe;
 
+    listener_pe = new_pe(ssl_listener);
     if (listener_pe != NULL) {
-        listener_pe->pe_type = PE_LISTENER;
-        listener_pe->pe_want_events = SSL_POLL_EVENT_IC | SSL_POLL_EVENT_EL;
+         listener_pe->pe_type = PE_LISTENER;
+         listener_pe->pe_want_events = SSL_POLL_EVENT_IC | SSL_POLL_EVENT_EL;
     }
 
     return (struct poll_event_listener *)listener_pe;
@@ -888,61 +978,116 @@ new_qconn_pe(SSL *ssl_qconn)
     struct poll_event *qconn_pe;
     struct poll_event_connection *pec;
 
-    qconn_pe = OPENSSL_zalloc(sizeof (struct poll_event_connection));
+    if (ssl_qconn != NULL) {
+        qconn_pe = OPENSSL_zalloc(sizeof (struct poll_event_connection));
 
-    if (qconn_pe != NULL) {
-        init_pe(qconn_pe, ssl_qconn);
-        qconn_pe->pe_type = PE_CONNECTION;
-        qconn_pe->pe_want_events = SSL_POLL_EVENT_ISB | SSL_POLL_EVENT_ISU;
-        qconn_pe->pe_want_events |= SSL_POLL_EVENT_EC | SSL_POLL_EVENT_ECD;
-        /*
-         * SSL_POLL_EVENT_OSB (or SSL_POLL_EVENT_OSU) must be monitored once
-         * there is a request for outbound stream created by app.
-         */
-        pec = (struct poll_event_connection *)qconn_pe;
-        POLL_TAILQ_INIT(&pec->pec_unistream_cx);
-        POLL_TAILQ_INIT(&pec->pec_stream_cx);
+        if (qconn_pe != NULL) {
+            init_pe(qconn_pe, ssl_qconn);
+            qconn_pe->pe_type = PE_CONNECTION;
+            qconn_pe->pe_want_events = SSL_POLL_EVENT_ISB | SSL_POLL_EVENT_ISU;
+            qconn_pe->pe_want_events |= SSL_POLL_EVENT_EC | SSL_POLL_EVENT_ECD;
+            /*
+             * SSL_POLL_EVENT_OSB (or SSL_POLL_EVENT_OSU) must be monitored
+             * once there is a request for outbound stream created by app.
+             */
+            pec = (struct poll_event_connection *)qconn_pe;
+            QPOLL_TAILQ_INIT(&pec->pec_unistream_cx);
+            QPOLL_TAILQ_INIT(&pec->pec_stream_cx);
+        }
+    } else {
+        qconn_pe = NULL;
     }
 
     return qconn_pe;
 }
 
-static struct poll_event_stream *
-new_stream_pe(SSL *ssl_qs)
+static struct poll_event_sstream *
+new_sstream_pe(SSL *ssl_qs)
 {
-    struct poll_event_stream *pes;
+    struct poll_event_sstream *pess;
 
-    pes = OPENSSL_zalloc(sizeof (struct poll_event_stream));
+    if (ssl_qs != NULL) {
+        pess = OPENSSL_zalloc(sizeof (struct poll_event_sstream));
 
-    if (pes != NULL) {
-        init_pe((struct poll_event *)pes, ssl_qs);
-        pes->pes_wpos = pes->pes_reqbuf;
-        pes->pes_wpos_sz = sizeof (pes->pes_reqbuf) - 1;
+        if (pess != NULL) {
+            init_pe((struct poll_event *)pess, ssl_qs);
+            pess->pess_wpos = pess->pess_reqbuf;
+            pess->pess_wpos_sz = sizeof (pess->pess_reqbuf) - 1;
+            ((struct poll_event *)pess)->pe_type = PE_SSTREAM;
+        }
+    } else {
+        pess = NULL;
     }
 
-    return (pes);
+    return (pess);
 }
 
-static struct poll_event_response *
-new_response_pe(SSL *ssl_qs)
+static struct poll_event_sustream *
+new_sustream_pe(SSL *ssl_qs)
 {
-    struct poll_event_response *per;
+    struct poll_event_sustream *pesu;
 
-    per = OPENSSL_zalloc(sizeof (struct poll_event_stream));
+    if (ssl_qs != NULL) {
+        pesu = OPENSSL_zalloc(sizeof (struct poll_event_sustream));
 
-    if (per != NULL)
-        init_pe((struct poll_event *)per, ssl_qs);
+        if (pesu != NULL) {
+            init_pe((struct poll_event *)pesu, ssl_qs);
+            ((struct poll_event *)pesu)->pe_type = PE_SUSTREAM;
+        }
+    } else {
+        pesu = NULL;
+    }
 
-    return (per);
+    return (pesu);
+}
+
+static struct poll_event_cstream *
+new_cstream_pe(SSL *ssl_qs)
+{
+    struct poll_event_cstream *pecs;
+
+    if (ssl_qs != NULL) {
+        pecs = OPENSSL_zalloc(sizeof (struct poll_event_cstream));
+
+        if (pecs != NULL) {
+            init_pe((struct poll_event *)pecs, ssl_qs);
+            ((struct poll_event *)pecs)->pe_type = PE_CSTREAM;
+        }
+    } else {
+        pecs = NULL;
+    }
+
+    return (pecs);
+}
+
+static struct poll_event_custream *
+new_custream_pe(SSL *ssl_qs)
+{
+    struct poll_event_custream *pecsu;
+
+    if (ssl_qs != NULL) {
+        pecsu = OPENSSL_zalloc(sizeof (struct poll_event_custream));
+
+        if (pecsu != NULL) {
+            init_pe((struct poll_event *)pecsu, ssl_qs);
+            ((struct poll_event *)pecsu)->pe_type = PE_CUSTREAM;
+        }
+    } else {
+        pecsu = NULL;
+    }
+
+    return (pecsu);
 }
 
 static SSL *
 get_ssl_from_pe(struct poll_event *pe)
 {
-    SSL *ssl = NULL;
+    SSL *ssl;
 
     if (pe != NULL)
         ssl = pe->pe_poll_item.desc.value.ssl;
+    else
+        ssl = NULL;
 
     return ssl;
 }
@@ -1137,7 +1282,7 @@ static void
 add_pe_to_pm(struct poll_manager *pm, struct poll_event *pe)
 {
     if (pe->pe_my_pm == NULL) {
-        POLL_TAILQ_INSERT_HEAD(&pm->pm_head, pe, pe_tqe);
+        QPOLL_TAILQ_INSERT_HEAD(&pm->pm_head, pe, pe_tqe);
         pm->pm_need_rebuild = 1;
         pe->pe_my_pm = pm;
     }
@@ -1147,7 +1292,7 @@ static void
 remove_pe_from_pm(struct poll_manager *pm, struct poll_event *pe)
 {
     if (pe->pe_my_pm == pm) {
-        POLL_TAILQ_REMOVE(&pm->pm_head, pe, pe_tqe);
+        QPOLL_TAILQ_REMOVE(&pm->pm_head, pe, pe_tqe);
         pm->pm_need_rebuild = 1;
         pe->pe_my_pm = NULL;
     }
@@ -1162,7 +1307,7 @@ create_poll_manager(void)
     if (pm == NULL)
         return NULL;
 
-    POLL_TAILQ_INIT(&pm->pm_head);
+    QPOLL_TAILQ_INIT(&pm->pm_head);
     pm->pm_poll_set = OPENSSL_malloc(sizeof (struct poll_event) * POLL_GROW);
     if (pm->pm_poll_set != NULL) {
         pm->pm_poll_set_sz = POLL_GROW;
@@ -1187,7 +1332,7 @@ rebuild_poll_set(struct poll_manager *pm)
     if (pm->pm_need_rebuild == 0)
         return 0;
 
-    pe_num = POLL_TAILQ_COUNT(&pm->pm_head);
+    pe_num = QPOLL_TAILQ_COUNT(&pm->pm_head);
     if (pe_num > pm->pm_poll_set_sz) {
         /*
          * grow poll set by POLL_GROW
@@ -1216,8 +1361,8 @@ rebuild_poll_set(struct poll_manager *pm)
 
     i = 0;
     DPRINTF(stderr, "%s there %zu events to poll\n", __func__,
-            POLL_TAILQ_COUNT(&pm->pm_head));
-    POLL_TAILQ_FOREACH(pe, &pm->pm_head, pe_tqe) {
+            QPOLL_TAILQ_COUNT(&pm->pm_head));
+    QPOLL_TAILQ_FOREACH(pe, &pm->pm_head, pe_tqe) {
         pe->pe_poll_item.events = pe->pe_want_events;
         pm->pm_poll_set[i++] = *pe;
         DPRINTF(stderr, "\t%p (%s) " POLL_FMT " (disabled: " POLL_FMT ")\n",
@@ -1239,7 +1384,7 @@ destroy_poll_manager(struct poll_manager *pm)
     if (pm == NULL)
         return;
 
-    POLL_TAILQ_FOREACH_SAFE(pe, &pm->pm_head, pe_tqe, pe_safe) {
+    QPOLL_TAILQ_FOREACH_SAFE(pe, &pm->pm_head, pe_tqe, pe_safe) {
         destroy_pe(pe);
     }
 
@@ -1292,19 +1437,6 @@ pe_handle_listener_error(struct poll_event *pe)
     return -1;
 }
 
-static struct poll_event_stream *
-pe_to_stream(struct poll_event *pe)
-{
-    switch (pe->pe_type) {
-    case PE_STREAM:
-    case PE_STREAM_UNI_IN:
-    case PE_STREAM_UNI_OUT:
-        return ((struct poll_event_stream *)pe);
-    default:
-        return NULL;
-    }
-}
-
 /*
  * non-blocking variant for new_stream()/accept_stream(). Creating outbound
  * stream is two step process when using non-blocking I/O.
@@ -1320,20 +1452,11 @@ pe_to_stream(struct poll_event *pe)
  * which uses SSL_poll()  to manage I/O. We expect there might be more
  * than 1 stream request.
  */
-static int
+static void
 request_new_stream(struct poll_event_connection *pec, uint64_t qsflag,
-                   void *peccx_arg, int accept)
+                   struct poll_stream_context *pscx, int accept)
 {
-    struct poll_event_context *peccx;
     struct poll_event *qconn_pe = (struct poll_event *)pec;
-
-    if (peccx_arg == NULL)
-        return -1;
-
-    peccx = OPENSSL_malloc(sizeof (struct poll_event_context));
-    if (peccx == NULL)
-        return -1;
-    peccx->peccx = peccx_arg;
 
     if (qsflag & SSL_STREAM_FLAG_UNI) {
         pec->pec_want_unistream++;
@@ -1341,7 +1464,7 @@ request_new_stream(struct poll_event_connection *pec, uint64_t qsflag,
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_OSU;
         else
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_ISU;
-        POLL_TAILQ_INSERT_TAIL(&pec->pec_unistream_cx, peccx, peccx_tqe);
+        QPOLL_TAILQ_INSERT_TAIL(&pec->pec_unistream_cx, pscx, pscx_tqe);
     } else {
         pec->pec_want_stream++;
         if (accept == 0)
@@ -1349,42 +1472,42 @@ request_new_stream(struct poll_event_connection *pec, uint64_t qsflag,
         else
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_ISB;
             
-        POLL_TAILQ_INSERT_TAIL(&pec->pec_stream_cx, peccx, peccx_tqe);
+        QPOLL_TAILQ_INSERT_TAIL(&pec->pec_stream_cx, pscx, pscx_tqe);
     }
 
     /*
      * We are changing poll events, so SSL_poll() array needs be rebuilt.
      */
     qconn_pe->pe_my_pm->pm_need_rebuild = 1;
-
-    return 0;
 }
 
 static void *
 get_response_from_pec(struct poll_event_connection *pec, int stype)
 {
-    struct poll_event_context *peccx;
+    struct poll_stream_context *pscx;
     void *rv;
 
     switch (stype) {
-    case PE_STREAM_UNI_OUT:
-        peccx = POLL_TAILQ_FIRST(&pec->pec_unistream_cx);
-        if (peccx != NULL) {
+    case PE_SUSTREAM:
+    case PE_CUSTREAM:
+        pscx = QPOLL_TAILQ_FIRST(&pec->pec_unistream_cx);
+        if (pscx != NULL) {
             pec->pec_want_unistream--;
-            POLL_TAILQ_REMOVE(&pec->pec_unistream_cx, peccx, peccx_tqe);
-            rv = peccx->peccx;
-            OPENSSL_free(peccx);
+            QPOLL_TAILQ_REMOVE(&pec->pec_unistream_cx, pscx, pscx_tqe);
+            rv = pscx->pscx;
+            OPENSSL_free(pscx);
         } else {
             rv = NULL;
         }
         break;
-    case PE_STREAM:
-        peccx = POLL_TAILQ_FIRST(&pec->pec_stream_cx);
-        if (peccx != NULL) {
+    case PE_SSTREAM:
+    case PE_CSTREAM:
+        pscx = QPOLL_TAILQ_FIRST(&pec->pec_stream_cx);
+        if (pscx != NULL) {
             pec->pec_want_stream--;
-            POLL_TAILQ_REMOVE(&pec->pec_stream_cx, peccx, peccx_tqe);
-            rv = peccx->peccx;
-            OPENSSL_free(peccx);
+            QPOLL_TAILQ_REMOVE(&pec->pec_stream_cx, pscx, pscx_tqe);
+            rv = pscx->pscx;
+            OPENSSL_free(pscx);
         } else {
             rv = NULL;
         }
@@ -1400,21 +1523,22 @@ static void
 app_destroy_qconn(struct poll_event *pe)
 {
     struct poll_event_connection *pec;
-    struct poll_event_context *peccx, *peccx_save;
+    struct poll_stream_context *pscx, *pscx_save;
 
     pec = pe_to_connection(pe);
     if (pec == NULL)
         return;
 
-    POLL_TAILQ_FOREACH_SAFE(peccx, &pec->pec_unistream_cx, peccx_tqe,
-                            peccx_save) {
-        peccx->peccx_cb_ondestroy(peccx->peccx);
-        OPENSSL_free(peccx);
+    QPOLL_TAILQ_FOREACH_SAFE(pscx, &pec->pec_unistream_cx, pscx_tqe,
+                            pscx_save) {
+        pscx->pscx_cb_ondestroy(pscx->pscx);
+        OPENSSL_free(pscx);
     }
 
-    POLL_TAILQ_FOREACH_SAFE(peccx, &pec->pec_stream_cx, peccx_tqe, peccx_save) {
-        peccx->peccx_cb_ondestroy(peccx->peccx);
-        OPENSSL_free(peccx);
+    QPOLL_TAILQ_FOREACH_SAFE(pscx, &pec->pec_stream_cx, pscx_tqe,
+	                     pscx_save) {
+        pscx->pscx_cb_ondestroy(pscx->pscx);
+        OPENSSL_free(pscx);
     }
 }
 
@@ -1464,9 +1588,19 @@ app_handle_qconn_error(struct poll_event *pe)
  * HTTP/1.0 server application
  */
 static void
-srvapp_ondestroy_cb(struct poll_event *pe)
+srvapp_ondestroy_sstreamcb(struct poll_event *pe)
 {
-    rb_destroy((struct response_buffer *)pe->pe_appdata);
+    struct poll_event_sstream *pess = pe_to_sstream(pe);
+
+    rb_destroy(pess->pess_rb);
+}
+
+static void
+srvapp_ondestroy_sustreamcb(struct poll_event *pe)
+{
+    struct poll_event_sustream *pesu = pe_to_sustream(pe);
+
+    rb_destroy(pesu->pesu_rb);
 }
 
 static int
@@ -1511,18 +1645,12 @@ srvapp_handle_stream_error(struct poll_event *pe)
  * if write queue becomes empty, stream is concluded.
  */
 static int
-srvapp_write_cb(struct poll_event *pe)
+srvapp_write_common(struct poll_event *pe, struct rr_buffer *rb)
 {
-    struct response_buffer *rb = (struct response_buffer *)pe->pe_appdata;
     char buf[4096];
     size_t written;
     unsigned int wlen;
     int rv;
-
-    if (rb == NULL) {
-        DPRINTFS(stderr, "%s no response buffer\n", __func__);
-        return -1;
-    }
 
     wlen = rb_read(rb, buf, sizeof (buf));
     if (wlen == 0) {
@@ -1556,26 +1684,76 @@ srvapp_write_cb(struct poll_event *pe)
 }
 
 static int
-srvapp_setup_response(struct poll_event_stream *pes)
+srvapp_write_sstreamcb(struct poll_event *pe)
 {
-    struct poll_event *pe = (struct poll_event *)pes;
+    struct poll_event_sstream *pess;
+
+    pess = pe_to_sstream(pe);
+    if (pess == NULL) {
+        warnx("%s unexpected type for %p (want SSTREAM, got %s\n)\n",
+              __func__, pe, pe_type_to_name(pe));
+        return -1;
+    } 
+
+    if (pess->pess_rb == NULL) {
+        warnx("%s no response buffer\n", __func__);
+        return -1;
+    }
+
+    return srvapp_write_common(pe, pess->pess_rb);
+}
+
+static int
+srvapp_write_sustreamcb(struct poll_event *pe)
+{
+    struct poll_event_sustream *pesu;
+
+    pesu = pe_to_sustream(pe);
+    if (pesu == NULL) {
+        warnx("%s unexpected type for %p (want SUTREAM, got %s\n)\n",
+              __func__, pe, pe_type_to_name(pe));
+        return -1;
+    } 
+
+    if (pesu->pesu_rb == NULL) {
+        warnx("%s no response buffer\n", __func__);
+        return -1;
+    }
+
+    return srvapp_write_common(pe, pesu->pesu_rb);
+}
+
+static int
+srvapp_setup_response(struct poll_event_sstream *pess)
+{
+    struct poll_event *pe = (struct poll_event *)pess;
+    struct poll_stream_context *pscx;
     int rv;
 
     switch (pe->pe_type) {
-    case PE_STREAM_UNI_IN:
+    case PE_SUSTREAM:
         /*
          * passing accept 0 indicates we want to create outbound
          * stream (handling OS* event with SSL_new_stream()
          */
-        rv = request_new_stream(pes->pes_conn, SSL_STREAM_FLAG_UNI,
-                                pe->pe_appdata, /* accept */ 0);
-        break;
-    case PE_STREAM:
-        pe->pe_cb_out = srvapp_write_cb;
+        pscx = OPENSSL_malloc(sizeof (struct poll_stream_context));
+        if (pscx == NULL)
+            return -1;
+        pscx->pscx = pess->pess_rb;
+        pess->pess_rb = NULL;
+        pscx->pscx_cb_ondestroy = (void(*)(void *))rb_destroy;
+
+        request_new_stream(pess->pess_conn, SSL_STREAM_FLAG_UNI,
+                           pscx, /* accept */ 0);
         rv = 0;
+        break;
+    case PE_SSTREAM:
+        pe->pe_cb_out = srvapp_write_sstreamcb;
         pe_resume_write(pe);
+        rv = 0;
         break;
     default:
+        warnx("%s unexpected event type %s\n", __func__, pe_type_to_name(pe));
         rv = -1;
     }
 
@@ -1607,19 +1785,15 @@ get_fsize(const char *file_name)
 }
 
 static int
-parse_request(struct poll_event_stream *pes)
+parse_request(struct poll_event_sstream *pess)
 {
-    const char *pos = pes->pes_reqbuf;
+    const char *pos = pess->pess_reqbuf;
     char file_name_buf[4096];
     char *dst = file_name_buf;
     char *end = &file_name_buf[4096];
     char *file_name;
-    struct poll_event *pe = (struct poll_event *)pes;
+    struct poll_event *pe = (struct poll_event *)pess;
     int rv;
-
-    /* got request already */
-    if (pe->pe_appdata != NULL)
-        return -1;
 
     while (*pos && isspace((int)*pos))
         pos++;
@@ -1660,31 +1834,14 @@ parse_request(struct poll_event_stream *pes)
             file_name = "foo";
     }
 
-    assert(pe->pe_appdata == NULL);
-    pe->pe_appdata = new_txt_full_respoonse(file_name, get_fsize(file_name));
+    assert(pess->pess_rb == NULL);
+    pess->pess_rb = (struct rr_buffer *)
+                    new_txt_full_rrbuff(file_name,get_fsize(file_name));
 
-    if (pe->pe_appdata == NULL)
+    if (pess->pess_rb == NULL)
         rv = -1;
     else
-        rv = srvapp_setup_response(pes);
-
-    return rv;
-}
-
-static int
-wrap_around(struct poll_event_stream *pes)
-{
-    int rv = 0;
-
-    /* we can wrap the buffer iff we got request */
-    if (pes->pes_wpos_sz == 0) {
-        if (((struct poll_event *)pes)->pe_appdata != NULL) {
-            pes->pes_wpos = pes->pes_reqbuf;
-            pes->pes_wpos_sz = sizeof (pes->pes_reqbuf) - 1;
-        } else {
-            rv = -1;
-        }
-    }
+        rv = srvapp_setup_response(pess);
 
     return rv;
 }
@@ -1699,22 +1856,26 @@ wrap_around(struct poll_event_stream *pes)
 static int
 srvapp_read_cb(struct poll_event *pe)
 {
-    struct poll_event_stream *pes = pe_to_stream(pe);
+    struct poll_event_sstream *pess = pe_to_sstream(pe);
     size_t read_len;
     int rv;
 
-    if (pes == NULL)
+    if (pess == NULL) {
+        warnx("%s unexpected stream type (want SSTREAM got %s)", __func__,
+              pe_type_to_name(pe));
         return -1;
+    }
 
     /*
      * if we could not parse the request in the first chunk (8k), then just
-     * fail the stream with reset. If we got request then finish reading
-     * data from client.
+     * wrap around and continue reading data from client.
      */
-    if (wrap_around(pes) == -1)
-        return -1;
+    if (pess->pess_wpos_sz == 0) {
+        pess->pess_wpos = pess->pess_reqbuf;
+        pess->pess_wpos_sz = sizeof (pess->pess_reqbuf) - 1;
+    }
 
-    rv = SSL_read_ex(get_ssl_from_pe(pe), pes->pes_wpos, pes->pes_wpos_sz,
+    rv = SSL_read_ex(get_ssl_from_pe(pe), pess->pess_wpos, pess->pess_wpos_sz,
                      &read_len);
     if (rv == 0) {
         pe_disable_read(pe);
@@ -1728,10 +1889,10 @@ srvapp_read_cb(struct poll_event *pe)
             rv = handle_read_stream_state(pe);
         return rv;
     }
-    pes->pes_wpos += read_len;
-    pes->pes_wpos_sz -= read_len;
+    pess->pess_wpos += read_len;
+    pess->pess_wpos_sz -= read_len;
 
-    rv = parse_request(pes);
+    rv = parse_request(pess);
 
     return rv;
 }
@@ -1745,9 +1906,9 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
     SSL *qconn;
     SSL *qs;
     struct poll_event_connection *pec;
-    struct poll_event *qs_pe;
-    struct poll_event_stream *pes;
+    struct poll_event *qs_pe = NULL;
     int rv = 0;
+    struct rr_buffer *rb;
 
     assert(qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OS);
     pec = pe_to_connection(qconn_pe);
@@ -1755,32 +1916,32 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
 
     qconn = get_ssl_from_pe(qconn_pe);
 
-    if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU)
+    if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
         qs = SSL_new_stream(qconn, SSL_STREAM_FLAG_UNI);
-    else
+        qs_pe = (struct poll_event *)new_sustream_pe(qs);
+    } else {
         qs = SSL_new_stream(qconn, 0);
-    if (qs == NULL)
-        return -1;
+        qs_pe = (struct poll_event *)new_sstream_pe(qs);
+    }
 
-    pes = new_stream_pe(qs);
-    qs_pe = (struct poll_event *)pes;
-    if (qconn_pe != NULL) {
+    if (qs_pe != NULL) {
         qs_pe->pe_cb_error = srvapp_handle_stream_error;
-        qs_pe->pe_cb_out = srvapp_write_cb; /* unidirectional stream is outbound */
-        qs_pe->pe_cb_ondestroy = srvapp_ondestroy_cb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_EW;
 
         if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
-            qs_pe->pe_type = PE_STREAM_UNI_OUT;
+            qs_pe->pe_cb_ondestroy = srvapp_ondestroy_sustreamcb;
+            qs_pe->pe_cb_out = srvapp_write_sustreamcb;
+            rb = get_response_from_pec(pec, qs_pe->pe_type);
+            ((struct poll_event_sustream *)qs_pe)->pesu_rb = rb;
         } else if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSB) {
-            /* we will enable read side for bi-directional stream */
-            qs_pe->pe_type = PE_STREAM;
+            qs_pe->pe_cb_ondestroy = srvapp_ondestroy_sstreamcb;
             qs_pe->pe_cb_out = srvapp_read_cb;
-            qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
+            qs_pe->pe_cb_out = srvapp_write_sstreamcb;
+            qs_pe->pe_want_events |= SSL_POLL_EVENT_ER;
+            ((struct poll_event_sstream *)qs_pe)->pess_rb = rb;
         }
 
-        qs_pe->pe_appdata = get_response_from_pec(pec, qs_pe->pe_type);
-        if (qs_pe->pe_appdata == NULL) {
+        if (rb == NULL) {
             rv = -1;
             destroy_pe(qs_pe);
         } else {
@@ -1808,42 +1969,32 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
     SSL *qs;
     struct poll_event *qs_pe;
     int rv = 0;
-#ifdef DEBUG
-    struct poll_event_connection *pec;
-
-    assert(qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_IS);
-    pec = pe_to_connection(qconn_pe);
-    assert(pec != NULL);
-#endif
 
     qconn = get_ssl_from_pe(qconn_pe);
 
     if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISU)
         qs = SSL_accept_stream(qconn, SSL_STREAM_FLAG_UNI);
     else
-        qs = SSL_accept_stream(qconn, SSL_STREAM_FLAG_UNI);
-    if (qs == NULL)
-        return -1;
+        qs = SSL_accept_stream(qconn, 0);
 
-    qs_pe = (struct poll_event *)new_stream_pe(qs);
+    /*
+     * note we use bidirectional (sstream) for unidirectional stream too.
+     * The reason is that sustream can not process request.
+     */
+    qs_pe = (struct poll_event *)new_sstream_pe(qs);
     if (qs_pe != NULL) {
         qs_pe->pe_cb_error = srvapp_handle_stream_error;
         qs_pe->pe_cb_in = srvapp_read_cb;
-        qs_pe->pe_cb_ondestroy = srvapp_ondestroy_cb;
+        qs_pe->pe_cb_ondestroy = srvapp_ondestroy_sstreamcb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
         add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
-
-        if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISU) {
-            qs_pe->pe_type = PE_STREAM_UNI_IN;
-        } else if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISB) {
-            qs_pe->pe_type = PE_STREAM;
+        if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISB) {
             /*
              * disable write side on duplex (bi-directional) stream,
-             * because we need to read response from client first.
+             * because we need to read request from client first.
              */
             pe_pause_write(qs_pe);
         }
-        qs_pe->pe_appdata = NULL;
         pe_resume_read(qs_pe);
     } else {
         SSL_free(qs);
@@ -2144,23 +2295,58 @@ clntapp_create_request(size_t req_sz, size_t payload_sz)
     return rtf;
 }
 
-static int
-clntapp_setup_response(struct poll_event_stream *pes)
+static void
+clntapp_ondestroy_ccxcb(void *ccx_arg)
 {
-    struct poll_event *pe = (struct poll_event *)pes;
+    struct client_context *ccx = ccx_arg;
+
+    if (ccx != NULL) {
+        rb_destroy(ccx->ccx_rb);
+        OPENSSL_free(ccx);
+    }
+}
+
+static int
+clntapp_setup_response(struct poll_event_cstream *pecs)
+{
+    struct poll_event *pe = (struct poll_event *)pecs;
+    struct poll_stream_context *pscx;
+    struct client_context *ccx;
     int rv;
 
     switch (pe->pe_type) {
-    case PE_STREAM_UNI_OUT:
+    case PE_CUSTREAM:
         /*
          * passing accept 1 indicates we want to accept inbound
          * stream (handling IS* event with SSL_accept_stream()
          */
-        rv = request_new_stream(pes->pes_conn, SSL_STREAM_FLAG_UNI,
-                                pe->pe_appdata, /* accept */ 1);
+        pscx = OPENSSL_malloc(sizeof (struct poll_stream_context));
+        if (pscx == NULL) {
+            warnx("%s cannot allocate memory for poll stream context", __func__);
+            return -1;
+        }
+
+        ccx = OPENSSL_malloc(sizeof (struct client_context));
+        if (ccx == NULL) {
+            OPENSSL_free(pscx);
+            warnx("%s cannot allocate memory for client context", __func__);
+            return -1;
+        }
+
+        ccx->ccx_rb = pecs->pecs_rb;
+        pecs->pecs_rb = NULL;
+        ccx->ccx_ss = pecs->pecs_ss;
+
+        pscx->pscx = ccx;
+        pscx->pscx_cb_ondestroy = clntapp_ondestroy_ccxcb;
+
+        request_new_stream(pecs->pecs_pec, SSL_STREAM_FLAG_UNI,
+                           pscx, /* accept */ 1);
+        rv = 0;
         break;
-    case PE_STREAM:
+    case PE_CSTREAM:
         pe_resume_read(pe);
+        rv = 0;
         break;
     default:
         rv = -1;
@@ -2178,18 +2364,21 @@ clntapp_setup_response(struct poll_event_stream *pes)
 static int
 clntapp_write_cb(struct poll_event *pe)
 {
-    struct request_buffer *rb = (struct request_buffer *)pe->pe_appdata;
-    struct poll_event_stream *pes;
+    struct request_buffer *rb;
+    struct poll_event_cstream *pecs;
     char buf[4096];
     size_t written;
     unsigned int wlen;
     int rv;
 
-    if (rb == NULL) {
-        DPRINTFC(stderr, "%s no response buffer\n", __func__);
+    pecs = pe_to_cstream(pe);
+    if (pecs == NULL) {
+        warnx("%s unexpected event for %p (want CSTREAM got %s)",
+              __func__, pe, pe_type_to_name(pe));
         return -1;
     }
 
+    rb = pecs->pecs_rb;
     wlen = rb_read(rb, buf, sizeof (buf));
     if (wlen == 0) {
         DPRINTFC(stderr, "%s no more data to write to %p (%s)\n", __func__,
@@ -2202,15 +2391,7 @@ clntapp_write_cb(struct poll_event *pe)
         }
         pe_disable_write(pe);
 
-        pes = pe_to_stream(pe);
-        if (pes == NULL) {
-            DPRINTFC(stderr,
-                     "%s unexpected poll event type (expected stream got %s)\n",
-                     __func__, pe_type_to_name(pe));
-            return -1;
-        }
-
-        rv = clntapp_setup_response(pes);
+        rv = clntapp_setup_response(pecs);
         if (rv == -1)
             DPRINTFC(stderr, "%s clntapp_setup_response() failed\n", __func__);
 
@@ -2218,7 +2399,7 @@ clntapp_write_cb(struct poll_event *pe)
          * tell poll manager to discard unidirectional stream as the stream
          * is concluded (request has been sent).
          */
-        if (pe->pe_type != PE_STREAM)
+        if (pe->pe_type == PE_CUSTREAM)
             rv = -1;
 
     } else {
@@ -2235,38 +2416,114 @@ clntapp_write_cb(struct poll_event *pe)
 }
 
 static int
-clntapp_read_cb(struct poll_event *pe)
+clntapp_read_cstreamcb(struct poll_event *pe)
 {
-    struct poll_event_response *per;
+    struct poll_event_cstream *pecs;
     char devnull[16384];
     size_t read_len;
     int rv;
 
-    per = (struct poll_event_response *) pe_to_stream(pe);
-    if (per == NULL) {
-        DPRINTFC(stderr, "%s unexpected event type (want stream, got %s)\n",
-                 __func__, pe_type_to_name(pe));
+    pecs = pe_to_cstream(pe);
+    if (pecs == NULL) {
+        warnx("%s unexpected event type (want CSTREAM, got %s)\n",
+              __func__, pe_type_to_name(pe));
         return -1;
     }
 
     rv = SSL_read_ex(get_ssl_from_pe(pe), devnull, sizeof (devnull), &read_len);
     if ((rv == 0) || (read_len == 0)) {
         rv = -1; /* stream is done, tell poll manager to remove it */
-        DPRINTFC(stderr, "%s received: %zu\n", __func__, per->per_len);
+        DPRINTFC(stderr, "%s received: %zu\n", __func__, pecs->pecs_ss->ss_rx);
     } else {
         rv = 0;	/* keep polling */
-        per->per_len += read_len;
+	pecs->pecs_ss->ss_rx += read_len;
+    }
+
+    return rv;
+}
+
+static int
+clntapp_read_custreamcb(struct poll_event *pe)
+{
+    struct poll_event_custream *pecsu;
+    char devnull[16384];
+    size_t read_len;
+    int rv;
+
+    pecsu = pe_to_custream(pe);
+    if (pecsu == NULL) {
+        warnx("%s unexpected event type (want CUSTREAM, got %s)\n",
+              __func__, pe_type_to_name(pe));
+        return -1;
+    }
+
+    rv = SSL_read_ex(get_ssl_from_pe(pe), devnull, sizeof (devnull), &read_len);
+    if ((rv == 0) || (read_len == 0)) {
+        rv = -1; /* stream is done, tell poll manager to remove it */
+        DPRINTFC(stderr, "%s received: %zu\n", __func__, pecsu->pecsu_ss->ss_rx);
+    } else {
+        rv = 0;	/* keep polling */
+	pecsu->pecsu_ss->ss_rx += read_len;
     }
 
     return rv;
 }
 
 static void
-clntapp_ondestroy_cb(struct poll_event *pe)
+clntapp_update_pec(struct poll_event_connection *pec, struct stream_stats *ss)
 {
-    struct poll_event_response *per = (struct poll_event_response *)pe;
-    rb_destroy((struct response_buffer *)pe->pe_appdata);
-    SSL_shutdown(get_ssl_from_pe((struct poll_event *)per->per_pec));
+    /*
+     * bump connection stats and close connection when done
+     */
+    pec->pec_cs->cs_tx += ss->ss_tx;
+    pec->pec_cs->cs_rx += ss->ss_rx;
+    /* ? timeestamp ? */
+    QPOLL_TAILQ_INSERT_HEAD(&pec->pec_cs->cs_done, ss, ss_tqe);
+    if (QPOLL_TAILQ_COUNT(&pec->pec_cs->cs_done) == STREAM_COUNT)
+        SSL_shutdown(get_ssl_from_pe((struct poll_event *)pec));
+}
+
+static void
+clntapp_ondestroy_cstreamcb(struct poll_event *pe)
+{
+    struct poll_event_cstream *pecs;
+    struct poll_event_connection *pec;
+    struct stream_stats *ss;
+
+    pecs = pe_to_cstream(pe);
+    if (pecs == NULL) {
+        warnx("%s unexpected type for %p (want CSTREAM got %s)\n",
+              __func__, pecs, pe_type_to_name(pe));
+        return;
+    }
+
+    rb_destroy(pecs->pecs_rb);
+    pec = pecs->pecs_pec;
+    ss = pecs->pecs_ss;
+    OPENSSL_free(pecs);
+
+    clntapp_update_pec(pec, ss);
+}
+
+static void
+clntapp_ondestroy_custreamcb(struct poll_event *pe)
+{
+    struct poll_event_custream *pecsu;
+    struct poll_event_connection *pec;
+    struct stream_stats *ss;
+
+    pecsu = pe_to_custream(pe);
+    if (pecsu == NULL) {
+        warnx("%s unexpected type for %p (want CUSTREAM got %s)\n",
+              __func__, pecsu, pe_type_to_name(pe));
+        return;
+    }
+
+    pec = pecsu->pecsu_pec;
+    ss = pecsu->pecsu_ss;
+    OPENSSL_free(pecsu);
+
+    clntapp_update_pec(pec, ss);
 }
 
 static int
@@ -2275,39 +2532,73 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     SSL *qconn;
     SSL *qs;
     struct poll_event_connection *pec;
-    struct poll_event *qs_pe;
-    struct poll_event_response *per;
+    struct poll_event *qs_pe = NULL;
+    struct poll_event_cstream *pecs;
+    struct poll_event_custream *pecsu;
+    struct stream_stats *ss;
     int rv = 0;
+    int want_type;
 
     assert(qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OS);
     pec = pe_to_connection(qconn_pe);
     assert(pec != NULL);
 
-    qconn = get_ssl_from_pe(qconn_pe);
-    qconn_pe->pe_want_events &= ~SSL_POLL_EVENT_OSB;	/* todo: multistream */
-
-    if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU)
-        qs = SSL_new_stream(qconn, SSL_STREAM_FLAG_UNI);
+    if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSB)
+        want_type = SS_BIDISTREAM;
     else
-        qs = SSL_new_stream(qconn, 0);
+        want_type = SS_UNISTREAM;
+
+    QPOLL_TAILQ_FOREACH(ss, &pec->pec_cs->cs_todo, ss_tqe) {
+        if (ss->ss_type == want_type)
+            break;
+    }
+
+    if (ss == NULL) {
+        /* stop polling on uni/bidi stream */
+        qconn_pe->pe_want_events &= ~(SS_TYPE_TO_POLLEV(want_type));
+
+        /* if all requests are dispatch stop polling write side completely */
+        if (QPOLL_TAILQ_EMPTY(&pec->pec_cs->cs_todo))
+            pe_pause_write(qconn_pe);
+
+        return 0;
+    }
+
+    QPOLL_TAILQ_REMOVE(&pec->pec_cs->cs_todo, ss, ss_tqe);
+    qconn = get_ssl_from_pe(qconn_pe);
+    qs = SSL_new_stream(qconn, SS_TYPE_TO_SFLAG(want_type));
     if (qs == NULL)
         return -1;
 
-    per = new_response_pe(qs);
-    per->per_pec = pec;
-    qs_pe = (struct poll_event *)per;
+    if (want_type == SS_BIDISTREAM) {
+        pecs = new_cstream_pe(qs);
+        if (pecs != NULL) {
+	    pecs->pecs_pec = pec;
+	    pecs->pecs_ss = ss;
+            qs_pe = (struct poll_event *)pecs;
+        }
+    } else {
+        pecsu = new_custream_pe(qs);
+        if (pecsu != NULL) {
+	    pecsu->pecsu_pec = pec;
+	    pecsu->pecsu_ss = ss;
+            qs_pe = (struct poll_event *)pecsu;
+        }
+    }
     if (qs_pe != NULL) {
+        qs_pe = (struct poll_event *)pecs;
         qs_pe->pe_cb_error = clntapp_handle_stream_error;
         qs_pe->pe_cb_out = clntapp_write_cb;
-        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_cb;
+        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_cstreamcb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_EW;
 
         if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
-            qs_pe->pe_type = PE_STREAM_UNI_OUT;
+            qs_pe->pe_type = PE_CUSTREAM;
+            qs_pe->pe_cb_in = clntapp_read_custreamcb;
         } else if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSB) {
             /* we will enable read side for bi-directional stream */
-            qs_pe->pe_type = PE_STREAM;
-            qs_pe->pe_cb_in = clntapp_read_cb;
+            qs_pe->pe_type = PE_CSTREAM;
+            qs_pe->pe_cb_in = clntapp_read_cstreamcb;
             qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
         }
 
@@ -2315,8 +2606,8 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
 	 * TODO: we need to generate parameters here using a some kind of
 	 * performance test scenario.
          */
-        qs_pe->pe_appdata = clntapp_create_request(32768, 4096);
-        if (qs_pe->pe_appdata == NULL) {
+        pecs->pecs_rb = clntapp_create_request(ss->ss_req_sz, ss->ss_body_sz);
+        if (pecs->pecs_rb == NULL) {
             rv = -1;
             destroy_pe(qs_pe);
         } else {
@@ -2351,32 +2642,24 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
 
     qconn = get_ssl_from_pe(qconn_pe);
 
-    if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISU)
+    if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISU) {
         qs = SSL_accept_stream(qconn, SSL_STREAM_FLAG_UNI);
-    else
-        qs = SSL_accept_stream(qconn, SSL_STREAM_FLAG_UNI);
-    if (qs == NULL)
-        return -1;
+    } else {
+        qs = SSL_accept_stream(qconn, 9);
+        if (qs != NULL) {
+	    /* tell server to expect nothing from us */
+            SSL_stream_conclude(qs, 0);
+        }
+    }
 
-    qs_pe = (struct poll_event *)new_response_pe(qs);
+    qs_pe = (struct poll_event *)new_custream_pe(qs);
     if (qs_pe != NULL) {
         qs_pe->pe_cb_error = clntapp_handle_stream_error;
-        qs_pe->pe_cb_in = clntapp_read_cb;
-        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_cb;
+        qs_pe->pe_cb_in = clntapp_read_custreamcb;
+        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_custreamcb;
         qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
         add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
-
-        if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISU) {
-            qs_pe->pe_type = PE_STREAM_UNI_IN;
-        } else if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_ISB) {
-            qs_pe->pe_type = PE_STREAM;
-            /*
-             * disable write side on duplex (bi-directional) stream,
-             * because we need to read response from client first.
-             */
-            pe_pause_write(qs_pe);
-        }
-        qs_pe->pe_appdata = NULL;
+        pe_disable_write(qs_pe);
         pe_resume_read(qs_pe);
     } else {
         SSL_free(qs);
@@ -2495,13 +2778,15 @@ create_socket_bio(const char *hostname, const char *port, int family,
 }
 
 static struct poll_event *
-create_client_pe(SSL_CTX *ctx)
+create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
 {
     unsigned char alpn[] = { 8, 'h', 't', 't', 'p', '/', '1', '.', '0' };
     SSL *qconn = NULL;
     BIO *bio = NULL;
     BIO_ADDR *peer_addr = NULL;
     struct poll_event *qc_pe;
+    struct poll_event_connection *qc_pec;
+    struct stream_stats *ss;
 
     qconn = SSL_new(ctx);
     if (qconn == NULL) {
@@ -2554,10 +2839,25 @@ create_client_pe(SSL_CTX *ctx)
     qc_pe->pe_cb_out = clntapp_new_stream_cb;
     qc_pe->pe_cb_error = app_handle_qconn_error;
     qc_pe->pe_cb_ondestroy = app_destroy_qconn;
+
+    qc_pec = pe_to_connection(qc_pe);
+    qc_pec->pec_cs = cs;
+
     /*
      * client wants to send request, it needs to create outbound stream.
      */
-    qc_pe->pe_want_events |= SSL_POLL_EVENT_OSB;
+    if ((ss = QPOLL_TAILQ_FIRST(&cs->cs_todo)) != NULL) {
+        switch (ss->ss_type) {
+        case SS_UNISTREAM:
+            qc_pe->pe_want_events |= SSL_POLL_EVENT_OSU;
+            break;
+        case SS_BIDISTREAM:
+            qc_pe->pe_want_events |= SSL_POLL_EVENT_OSB;
+            break;
+        default:
+            warnx("No streams for connection\n");
+        }
+    }
 
     return qc_pe;
 
@@ -2569,6 +2869,99 @@ fail:
     return NULL;
 }
 
+static struct stream_stats *
+create_stream_stats(unsigned int req_sz, unsigned int body_sz, char type)
+{
+    struct stream_stats *ss;
+
+    ss = OPENSSL_malloc(sizeof (struct stream_stats));
+    if (ss != NULL) {
+        ss->ss_req_sz = req_sz;
+        ss->ss_body_sz = body_sz;
+        ss->ss_type = type;
+        ss->ss_rx = 0;
+        ss->ss_tx = 0;
+    }
+
+    return ss;
+}
+
+static void
+destroy_test_scenario(struct client_stats cs[])
+{
+    unsigned int i;
+    struct stream_stats *ss;
+
+    for (i = 0; i < client_config.cc_clients; i++) {
+        while ((ss = QPOLL_TAILQ_FIRST(&cs[i].cs_todo)) != NULL) {
+            QPOLL_TAILQ_REMOVE(&cs[i].cs_todo, ss, ss_tqe);
+            OPENSSL_free(ss);
+        }
+
+        while ((ss = QPOLL_TAILQ_FIRST(&cs[i].cs_done)) != NULL) {
+            QPOLL_TAILQ_REMOVE(&cs[i].cs_done, ss, ss_tqe);
+            OPENSSL_free(ss);
+        }
+    }
+
+    OPENSSL_free(cs);
+}
+
+/*
+ * creates a scenario for performance test. The scenario is array
+ * of connections. Each connection has list of streams to perform.
+ * The streams are moved from todo list to done list as they are
+ * being processed.
+ */
+static struct client_stats *
+create_test_scenario(void)
+{
+    struct client_stats *cs;
+    struct stream_stats *ss;
+    unsigned int req_sz, body_sz;
+    unsigned int i, j;
+
+    cs = OPENSSL_zalloc(sizeof (struct client_stats) *
+                        client_config.cc_clients);
+
+    if (cs != NULL) {
+        for (i = 0; i < client_config.cc_clients; i++) {
+            QPOLL_TAILQ_INIT(&cs[i].cs_todo);
+            QPOLL_TAILQ_INIT(&cs[i].cs_done);
+
+            req_sz = client_config.cc_rep_sz;
+            body_sz = client_config.cc_req_sz;
+            for (j = 0; j < client_config.cc_ustreams; j++) {
+                ss = create_stream_stats(req_sz, body_sz, SS_UNISTREAM);
+                if (ss == NULL) {
+                    destroy_test_scenario(cs);
+                    return NULL;
+                }
+                req_sz = req_sz * 2;
+                req_sz = (req_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : req_sz;
+                body_sz = body_sz * 2;
+                body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
+            }
+
+            req_sz = client_config.cc_rep_sz;
+            body_sz = client_config.cc_req_sz;
+            for (j = 0; j < client_config.cc_bstreams; j++) {
+                ss = create_stream_stats(req_sz, body_sz, SS_UNISTREAM);
+                if (ss == NULL) {
+                    destroy_test_scenario(cs);
+                    return NULL;
+                }
+                req_sz = req_sz * 2;
+                req_sz = (req_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : req_sz;
+                body_sz = body_sz * 2;
+                body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
+            }
+        }
+    }
+
+    return cs;
+}
+
 static int
 client_thread(void)
 {
@@ -2576,6 +2969,12 @@ client_thread(void)
     struct poll_manager *pm;
     struct poll_event *pec;
     int rv;
+    struct client_stats *cs;
+    unsigned int i;
+
+    cs = create_test_scenario();
+    if (cs == NULL)
+        errx(1, "%s can not create test scenario (malloc)\n", __func__);
 
     ctx = SSL_CTX_new(OSSL_QUIC_client_method());
     if (ctx == NULL)
@@ -2592,15 +2991,17 @@ client_thread(void)
         errx(1, "Failed to create poll manager for server");
     }
 
-    pec = create_client_pe(ctx);
-    if (pec == NULL) {
-        ERR_print_errors_fp(stderr);
-        errx(1, "Failed to create poll manager for server");
-    }
+    for (i = 0; i < client_config.cc_clients; i++) {
+        pec = create_client_pe(ctx, &cs[i]);
+        if (pec == NULL) {
+            ERR_print_errors_fp(stderr);
+            errx(1, "Failed to create poll manager for server");
+        }
 
-    add_pe_to_pm(pm, pec);
-    rebuild_poll_set(pm);
-    SSL_connect(get_ssl_from_pe(pec));
+        add_pe_to_pm(pm, pec);
+        rebuild_poll_set(pm);
+        SSL_connect(get_ssl_from_pe(pec));
+    }
 
     rv = run_quic_client(pm);
 
@@ -2658,7 +3059,7 @@ main(int argc, char *argv[])
     if (argc != 4)
         errx(res, "usage: %s <port> <server.crt> <server.key>", argv[0]);
 
-    while ((ch = getopt(argc, argv, "p:c:b:u:s:")) != -1) {
+    while ((ch = getopt(argc, argv, "p:c:b:u:s:r")) != -1) {
         switch (ch) {
         case 'p':
             portstr = optarg;
@@ -2677,6 +3078,9 @@ main(int argc, char *argv[])
             break;
         case 'w':
             req_sizestr = optarg;
+            break;
+        case 'r':
+            client_config.cc_shuffle = 1;
             break;
         default:
             usage(argv[0]);
