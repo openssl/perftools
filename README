@@ -56,6 +56,8 @@ handshake [-t] [-s] <certsdir> <threadcount>
 -t - produce terse output
 -s - create an ssl_ctx per connection, rather than a single thread-shared ctx
 -p - use ossl_lib_ctx per thread
+-P - use ossl_lib_ctx pool (can be combined with -s. If sharing is enabled, ssl_ctx
+     is shared within single thread)
 certsdir - Directory where the test can locate servercert.pem and serverkey.pem
 threadcount - Number of concurrent threads to run in test
 
