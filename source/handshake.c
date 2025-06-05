@@ -27,7 +27,6 @@ int err = 0;
 
 static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
-static int per_thread_ossl_lib_ctx = 0;
 static char *cert = NULL;
 static char *privkey = NULL;
 
@@ -35,6 +34,11 @@ OSSL_TIME *times;
 
 static int threadcount;
 size_t num_calls;
+
+typedef enum {
+    TC_SSL_CTX,
+    TC_OSSL_LIB_CTX_PER_THREAD,
+} test_case_t;
 
 static void do_handshake(size_t num)
 {
@@ -143,6 +147,7 @@ int main(int argc, char * const argv[])
     int i;
     int terse = 0;
     int opt;
+    test_case_t test_case = TC_SSL_CTX;
 
     while ((opt = getopt(argc, argv, "tsp")) != -1) {
         switch (opt) {
@@ -153,7 +158,7 @@ int main(int argc, char * const argv[])
             share_ctx = 0;
             break;
         case 'p':
-            per_thread_ossl_lib_ctx = 1;
+            test_case = TC_OSSL_LIB_CTX_PER_THREAD;
             break;
         default:
             printf(
@@ -196,18 +201,8 @@ int main(int argc, char * const argv[])
     if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
         num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
 
-    if (per_thread_ossl_lib_ctx) {
-        int ret;
-
-        ret = perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
-                                            threadcount, &duration);
-        if (!ret) {
-            printf("Failed to run the test\n");
-            goto err;
-        }
-    }
-
-    if (!per_thread_ossl_lib_ctx) {
+    switch (test_case) {
+    case TC_SSL_CTX: {
         if (share_ctx == 1) {
             if (!perflib_create_ssl_ctx_pair(TLS_server_method(), TLS_client_method(),
                                              0, 0, &sctx, &cctx, cert, privkey)) {
@@ -220,7 +215,22 @@ int main(int argc, char * const argv[])
             printf("Failed to run the test\n");
             goto err;
         }
+        break;
     }
+    case TC_OSSL_LIB_CTX_PER_THREAD: {
+         ret =
+            perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
+                                          threadcount, &duration);
+        if (!ret) {
+            printf("Failed to run the test\n");
+            goto err;
+        }
+        break;
+    }
+    default:
+        fprintf(stderr, "Invalid test case\n");
+        goto err;
+    };
 
     if (err) {
         printf("Error during test\n");
