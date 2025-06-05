@@ -22,6 +22,7 @@
 #include "perflib/perflib.h"
 
 #define NUM_CALLS_PER_TEST        10000
+#define OSSL_LIB_CTX_POOL_SIZE    16
 
 int err = 0;
 
@@ -29,6 +30,8 @@ static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
 static char *cert = NULL;
 static char *privkey = NULL;
+static OSSL_LIB_CTX *libctx_pool[OSSL_LIB_CTX_POOL_SIZE] = { NULL };
+
 
 OSSL_TIME *times;
 
@@ -38,6 +41,7 @@ size_t num_calls;
 typedef enum {
     TC_SSL_CTX,
     TC_OSSL_LIB_CTX_PER_THREAD,
+    TC_OSSL_LIB_CTX_POOL,
 } test_case_t;
 
 static void do_handshake(size_t num)
@@ -138,6 +142,95 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     OSSL_LIB_CTX_free(libctx);
 }
 
+static void do_handshake_ossl_lib_ctx_pool(size_t num)
+{
+    SSL *clientssl = NULL, *serverssl = NULL;
+    int ret = 1;
+    size_t i;
+    OSSL_TIME start, end;
+    OSSL_LIB_CTX *libctx = NULL;
+    SSL_CTX *lsctx = NULL;
+    SSL_CTX *lcctx = NULL;
+
+    start = ossl_time_now();
+
+    libctx = libctx_pool[num % OSSL_LIB_CTX_POOL_SIZE];
+
+    for (i = 0; i < num_calls / threadcount; i++) {
+        if (!perflib_create_ossl_lib_ctx_pair(libctx,
+                                              TLS_server_method(),
+                                              TLS_client_method(),
+                                              0, 0, &lsctx, &lcctx, cert,
+                                              privkey)) {
+            fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
+            err = 1;
+            return;
+        }
+
+
+        ret = perflib_create_ssl_objects(lsctx, lcctx, &serverssl, &clientssl,
+                                         NULL, NULL);
+        ret &= perflib_create_ssl_connection(serverssl, clientssl,
+                                             SSL_ERROR_NONE);
+        perflib_shutdown_ssl_connection(serverssl, clientssl);
+        serverssl = clientssl = NULL;
+        SSL_CTX_free(lsctx);
+        SSL_CTX_free(lcctx);
+        lsctx = lcctx = NULL;
+    }
+
+    end = ossl_time_now();
+    times[num] = ossl_time_subtract(end, start);
+
+    if (!ret)
+        err = 1;
+}
+
+static int init_ossl_lib_ctx_pool() {
+    for (int i = 0; i < OSSL_LIB_CTX_POOL_SIZE; ++i) {
+        libctx_pool[i] = OSSL_LIB_CTX_new();
+        if (libctx_pool[i] == NULL) {
+            fprintf(stderr, "%s:%d: Failed to create ossl lib context\n", __FILE__, __LINE__);
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static void free_ossl_lib_ctx_pool() {
+    for (int i = 0; i < OSSL_LIB_CTX_POOL_SIZE; ++i) {
+        OSSL_LIB_CTX_free(libctx_pool[i]);
+    }
+}
+
+static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
+{
+    int ret = 0;
+
+    ret = init_ossl_lib_ctx_pool();
+    if (!ret)
+        goto err;
+
+    ret = perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_pool, threadcount, duration);
+    if (!ret) {
+        printf("Failed to run the test\n");
+    }
+
+ err:
+    free_ossl_lib_ctx_pool();
+
+    return ret;
+}
+
+void usage(const char *progname) {
+    printf("Usage: %s [-t] [-s] certsdir threadcount\n", progname);
+    printf("-t - terse output\n");
+    printf("-s - disable context sharing\n");
+    printf("-p - use ossl_lib_ctx per thread\n");
+    printf("-P - use ossl_lib_ctx pool\n");
+}
+
 int main(int argc, char * const argv[])
 {
     double persec;
@@ -147,9 +240,10 @@ int main(int argc, char * const argv[])
     int i;
     int terse = 0;
     int opt;
+    int p_flag = 0, P_flag = 0;
     test_case_t test_case = TC_SSL_CTX;
 
-    while ((opt = getopt(argc, argv, "tsp")) != -1) {
+    while ((opt = getopt(argc, argv, "tspP")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -158,16 +252,24 @@ int main(int argc, char * const argv[])
             share_ctx = 0;
             break;
         case 'p':
+            p_flag = 1;
             test_case = TC_OSSL_LIB_CTX_PER_THREAD;
             break;
+        case 'P':
+            P_flag = 1;
+            test_case = TC_OSSL_LIB_CTX_POOL;
+            break;
         default:
-            printf(
-                "Usage: %s [-t] [-s] certsdir threadcount\n", basename(argv[0]));
-            printf("-t - terse output\n");
-            printf("-s - disable context sharing\n");
-            printf("-p - use ossl_lib_ctx per thread\n");
+            usage(basename(argv[0]));
             return EXIT_FAILURE;
         }
+    }
+
+    if ((p_flag + P_flag) > 1) {
+        fprintf(stderr,
+                "Error: -p and -P mutually exclusive. Choose only one.\n\n");
+        usage(basename(argv[0]));
+        return EXIT_FAILURE;
     }
 
     if (argv[optind] == NULL) {
@@ -221,6 +323,14 @@ int main(int argc, char * const argv[])
          ret =
             perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
                                           threadcount, &duration);
+        if (!ret) {
+            printf("Failed to run the test\n");
+            goto err;
+        }
+        break;
+    }
+    case TC_OSSL_LIB_CTX_POOL: {
+        int ret = test_ossl_lib_ctx_pool(threadcount, &duration);
         if (!ret) {
             printf("Failed to run the test\n");
             goto err;
