@@ -104,6 +104,13 @@ void do_fetch(size_t num)
 
     start = ossl_time_now();
 
+    /*
+     * Going through the fetch entries num_calls / threadcount times.
+     *
+     * Mind a little deviation as the (num_calls / threadcount) does not have
+     * to be a multiple of the number of fetch entries therefore at the last
+     * iteration we may not check all the algorithms.
+     */
     for (i = 0; i < num_calls / threadcount; i++) {
         /*
          * If we set a fetch type, always use that
