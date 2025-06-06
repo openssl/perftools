@@ -8,7 +8,7 @@ clean:
 CPPFLAGS += -I$(TARGET_OSSL_INCLUDE_PATH) -I.
 # For second include path, i.e. out of tree build of OpenSSL uncomment this:
 # CPPFLAGS += -I$(TARGET_OSSL_INCLUDE_PATH2)
-CFLAGS += -pthread -O2
+CFLAGS += -pthread -O3
 LDFLAGS += -L$(TARGET_OSSL_LIBRARY_PATH) -L.
 # For setting RUNPATH on built executables uncomment this:
 # LDFLAGS += -Wl,-rpath,$(TARGET_OSSL_LIBRARY_PATH)
