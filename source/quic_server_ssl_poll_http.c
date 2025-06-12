@@ -300,6 +300,7 @@ struct poll_event_connection {
     uint64_t pec_want_stream;
     uint64_t pec_want_unistream;
     struct client_stats *pec_cs;
+    int pec_shutdown;
 };
 
 /*
@@ -448,10 +449,8 @@ static struct client_config {
     unsigned int cc_req_sz;
     int cc_shuffle;
 } client_config;
-#if 0
+
 #define STREAM_COUNT (client_config.cc_ustreams + client_config.cc_bstreams)
-#endif
-#define STREAM_COUNT client_config.cc_ustreams
 
 enum {
     SS_UNISTREAM,
@@ -1334,7 +1333,7 @@ rebuild_poll_set(struct poll_manager *pm)
 {
     struct poll_event *new_poll_set;
     struct poll_event *pe;
-    size_t new_sz;
+    size_t new_sz, new_poll_set_sz;
     size_t pe_num;
     size_t i;
 
@@ -1346,13 +1345,18 @@ rebuild_poll_set(struct poll_manager *pm)
         /*
          * grow poll set by POLL_GROW
          */
-        new_sz = sizeof (struct poll_event) * (pm->pm_poll_set_sz + POLL_GROW);
+        new_poll_set_sz = pm->pm_poll_set_sz;
+        do {
+            new_poll_set_sz += POLL_GROW;
+        } while (new_poll_set_sz < pe_num);
+
+        new_sz = sizeof (struct poll_event) * new_poll_set_sz;
         new_poll_set = (struct poll_event *)OPENSSL_realloc(pm->pm_poll_set,
                                                             new_sz);
         if (new_poll_set == NULL)
             return -1;
         pm->pm_poll_set = new_poll_set;
-        pm->pm_poll_set_sz += POLL_GROW;
+        pm->pm_poll_set_sz = new_poll_set_sz;
 
     } else if ((pe_num + POLL_DOWNSIZ) < pm->pm_poll_set_sz) {
         /*
@@ -1444,6 +1448,37 @@ pe_handle_listener_error(struct poll_event *pe)
             pe, pe_type_to_name(pe), POLL_PRINTA(pe->pe_poll_item.revents));
 
     return -1;
+}
+
+static int
+poke_conn_shutdown(struct poll_event *pe)
+{
+    struct poll_event_connection *pec = pe_to_connection(pe);
+    int e;
+
+    if (pec == NULL) {
+        warnx("%s unexpected pe %p (want CONNECTION got %s)", __func__,
+              pe, pe_type_to_name(pe));
+        return 0;
+    }
+
+    if (pec->pec_shutdown == 0)
+        return 0;
+
+    e = SSL_shutdown(get_ssl_from_pe(pe));
+    if (e == 1) {
+        DPRINTF(stderr, "%s shutdown complete for %p\n", __func__, pe);
+        e = -1;
+    } if (e < 0) {
+        DPRINTF(stderr, "%s shutdown error for %p [ %d ]\n", __func__, pe,
+                SSL_get_error(get_ssl_from_pe(pe), e));
+        e = -1;
+    } else {
+        DPRINTF(stderr, "%s shutdown in progress %p [ %d ]\n", __func__, pe,
+                e);
+    }
+
+    return 0;
 }
 
 /*
@@ -1960,7 +1995,7 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
     SSL *qs;
     struct poll_event_connection *pec;
     struct poll_event *qs_pe = NULL;
-    struct rr_buffer *rb;
+    struct rr_buffer *rb = NULL;
 
     assert(qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OS);
     pec = pe_to_connection(qconn_pe);
@@ -1969,6 +2004,10 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
     qconn = get_ssl_from_pe(qconn_pe);
 
     if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
+
+        if (QPOLL_TAILQ_EMPTY(&pec->pec_unistream_cx))
+            return 0;
+
         qs = SSL_new_stream(qconn, SSL_STREAM_FLAG_UNI);
         qs_pe = (struct poll_event *)new_sustream_pe(qs);
     } else {
@@ -2006,14 +2045,12 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
              * stream. but there is no request to send respond to. We free
              * the stream and stop polling for outbound streams.
              */
-            destroy_pe(qs_pe);
+            srvapp_ondestroy_sustreamcb(qs_pe);
             qconn_pe->pe_want_events &= ~SSL_POLL_EVENT_OSU;
+            qconn_pe->pe_my_pm->pm_need_rebuild = 1;
         } else {
             add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
             pe_resume_write(qs_pe);
-            /* enable read side on bidirectional outbound streams */
-            if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSB)
-                pe_resume_read(qs_pe);
         }
     } else {
         warnx("%s allocation of stream failed", __func__);
@@ -2576,7 +2613,8 @@ clntapp_read_custreamcb(struct poll_event *pe)
     rv = SSL_read_ex(get_ssl_from_pe(pe), devnull, sizeof (devnull), &read_len);
     if ((rv == 0) || (read_len == 0)) {
         rv = -1; /* stream is done, tell poll manager to remove it */
-        DPRINTFC(stderr, "%s received: %zu\n", __func__, pecsu->pecsu_ss->ss_rx);
+        DPRINTFC(stderr, "%s (%p) received: %zu\n", __func__, pecsu,
+                 pecsu->pecsu_ss->ss_rx);
     } else {
         rv = 0;	/* keep polling */
 	pecsu->pecsu_ss->ss_rx += read_len;
@@ -2600,6 +2638,7 @@ clntapp_update_pec(struct poll_event_connection *pec, struct stream_stats *ss)
     QPOLL_TAILQ_INSERT_HEAD(&pec->pec_cs->cs_done, ss, ss_tqe);
     if (QPOLL_TAILQ_COUNT(&pec->pec_cs->cs_done) == STREAM_COUNT) {
         SSL_shutdown(get_ssl_from_pe((struct poll_event *)pec));
+        pec->pec_shutdown = 1;
         DPRINTFC(stderr, "%s shutdown on %p\n", __func__, pec);
     }
 }
@@ -2623,6 +2662,7 @@ clntapp_ondestroy_cstreamcb(struct poll_event *pe)
     ss = pecs->pecs_ss;
 
     clntapp_update_pec(pec, ss);
+    DPRINTFC(stderr, "%s %p @ %p\n", __func__, pe, pec);
 }
 
 static void
@@ -2644,6 +2684,7 @@ clntapp_ondestroy_custreamcb(struct poll_event *pe)
     ss = pecsu->pecsu_ss;
 
     clntapp_update_pec(pec, ss);
+    DPRINTFC(stderr, "%s %p @ %p\n", __func__, pe, pec);
 }
 
 static int
@@ -2786,6 +2827,8 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
         OPENSSL_free(pscx->pscx);
         OPENSSL_free(pscx);
 
+        DPRINTFC(stderr, "%s got %p for connection %p\n",
+                 __func__, qs_pe, qconn_pe);
         add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
         pe_disable_write(qs_pe);
         pe_resume_read(qs_pe);
@@ -2826,19 +2869,24 @@ run_quic_client(struct poll_manager *pm)
 
         for (i = 0; i < pm->pm_event_count; i++) {
             pe = &pm->pm_poll_set[i];
-            if (pe->pe_poll_item.revents == 0)
-                continue;
-            DPRINTFC(stderr, "%s %s (%p) " POLL_FMT "\n", __func__,
-                     pe_type_to_name(pe), pe,
-                     POLL_PRINTA(pe->pe_poll_item.revents));
-            pe->pe_self->pe_poll_item.revents = pe->pe_poll_item.revents;
-            if (pe->pe_poll_item.revents & SSL_POLL_ERROR)
-                e = pe->pe_cb_error(pe->pe_self);
-            else if (pe->pe_poll_item.revents & SSL_POLL_IN)
-                e = pe->pe_cb_in(pe->pe_self);
-            else if (pe->pe_poll_item.revents & SSL_POLL_OUT)
-                e = pe->pe_cb_out(pe->pe_self);
-
+            /* SSL_handle_events(get_ssl_from_pe(pe->pe_self)); */
+            if (pe->pe_poll_item.revents == 0) {
+                e = 0;
+                pe = pe->pe_self;
+                if (pe->pe_type == PE_CONNECTION)
+                    e = poke_conn_shutdown(pe);
+            } else {
+                DPRINTFC(stderr, "%s %s (%p) " POLL_FMT "\n", __func__,
+                         pe_type_to_name(pe), pe->pe_self,
+                         POLL_PRINTA(pe->pe_poll_item.revents));
+                pe->pe_self->pe_poll_item.revents = pe->pe_poll_item.revents;
+                if (pe->pe_poll_item.revents & SSL_POLL_ERROR)
+                    e = pe->pe_cb_error(pe->pe_self);
+                else if (pe->pe_poll_item.revents & SSL_POLL_IN)
+                    e = pe->pe_cb_in(pe->pe_self);
+                else if (pe->pe_poll_item.revents & SSL_POLL_OUT)
+                    e = pe->pe_cb_out(pe->pe_self);
+            }
             if (e == -1) {
                 pe = pm->pm_poll_set[i].pe_self;
                 destroy_pe(pe);
@@ -3083,7 +3131,6 @@ create_test_scenario(void)
 		QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
 
-#if 0
             req_sz = client_config.cc_rep_sz;
             body_sz = client_config.cc_req_sz;
             for (j = 0; j < client_config.cc_bstreams; j++) {
@@ -3098,7 +3145,6 @@ create_test_scenario(void)
                 body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
 		QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
-#endif
         }
     }
 
