@@ -122,7 +122,40 @@
 /*
  * Code below comes from sys/queue.h found on OpenBSD. The head member
  * is modified to track number of elements on the list. Macros are
- * also renamed so they start with POLL_ prefix.
+ * also renamed so they start with QPOLL_ prefix.
+ */
+/*	$OpenBSD: queue.h,v 1.46 2020/12/30 13:33:12 millert Exp $	*/
+/*	$NetBSD: queue.h,v 1.11 1996/05/16 05:17:14 mycroft Exp $	*/
+
+/*
+ * Copyright (c) 1991, 1993
+ *	The Regents of the University of California.  All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. Neither the name of the University nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ *
+ *	@(#)queue.h	8.5 (Berkeley) 8/20/94
  */
 
 /*
@@ -476,6 +509,8 @@ struct client_stats {
     QPOLL_TAILQ_HEAD(, stream_stats) cs_todo;
     QPOLL_TAILQ_HEAD(, stream_stats) cs_done;
 };
+
+static int terse = 0;
 
 #ifdef _WIN32
 static const char *progname;
@@ -3161,6 +3196,8 @@ client_thread(void)
     struct client_stats *cs;
     unsigned int i;
     size_t rx, tx;
+    OSSL_TIME start, end;
+    float duration;
 
     cs = create_test_scenario();
     if (cs == NULL)
@@ -3181,6 +3218,7 @@ client_thread(void)
         errx(1, "Failed to create poll manager for server");
     }
 
+    start = ossl_time_now();
     for (i = 0; i < client_config.cc_clients; i++) {
         pec = create_client_pe(ctx, &cs[i]);
         if (pec == NULL) {
@@ -3199,13 +3237,20 @@ client_thread(void)
 
     destroy_poll_manager(pm);
     SSL_CTX_free(ctx);
+    end = ossl_time_now();
+    duration = ossl_time2ticks(ossl_time_subtract(end, start))/(double)OSSL_TIME_MS;
     rx = 0;
     tx = 0;
     for (i = 0; i < client_config.cc_clients; i++) {
         rx += cs[i].cs_rx;
         tx += cs[i].cs_tx;
     }
-    printf("%s\n\ttx: %zu\n\trx: %zu\n", __func__, tx, rx);
+    if (terse) {
+        printf("%.04lf\n", ((double)(rx + tx))/duration);
+    } else
+        printf("%s\n\ttx: %zu\n\trx: %zu\nin %.4f secs\n", __func__, tx, rx,
+               duration/OSSL_TIME_US);
+    
     destroy_test_scenario(cs);
 
     return rv;
@@ -3254,7 +3299,7 @@ main(int argc, char *argv[])
 #ifdef _WIN32
     progname = argv[0];
 #endif
-    while ((ch = getopt(argc, argv, "p:c:b:u:s:w:r")) != -1) {
+    while ((ch = getopt(argc, argv, "p:c:b:u:s:w:t")) != -1) {
         switch (ch) {
         case 'p':
             portstr = optarg;
@@ -3274,8 +3319,8 @@ main(int argc, char *argv[])
         case 'w':
             req_sizestr = optarg;
             break;
-        case 'r':
-            client_config.cc_shuffle = 1;
+        case 't':
+            terse = 1;
             break;
         default:
             usage(argv[0]);
