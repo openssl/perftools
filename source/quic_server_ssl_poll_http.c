@@ -8,40 +8,18 @@
  */
 
 /*
- * Implementation of hq-interop and http/1.0 QUIC server built on top of
- * SSL_poll(3ossl). The server is able to deal with simultaneous connections
- * All I/O operations are non-blocking.
- *
- * The only supported request is get. No HTTP errors are sent back. If
- * request is not understood the channel is reset.
- *
- * If client sends request for example GET /foo_1024.txt the server
- * replies with HTTP/1.0 200 OK with plain-text body. The body is
- * 1k of text foo_1024.txtfoo_1024,txtfoo...
- *
- * To run the server use command as follows:
- *    ./quic-server-ssl-poll-http 8080 chain.pem pkey.pem
- * command above starts server which listens to port localhost:8080
- * Although the server is simple one can use it with tquic_client
- * found at https://tquic.net/. Other 3rd party clients were not tested yet.
- *
- * The main() function creates instance of poll_manager which manages
- * all events (poll_event). If all is good execution calls to
- * run_quic_server() function where QUIC listener is created and passed
- * to manager. Then the polling loop is entered to serve remote clients.
- *
- * Some naming conventions are followed in code:
- *    - pe is used for poll event, it can be associated with listener,
- *      connection or stream.
- *    - pec is used for poll event which handles connection
- *    - pes is used for poll event which handles stream
- *
- * there is also response buffer which helps server to dispatch reply:
- *    - rb is used for any response buffer type
- *    - rts is used for simple text buffer (just data with no HTTP/1.0
- *      headers)
- *    - rtf is used for response text buffers which carry HTTP/1.0 headers
- *      (response text full)
+ * Tool reports SSL_poll(3ossl) performance for HTTP/1.0 over QUIC.
+ * It spawns two threads:
+ *     - server thread
+ *     - client thread.
+ * clients and server talk over loopback socket (use option -p to specify
+ * UDP server port number).  Both client and server use SSL_poll(3ossl) to
+ * multiplex QUIC connections and streams. Option -c specifies number
+ * of connections client opens. Each connection opens bidirectional (option -b
+ * specifies number of bidirectional streams) and unidirectional streams
+ * (option -u) to transfer data between client and server.
+ * Option -w specifies size of payload sent by client, option -w
+ * defines the size payload sent by server.
  */
 #include <string.h>
 #include <stdio.h>
@@ -78,7 +56,11 @@
 #endif /* _WIN32 */
 
 /*
- * This is a simple non-blocking QUIC HTTP/1.0 server application.
+ * The code here is based on QUIC poll server found in demos/quic/poll-server
+ * in OpenSSL source code repository. Here we take the demo one step further
+ * and implement also non-blocking client which talks to server to measure
+ * performance.
+ *
  * Server accepts QUIC connections. It then accepts bi-directional
  * stream from client and reads request. By default it sends
  * 12345 bytes back as HHTTP/1.0 response to any GET request.
@@ -283,19 +265,20 @@ struct poll_event_listener {
 };
 
 /*
- * Each poll_event holds pe_appdata context. The poll_event is associated with
- * SSL object which is typically QUIC stream. There are two types of streams
- * in QUIC:
+ * The poll_event is associated with SSL object which is typically QUIC stream.
+ * There are two types of streams in QUIC:
  *    - uni-directional (simplex)
  *    - bi-directional (duplex)
- * bi-directional are easy to handle: we create them, then we read request
- * from client and write reply back. Then stream gets destroyed.
- * This request-reply handling is more tricky with uni-directional streams.
- * We need a pair of streams: server reads a request from one stream and
- * then must create a stream for reply. For echo-reply server we need to
- * pass data we read from input stream to output stream. The poll_stream_context
- * here is to do it for us. The echo-reply server handling with simplex
- * (unidirectional) streams goes as follows:
+ *    - QUIC connection
+ *    - QUIC listener
+ * bi-directional streams are easy to handle: we create them, then we read
+ * request from client and write reply back. Then stream gets destroyed.  This
+ * request-reply handling is more tricky with uni-directional streams.  We need
+ * a pair of streams: server reads a request from one stream and then must
+ * create a stream for reply. For echo-reply server we need to pass data we
+ * read from input stream to output stream. The poll_stream_context here is to
+ * do it for us. The echo-reply server handling with simplex (unidirectional)
+ * streams goes as follows:
  *    - we read data from input stream and parse request
  *    - then we request poll manager to create an outbound stream,
  *      at this point we also create a response (rr_buffer).
@@ -304,6 +287,11 @@ struct poll_event_listener {
  *      client may establish more streams to send more requests
  *    - once outbound stream is created, poll manager moves response
  *      connection to outbound stream.
+ */
+
+/*
+ * poll stream context holds context to process request
+ * on server when uni-directional streams are used.
  */
 struct poll_stream_context {
     QPOLL_TAILQ_ENTRY(poll_stream_context) pscx_tqe;
@@ -379,6 +367,10 @@ struct poll_manager {
 #define SSL_POLL_OUT (SSL_POLL_EVENT_W | SSL_POLL_EVENT_OSB | \
                       SSL_POLL_EVENT_OSU)
 
+/*
+ * bi-directional stream at server. The instances are
+ * always named as pess
+ */
 struct poll_event_sstream {
     poll_event_base;
     struct poll_event_connection *pess_pec;
@@ -389,6 +381,10 @@ struct poll_event_sstream {
     char pess_reqbuf[8192];
 };
 
+/*
+ * uni-directional streams at server. The instances are
+ * always named pesu
+ */
 struct poll_event_sustream {
     poll_event_base;
     struct poll_event_connection *pesu_pec;
@@ -399,6 +395,10 @@ struct poll_event_sustream {
     char pesu_reqbuf[8192];
 };
 
+/*
+ * bi-directional streams at client. The instances are
+ * always named pecs
+ */
 struct poll_event_cstream {
     poll_event_base;
     struct poll_event_connection *pecs_pec;
@@ -406,6 +406,10 @@ struct poll_event_cstream {
     struct stream_stats *pecs_ss;
 };
 
+/*
+ * uni-directional streams ate client. The instances are
+ * always named pecsu
+ */
 struct poll_event_custream {
     poll_event_base;
     struct poll_event_connection *pecsu_pec;
@@ -413,6 +417,10 @@ struct poll_event_custream {
     struct stream_stats *pecsu_ss;
 };
 
+/*
+ * This holds context for client. It holds counters to
+ * measure statistics.
+ */
 struct client_context {
     struct stream_stats *ccx_ss;
     struct rr_buffer *ccx_rb;
@@ -444,13 +452,6 @@ struct rr_buffer {
     rr_buffer_base;
 };
 
-struct rr_txt_simple {
-    rr_buffer_base;
-    char *rts_pattern;
-    unsigned int rts_pattern_len;
-    unsigned int rts_len;
-};
-
 struct rr_txt_full {
     rr_buffer_base;
     char rtf_headers[1024];
@@ -473,6 +474,9 @@ static int stop_server = 0;
 
 /* 100 MB cap on stream size */
 #define STREAM_SZ_CAP (100 * 1024 * 1024)
+/*
+ * This holds parsed arguments from command line.
+ */
 static struct client_config {
     const char *cc_portstr;
     unsigned int cc_clients;
@@ -494,6 +498,10 @@ enum {
                                SSL_STREAM_FLAG_UNI : 0)
 #define SS_TYPE_TO_POLLEV(_t_) (((_t_) == SS_UNISTREAM) ? \
                                 SSL_POLL_EVENT_OSU : SSL_POLL_EVENT_OSB)
+/*
+ * client calculates stats for every stream (pair of streams in case
+ * of unidirectional streams).
+ */
 struct stream_stats {
     size_t ss_req_sz;
     size_t ss_body_sz;
@@ -503,6 +511,10 @@ struct stream_stats {
     QPOLL_TAILQ_ENTRY(stream_stats) ss_tqe;
 };
 
+/*
+ * Here we manage statistics and also tasks which we still need to perform and
+ * tasks which are done.
+ */
 struct client_stats {
     size_t cs_rx;
     size_t cs_tx;
@@ -572,15 +584,6 @@ enum pe_types {
     PE_CUSTREAM,
     PE_INVALID
 };
-
-static struct rr_txt_simple *
-rb_to_txt_simple(struct rr_buffer *rb)
-{
-    if (rb == NULL || rb->rb_type != RB_TYPE_TEXT_SIMPLE)
-        return NULL;
-
-    return (struct rr_txt_simple *)rb;
-}
 
 static struct rr_txt_full *
 rb_to_txt_full(struct rr_buffer *rb)
@@ -657,91 +660,6 @@ rb_destroy(struct rr_buffer *rb)
 {
     if (rb != NULL)
         rb->rb_ondestroy_cb(rb);
-}
-
-static int
-rb_txt_simple_eof_cb(struct rr_buffer *rb)
-{
-    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
-
-    if (rb_to_txt_full(rb) == NULL)
-        return 1;
-
-    if (rb->rb_rpos >= rts->rts_len)
-        return 1;
-    else
-        return 0;
-}
-
-static unsigned int
-rb_txt_simple_read_cb(struct rr_buffer *rb, char *buf,
-                      unsigned int buf_sz)
-{
-    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
-    unsigned int i = rb->rb_rpos;
-    unsigned int rv = 0;
-
-    if (rts == NULL || rb_eof(rb))
-        return 0;
-
-    while ((i < rts->rts_len) && (rv < buf_sz)) {
-        *buf++ = rts->rts_pattern[i % rts->rts_pattern_len];
-        i++;
-        rv++;
-    }
-
-    return rv;
-}
-
-static void
-rb_txt_simple_ondestroy_cb(struct rr_buffer *rb)
-{
-    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
-
-    if (rts != NULL) {
-        OPENSSL_free(rts->rts_pattern);
-        OPENSSL_free(rts);
-    }
-}
-
-static void
-rb_txt_simple_advrpos_cb(struct rr_buffer *rb, unsigned int sz)
-{
-    struct rr_txt_simple *rts = rb_to_txt_simple(rb);
-
-    if (rts != NULL) {
-        rb->rb_rpos += sz;
-        if (rb->rb_rpos >= rts->rts_len)
-            rb->rb_rpos = rts->rts_len;
-    }
-}
-
-static __attribute__((unused)) struct rr_txt_simple *
-new_txt_simple_respoonse(const char *fill_pattern, unsigned int fsize)
-{
-    struct rr_txt_simple *rts;
-    struct rr_buffer *rb;
-
-    rts = OPENSSL_malloc(sizeof (struct rr_txt_simple));
-    if (rts == NULL)
-        return NULL;
-
-    if ((rts->rts_pattern = strdup(fill_pattern)) == NULL) {
-        OPENSSL_free(rts);
-        return NULL;
-    }
-    rts->rts_pattern_len = strlen(fill_pattern);
-    rts->rts_len = fsize;
-
-    rb = (struct rr_buffer *)rts;
-    rb_init(rb);
-    rb->rb_type = RB_TYPE_TEXT_SIMPLE;
-    rb->rb_eof_cb = rb_txt_simple_eof_cb;
-    rb->rb_read_cb = rb_txt_simple_read_cb;
-    rb->rb_ondestroy_cb = rb_txt_simple_ondestroy_cb;
-    rb->rb_advrpos_cb = rb_txt_simple_advrpos_cb;
-
-    return rts;
 }
 
 static int
