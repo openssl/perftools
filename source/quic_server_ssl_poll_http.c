@@ -75,7 +75,7 @@
 #else
 # include <windows.h>
 # include "perflib/getopt.h"
-#endif	/* _WIN32 */
+#endif /* _WIN32 */
 
 /*
  * This is a simple non-blocking QUIC HTTP/1.0 server application.
@@ -124,12 +124,12 @@
  * is modified to track number of elements on the list. Macros are
  * also renamed so they start with QPOLL_ prefix.
  */
-/*	$OpenBSD: queue.h,v 1.46 2020/12/30 13:33:12 millert Exp $	*/
-/*	$NetBSD: queue.h,v 1.11 1996/05/16 05:17:14 mycroft Exp $	*/
+/* $OpenBSD: queue.h,v 1.46 2020/12/30 13:33:12 millert Exp $ */
+/* $NetBSD: queue.h,v 1.11 1996/05/16 05:17:14 mycroft Exp $ */
 
 /*
  * Copyright (c) 1991, 1993
- *	The Regents of the University of California.  All rights reserved.
+ *  The Regents of the University of California.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -155,7 +155,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	@(#)queue.h	8.5 (Berkeley) 8/20/94
+ * @(#)queue.h 8.5 (Berkeley) 8/20/94
  */
 
 /*
@@ -460,7 +460,7 @@ struct rr_txt_full {
     unsigned int rtf_len; /* headers + data */
 };
 
-#define request_txt_full	rr_txt_full
+#define request_txt_full rr_txt_full
 
 static void destroy_pe(struct poll_event *);
 static int pe_return_error(struct poll_event *);
@@ -472,7 +472,7 @@ static SSL_CTX *server_ctx;
 static int stop_server = 0;
 
 /* 100 MB cap on stream size */
-#define	STREAM_SZ_CAP	100 * 1024 * 1024
+#define STREAM_SZ_CAP (100 * 1024 * 1024)
 static struct client_config {
     const char *cc_portstr;
     unsigned int cc_clients;
@@ -491,9 +491,9 @@ enum {
 };
 
 #define SS_TYPE_TO_SFLAG(_t_) (((_t_) == SS_UNISTREAM) ? \
-    SSL_STREAM_FLAG_UNI : 0)
+                               SSL_STREAM_FLAG_UNI : 0)
 #define SS_TYPE_TO_POLLEV(_t_) (((_t_) == SS_UNISTREAM) ? \
-    SSL_POLL_EVENT_OSU : SSL_POLL_EVENT_OSB)
+                                SSL_POLL_EVENT_OSU : SSL_POLL_EVENT_OSB)
 struct stream_stats {
     size_t ss_req_sz;
     size_t ss_body_sz;
@@ -1006,8 +1006,8 @@ new_listener_pe(SSL *ssl_listener)
 
     listener_pe = new_pe(ssl_listener);
     if (listener_pe != NULL) {
-         listener_pe->pe_type = PE_LISTENER;
-         listener_pe->pe_want_events = SSL_POLL_EVENT_IC | SSL_POLL_EVENT_EL;
+        listener_pe->pe_type = PE_LISTENER;
+        listener_pe->pe_want_events = SSL_POLL_EVENT_IC | SSL_POLL_EVENT_EL;
     }
 
     return (struct poll_event_listener *)listener_pe;
@@ -1383,6 +1383,7 @@ rebuild_poll_set(struct poll_manager *pm)
         new_poll_set_sz = pm->pm_poll_set_sz;
         do {
             new_poll_set_sz += POLL_GROW;
+            (void)(0); /* make check-format.pl happy */
         } while (new_poll_set_sz < pe_num);
 
         new_sz = sizeof (struct poll_event) * new_poll_set_sz;
@@ -1504,7 +1505,7 @@ poke_conn_shutdown(struct poll_event *pe)
     if (e == 1) {
         DPRINTF(stderr, "%s shutdown complete for %p\n", __func__, pe);
         e = -1;
-    } if (e < 0) {
+    } else if (e < 0) {
         DPRINTF(stderr, "%s shutdown error for %p [ %d ]\n", __func__, pe,
                 SSL_get_error(get_ssl_from_pe(pe), e));
         e = -1;
@@ -1550,7 +1551,7 @@ request_new_stream(struct poll_event_connection *pec, uint64_t qsflag,
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_OSB;
         else
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_ISB;
-            
+
         QPOLL_TAILQ_INSERT_TAIL(&pec->pec_stream_cx, pscx, pscx_tqe);
     }
 
@@ -1609,13 +1610,13 @@ app_destroy_qconn(struct poll_event *pe)
         return;
 
     QPOLL_TAILQ_FOREACH_SAFE(pscx, &pec->pec_unistream_cx, pscx_tqe,
-                            pscx_save) {
+                             pscx_save) {
         pscx->pscx_cb_ondestroy(pscx->pscx);
         OPENSSL_free(pscx);
     }
 
     QPOLL_TAILQ_FOREACH_SAFE(pscx, &pec->pec_stream_cx, pscx_tqe,
-	                     pscx_save) {
+                             pscx_save) {
         pscx->pscx_cb_ondestroy(pscx->pscx);
         OPENSSL_free(pscx);
     }
@@ -1772,7 +1773,7 @@ srvapp_write_sstreamcb(struct poll_event *pe)
         warnx("%s unexpected type for %p (want SSTREAM, got %s\n)\n",
               __func__, pe, pe_type_to_name(pe));
         return -1;
-    } 
+    }
 
     if (pess->pess_rb == NULL) {
         warnx("%s no response buffer\n", __func__);
@@ -1792,7 +1793,7 @@ srvapp_write_sustreamcb(struct poll_event *pe)
         warnx("%s unexpected type for %p (want SUTREAM, got %s\n)\n",
               __func__, pe, pe_type_to_name(pe));
         return -1;
-    } 
+    }
 
     if (pesu->pesu_rb == NULL) {
         warnx("%s no response buffer\n", __func__);
@@ -1872,7 +1873,7 @@ parse_request(const char *buf)
     char *dst = file_name_buf;
     char *end = &file_name_buf[4096];
     char *file_name;
-    struct rr_buffer *rv;;
+    struct rr_buffer *rv;
 
     while (*pos && isspace((int)*pos))
         pos++;
@@ -2067,7 +2068,7 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
             qs_pe->pe_cb_out = srvapp_write_sustreamcb;
             rb = get_response_from_pec(pec, qs_pe->pe_type);
             ((struct poll_event_sustream *)qs_pe)->pesu_rb = rb;
-        } 
+        }
 
         if (rb == NULL) {
             /*
@@ -2125,7 +2126,7 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
         qs_pe = (struct poll_event *)pesu;
         if (qs_pe == NULL) {
             warnx("%s accept returned NULL (%p) [%x]", __func__,
-                qconn_pe, SSL_get_error(qconn, 0));
+                  qconn_pe, SSL_get_error(qconn, 0));
             SSL_free(qs);
             /*
              * keep polling on connection. Returning -1 here
@@ -2153,7 +2154,7 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
              * because there might be other active streams.
              */
             warnx("%s accept returned NULL (%p) [%x]", __func__,
-                qconn_pe, SSL_get_error(qconn, 0));
+                  qconn_pe, SSL_get_error(qconn, 0));
             SSL_free(qs);
             return 0;
         }
@@ -2460,7 +2461,7 @@ clntapp_create_request(size_t req_sz, size_t payload_sz)
     snprintf(request, sizeof (request), "/foo/%zu", req_sz);
 
     rtf = new_txt_full_request(request,
-        (payload_sz > 0) ? "foo" : NULL, payload_sz);
+                               (payload_sz > 0) ? "foo" : NULL, payload_sz);
 
     return rtf;
 }
@@ -2531,7 +2532,7 @@ clntapp_setup_response(struct poll_event *pe)
  */
 static int
 clntapp_write_common(struct poll_event *pe, struct request_buffer *rb,
-    struct stream_stats *ss)
+                     struct stream_stats *ss)
 {
     char buf[4096];
     size_t written;
@@ -2556,7 +2557,7 @@ clntapp_write_common(struct poll_event *pe, struct request_buffer *rb,
 
         /*
          * tell polling loop to remove poll event for
-         * unidirectional stream as it is done. 
+         * unidirectional stream as it is done.
          */
         if (pe->pe_type == PE_CUSTREAM)
             rv = -1;
@@ -2623,8 +2624,8 @@ clntapp_read_cstreamcb(struct poll_event *pe)
         rv = -1; /* stream is done, tell poll manager to remove it */
         DPRINTFC(stderr, "%s received: %zu\n", __func__, pecs->pecs_ss->ss_rx);
     } else {
-        rv = 0;	/* keep polling */
-	pecs->pecs_ss->ss_rx += read_len;
+        rv = 0; /* keep polling */
+        pecs->pecs_ss->ss_rx += read_len;
     }
 
     return rv;
@@ -2651,8 +2652,8 @@ clntapp_read_custreamcb(struct poll_event *pe)
         DPRINTFC(stderr, "%s (%p) received: %zu\n", __func__, pecsu,
                  pecsu->pecsu_ss->ss_rx);
     } else {
-        rv = 0;	/* keep polling */
-	pecsu->pecsu_ss->ss_rx += read_len;
+        rv = 0; /* keep polling */
+        pecsu->pecsu_ss->ss_rx += read_len;
     }
 
     return rv;
@@ -2774,8 +2775,8 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     if (want_type == SS_BIDISTREAM) {
         pecs = new_cstream_pe(qs);
         if (pecs != NULL) {
-	    pecs->pecs_pec = pec;
-	    pecs->pecs_ss = ss;
+            pecs->pecs_pec = pec;
+            pecs->pecs_ss = ss;
             pecs->pecs_rb = clntapp_create_request(ss->ss_req_sz,
                                                    ss->ss_body_sz);
             qs_pe = (struct poll_event *)pecs;
@@ -2789,8 +2790,8 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     } else {
         pecsu = new_custream_pe(qs);
         if (pecsu != NULL) {
-	    pecsu->pecsu_pec = pec;
-	    pecsu->pecsu_ss = ss;
+            pecsu->pecsu_pec = pec;
+            pecsu->pecsu_ss = ss;
             pecsu->pecsu_rb = clntapp_create_request(ss->ss_req_sz,
                                                      ss->ss_body_sz);
             qs_pe = (struct poll_event *)pecsu;
@@ -2937,7 +2938,7 @@ run_quic_client(struct poll_manager *pm)
 
 static BIO *
 create_socket_bio(const char *hostname, const char *port, int family,
-    BIO_ADDR **peer_addr)
+                  BIO_ADDR **peer_addr)
 {
     int sock = -1;
     BIO_ADDRINFO *res;
@@ -3163,7 +3164,7 @@ create_test_scenario(void)
                 req_sz = (req_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : req_sz;
                 body_sz = body_sz * 2;
                 body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
-		QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
+                QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
 
             req_sz = client_config.cc_rep_sz;
@@ -3178,7 +3179,7 @@ create_test_scenario(void)
                 req_sz = (req_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : req_sz;
                 body_sz = body_sz * 2;
                 body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
-		QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
+                QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
         }
     }
@@ -3211,7 +3212,7 @@ client_thread(void)
 
     if (!SSL_CTX_set_default_verify_paths(ctx))
         errx(1, "%s SSL_CTX_set_default_verify_paths() failed", __func__);
- 
+
     pm = create_poll_manager();
     if (pm == NULL) {
         ERR_print_errors_fp(stderr);
@@ -3238,7 +3239,7 @@ client_thread(void)
     destroy_poll_manager(pm);
     SSL_CTX_free(ctx);
     end = ossl_time_now();
-    duration = ossl_time2ticks(ossl_time_subtract(end, start))/(double)OSSL_TIME_MS;
+    duration = ossl_time2ticks(ossl_time_subtract(end, start)) / (double)OSSL_TIME_MS;
     rx = 0;
     tx = 0;
     for (i = 0; i < client_config.cc_clients; i++) {
@@ -3246,11 +3247,12 @@ client_thread(void)
         tx += cs[i].cs_tx;
     }
     if (terse) {
-        printf("%.04lf\n", ((double)(rx + tx))/duration);
-    } else
+        printf("%.04lf\n", ((double)(rx + tx)) / duration);
+    } else {
         printf("%s\n\ttx: %zu\n\trx: %zu\nin %.4f secs\n", __func__, tx, rx,
-               duration/OSSL_TIME_US);
-    
+               duration / OSSL_TIME_US);
+    }
+
     destroy_test_scenario(cs);
 
     return rv;
@@ -3259,21 +3261,21 @@ client_thread(void)
 static void usage(const char *progname)
 {
     fprintf(stderr, "%s -p portnum -c connections -b bidi_stream_count "
-                    "-u uni_stream_count -s base_size "
-                    "path/to/cert path/to/certkey\n"
-                    "\t-p port number to use (<1, 65535>), default 8000\n"
-                    "\t-c number of connections to establish, default 10\n"
-                    "\t-b number of bidirectional streams to use, default 10\n"
-                    "\t-u number of unidirectional streams to use, default 10\n"
-                    "\t-s data size to request, default 64\n"
-                    "\t-w request body size, default 64\n"
-                    "program creates server and client thread.\n"
-                    "client establishes `c` connections to server\n"
-                    "Each connection caries `b` `and `u` streams to request data\n"
-                    "from server. Initial size to download is `s` bytes. The second\n"
-                    "stream then carries `s` * 2, third `s` * 3, etc.\n"
-                    "Request body increases usinging the same pattern starting with\n"
-                    "`w` size.\n", progname);
+            "-u uni_stream_count -s base_size "
+            "path/to/cert path/to/certkey\n"
+            "\t-p port number to use (<1, 65535>), default 8000\n"
+            "\t-c number of connections to establish, default 10\n"
+            "\t-b number of bidirectional streams to use, default 10\n"
+            "\t-u number of unidirectional streams to use, default 10\n"
+            "\t-s data size to request, default 64\n"
+            "\t-w request body size, default 64\n"
+            "program creates server and client thread.\n"
+            "client establishes `c` connections to server\n"
+            "Each connection caries `b` `and `u` streams to request data\n"
+            "from server. Initial size to download is `s` bytes. The second\n"
+            "stream then carries `s` * 2, third `s` * 3, etc.\n"
+            "Request body increases usinging the same pattern starting with\n"
+            "`w` size.\n", progname);
     exit(1);
 }
 
@@ -3375,6 +3377,6 @@ main(int argc, char *argv[])
 
     SSL_CTX_free(server_ctx);
     server_ctx = NULL;
-    
+
     return res;
 }
