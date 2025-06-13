@@ -1404,37 +1404,6 @@ pe_handle_listener_error(struct poll_event *pe)
     return -1;
 }
 
-static int
-poke_conn_shutdown(struct poll_event *pe)
-{
-    struct poll_event_connection *pec = pe_to_connection(pe);
-    int e;
-
-    if (pec == NULL) {
-        warnx("%s unexpected pe %p (want CONNECTION got %s)", __func__,
-              pe, pe_type_to_name(pe));
-        return 0;
-    }
-
-    if (pec->pec_shutdown == 0)
-        return 0;
-
-    e = SSL_shutdown(get_ssl_from_pe(pe));
-    if (e == 1) {
-        DPRINTF(stderr, "%s shutdown complete for %p\n", __func__, pe);
-        e = -1;
-    } else if (e < 0) {
-        DPRINTF(stderr, "%s shutdown error for %p [ %d ]\n", __func__, pe,
-                SSL_get_error(get_ssl_from_pe(pe), e));
-        e = -1;
-    } else {
-        DPRINTF(stderr, "%s shutdown in progress %p [ %d ]\n", __func__, pe,
-                e);
-    }
-
-    return 0;
-}
-
 /*
  * non-blocking variant for new_stream()/accept_stream(). Creating outbound
  * stream is two step process when using non-blocking I/O.
@@ -2827,24 +2796,17 @@ run_quic_client(struct poll_manager *pm)
 
         for (i = 0; i < pm->pm_event_count; i++) {
             pe = &pm->pm_poll_set[i];
-            /* SSL_handle_events(get_ssl_from_pe(pe->pe_self)); */
-            if (pe->pe_poll_item.revents == 0) {
-                e = 0;
-                pe = pe->pe_self;
-                if (pe->pe_type == PE_CONNECTION)
-                    e = poke_conn_shutdown(pe);
-            } else {
-                DPRINTFC(stderr, "%s %s (%p) " POLL_FMT "\n", __func__,
-                         pe_type_to_name(pe), pe->pe_self,
-                         POLL_PRINTA(pe->pe_poll_item.revents));
-                pe->pe_self->pe_poll_item.revents = pe->pe_poll_item.revents;
-                if (pe->pe_poll_item.revents & SSL_POLL_ERROR)
-                    e = pe->pe_cb_error(pe->pe_self);
-                else if (pe->pe_poll_item.revents & SSL_POLL_IN)
-                    e = pe->pe_cb_in(pe->pe_self);
-                else if (pe->pe_poll_item.revents & SSL_POLL_OUT)
-                    e = pe->pe_cb_out(pe->pe_self);
-            }
+            e = 0;
+            DPRINTFC(stderr, "%s %s (%p) " POLL_FMT "\n", __func__,
+                     pe_type_to_name(pe), pe->pe_self,
+                     POLL_PRINTA(pe->pe_poll_item.revents));
+            pe->pe_self->pe_poll_item.revents = pe->pe_poll_item.revents;
+            if (pe->pe_poll_item.revents & SSL_POLL_ERROR)
+                e = pe->pe_cb_error(pe->pe_self);
+            else if (pe->pe_poll_item.revents & SSL_POLL_IN)
+                e = pe->pe_cb_in(pe->pe_self);
+            else if (pe->pe_poll_item.revents & SSL_POLL_OUT)
+                e = pe->pe_cb_out(pe->pe_self);
             if (e == -1) {
                 pe = pm->pm_poll_set[i].pe_self;
                 destroy_pe(pe);
