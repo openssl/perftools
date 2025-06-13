@@ -2000,6 +2000,8 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
              * the stream and stop polling for outbound streams.
              */
             srvapp_ondestroy_sustreamcb(qs_pe);
+            SSL_free(qs);
+            OPENSSL_free(qs_pe);
             qconn_pe->pe_want_events &= ~SSL_POLL_EVENT_OSU;
             qconn_pe->pe_my_pm->pm_need_rebuild = 1;
         } else {
@@ -2766,6 +2768,8 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
         if (pscx == NULL) {
             warnx("%s no context for unistream client", __func__);
             clntapp_ondestroy_custreamcb(qs_pe);
+            OPENSSL_free(qs_pe);
+            SSL_free(qs);
             /*
              * keep polling on connection. returning -1 to
              * destroy it is not option as there still might be
