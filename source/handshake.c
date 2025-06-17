@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
 #ifndef _WIN32
 # include <libgen.h>
 # include <unistd.h>
@@ -22,7 +23,6 @@
 #include "perflib/perflib.h"
 
 #define NUM_CALLS_PER_TEST        10000
-#define OSSL_LIB_CTX_POOL_SIZE    16
 
 int err = 0;
 
@@ -30,13 +30,14 @@ static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
 static char *cert = NULL;
 static char *privkey = NULL;
-static OSSL_LIB_CTX *libctx_pool[OSSL_LIB_CTX_POOL_SIZE] = { NULL };
+static OSSL_LIB_CTX **libctx_pool = NULL;
 
 
 OSSL_TIME *times;
 
 static int threadcount;
 size_t num_calls;
+static long ossl_lib_ctx_pool_size = 16;
 
 typedef enum {
     TC_SSL_CTX,
@@ -154,7 +155,7 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
 
     start = ossl_time_now();
 
-    libctx = libctx_pool[num % OSSL_LIB_CTX_POOL_SIZE];
+    libctx = libctx_pool[num % ossl_lib_ctx_pool_size];
     if (share_ctx == 1) {
         if (!perflib_create_ossl_lib_ctx_pair(libctx,
                                               TLS_server_method(),
@@ -205,8 +206,13 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
         err = 1;
 }
 
-static int init_ossl_lib_ctx_pool() {
-    for (int i = 0; i < OSSL_LIB_CTX_POOL_SIZE; ++i) {
+static int init_ossl_lib_ctx_pool()
+{
+    libctx_pool = OPENSSL_malloc(ossl_lib_ctx_pool_size * sizeof(*libctx_pool));
+    if (libctx_pool == NULL)
+        return 1;
+
+    for (int i = 0; i < ossl_lib_ctx_pool_size; ++i) {
         libctx_pool[i] = OSSL_LIB_CTX_new();
         if (libctx_pool[i] == NULL) {
             fprintf(stderr, "%s:%d: Failed to create ossl lib context\n", __FILE__, __LINE__);
@@ -217,10 +223,13 @@ static int init_ossl_lib_ctx_pool() {
     return 1;
 }
 
-static void free_ossl_lib_ctx_pool() {
-    for (int i = 0; i < OSSL_LIB_CTX_POOL_SIZE; ++i) {
+static void free_ossl_lib_ctx_pool()
+{
+    for (int i = 0; i < ossl_lib_ctx_pool_size; ++i) {
         OSSL_LIB_CTX_free(libctx_pool[i]);
     }
+
+    OPENSSL_free(libctx_pool);
 }
 
 static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
@@ -232,9 +241,8 @@ static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
         goto err;
 
     ret = perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_pool, threadcount, duration);
-    if (!ret) {
+    if (!ret)
         printf("Failed to run the test\n");
-    }
 
  err:
     free_ossl_lib_ctx_pool();
@@ -242,12 +250,14 @@ static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
     return ret;
 }
 
-void usage(const char *progname) {
-    printf("Usage: %s [-t] [-s] certsdir threadcount\n", progname);
+void usage(const char *progname)
+{
+    printf("Usage: %s [-t] [-s] [-p] [-P] [-o] certsdir threadcount\n", progname);
     printf("-t - terse output\n");
     printf("-s - disable context sharing\n");
     printf("-p - use ossl_lib_ctx per thread\n");
     printf("-P - use ossl_lib_ctx pool\n");
+    printf("-o - set ossl_lib_ctx pool size\n");
 }
 
 int main(int argc, char * const argv[])
@@ -260,9 +270,10 @@ int main(int argc, char * const argv[])
     int terse = 0;
     int opt;
     int p_flag = 0, P_flag = 0;
+    char *endptr = NULL;
     test_case_t test_case = TC_SSL_CTX;
 
-    while ((opt = getopt(argc, argv, "tspP")) != -1) {
+    while ((opt = getopt(argc, argv, "tspPo:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -277,6 +288,25 @@ int main(int argc, char * const argv[])
         case 'P':
             P_flag = 1;
             test_case = TC_OSSL_LIB_CTX_POOL;
+            break;
+        case 'o':
+            errno = 0;
+            ossl_lib_ctx_pool_size = strtol(optarg, &endptr, 0);
+            if (errno == ERANGE && ossl_lib_ctx_pool_size == ULONG_MAX) {
+                perror("Overflow occurred");
+                usage(basename(argv[0]));
+                return EXIT_FAILURE;
+            }
+            if (endptr == optarg || *endptr) {
+                fprintf(stderr, "Invalid input: '%s'\n", optarg);
+                usage(basename(argv[0]));
+                return EXIT_FAILURE;
+            }
+            if (ossl_lib_ctx_pool_size < 1) {
+                fprintf(stderr, "Pool size must be a > 0\n");
+                usage(basename(argv[0]));
+                return EXIT_FAILURE;
+            }
             break;
         default:
             usage(basename(argv[0]));
