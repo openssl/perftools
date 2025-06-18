@@ -3158,7 +3158,7 @@ static void usage(const char *progname)
             "Each connection carries `b` `and `u` streams to request data\n"
             "from server. Initial size to download is `s` bytes. The second\n"
             "stream then carries `s` * 2, third `s` * 3, etc.\n"
-            "Request body increases usinging the same pattern starting with\n"
+            "Request body increases using the same pattern starting with\n"
             "`w` size.\n", progname);
     exit(1);
 }
