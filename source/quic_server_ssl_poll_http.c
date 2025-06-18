@@ -63,7 +63,7 @@
  *
  * Server accepts QUIC connections. It then accepts bi-directional
  * stream from client and reads request. By default it sends
- * 12345 bytes back as HHTTP/1.0 response to any GET request.
+ * 12345 bytes back as HTTP/1.0 response to any GET request.
  * If GET request comes with URL for example as follows:
  *     /foo/bar/file_65535.txt
  * then the server sends 64kB of data in HTTP/1.0 response.
