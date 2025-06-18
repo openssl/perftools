@@ -326,7 +326,7 @@ struct poll_event_connection {
 
 /*
  * We always allocate more slots than we need. If POLL_GROW slots get
- * deplepted then we allocate POLL_GROW more for the next one.
+ * depleted then we allocate POLL_GROW more for the next one.
  * Downsizing is similar. This is very naive and leads to oscillations
  * (where we may end up freeing and reallocating poll event set) we need to
  * figure out better strategy.
