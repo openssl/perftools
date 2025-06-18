@@ -698,7 +698,7 @@ rb_txt_full_read_cb(struct rr_buffer *rb, char *buf, unsigned int buf_sz)
     if (rtf == NULL || rb_eof(rb))
         return 0;
 
-    while ((i < rtf->rtf_hdr_len) && (rv < buf_sz)) {
+    while (i < rtf->rtf_hdr_len && rv < buf_sz) {
         *buf++ = rtf->rtf_headers[i++];
         rv++;
     }
