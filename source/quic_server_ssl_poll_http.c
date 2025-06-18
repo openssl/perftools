@@ -3155,7 +3155,7 @@ static void usage(const char *progname)
             "\t-w request body size, default 64\n"
             "program creates server and client thread.\n"
             "client establishes `c` connections to server\n"
-            "Each connection caries `b` `and `u` streams to request data\n"
+            "Each connection carries `b` `and `u` streams to request data\n"
             "from server. Initial size to download is `s` bytes. The second\n"
             "stream then carries `s` * 2, third `s` * 3, etc.\n"
             "Request body increases usinging the same pattern starting with\n"
