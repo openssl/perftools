@@ -307,7 +307,7 @@ struct poll_stream_context {
  *    - pec_unistream_cx for uni-direcitonal (simplex) streams.
  *
  * Then there are two counters:
- *    - pec_want_stream bumbped up when application requests duplex stream,
+ *    - pec_want_stream bumped up when application requests duplex stream,
  *      bumped down when stream is created
  *    - pec_want_unistream bumped up when application requests simplex stream.
  *      bumped down when stream is created
