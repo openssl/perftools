@@ -3231,7 +3231,7 @@ main(int argc, char *argv[])
 
     client_config.cc_clients = strtoul(ccountstr, NULL, 0);
     if (client_config.cc_clients <= 0 || client_config.cc_clients > 100)
-        errx(res, "number of clients must be in <1, 100>");
+        errx(res, "number of clients must be in [1, 100]");
 
     client_config.cc_bstreams = strtoul(bstreamstr, NULL, 0);
     if (client_config.cc_bstreams <= 0 || client_config.cc_bstreams > 1000)
