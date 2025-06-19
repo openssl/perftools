@@ -59,6 +59,7 @@ handshake [-t] [-s] <certsdir> <threadcount>
 -P - use ossl_lib_ctx pool (can be combined with -s. If sharing is enabled, ssl_ctx
      is shared within single thread)
 -o - set ossl_lib_ctx pool size (use only with -P)
+-l - use ssl_ctx pool
 certsdir - Directory where the test can locate servercert.pem and serverkey.pem
 threadcount - Number of concurrent threads to run in test
 
