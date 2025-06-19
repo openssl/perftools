@@ -20,6 +20,7 @@
 # include "perflib/basename.h"
 #endif /* _WIN32 */
 #include <openssl/ssl.h>
+#include <openssl/err.h>
 #include "perflib/perflib.h"
 
 #define RUN_TIME 5
@@ -79,7 +80,8 @@ static void do_handshake(size_t num)
                                              TLS_client_method(),
                                              0, 0, &lsctx, &lcctx, cert,
                                              privkey)) {
-                printf("Failed to create SSL_CTX pair\n");
+                ERR_print_errors_fp(stderr);
+                fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 break;
             }
         }
@@ -127,6 +129,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
                                               TLS_client_method(),
                                               0, 0, &lsctx, &lcctx, cert,
                                               privkey)) {
+            ERR_print_errors_fp(stderr);
             fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
             err = 1;
             return;
@@ -175,6 +178,7 @@ static void do_handshake_ctx_pool(size_t num)
                                               TLS_client_method(),
                                               0, 0, &lsctx, &lcctx, cert,
                                               privkey)) {
+            ERR_print_errors_fp(stderr);
             fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
             err = 1;
             return;
@@ -190,6 +194,7 @@ static void do_handshake_ctx_pool(size_t num)
                                                   TLS_client_method(),
                                                   0, 0, &lsctx, &lcctx, cert,
                                                   privkey)) {
+                ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 err = 1;
                 return;
@@ -314,6 +319,7 @@ void usage(const char *progname)
     printf("-P - use ossl_lib_ctx pool\n");
     printf("-l - use ssl ctx pool\n");
     printf("-o - set ossl_lib_ctx pool size\n");
+    printf("-S [n] - use secure memory\n");
 }
 
 int main(int argc, char * const argv[])
@@ -329,7 +335,7 @@ int main(int argc, char * const argv[])
     int p_flag = 0, P_flag = 0, l_flag = 0;
     char *endptr = NULL;
 
-    while ((opt = getopt(argc, argv, "tspPo:l")) != -1) {
+    while ((opt = getopt(argc, argv, "tspPo:lS:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -368,6 +374,27 @@ int main(int argc, char * const argv[])
             l_flag = 1;
             test_case = TC_SSL_CTX_POOL;
             break;
+        case 'S': {
+            char *end = NULL;
+            errno = 0;
+            int sec_mem_size;
+
+            sec_mem_size = (int)strtol(optarg, &end, 10);
+            if (errno || end == NULL || *end || sec_mem_size <= 0) {
+                fprintf(stderr, "Invalid secure memory size: '%s'\n", optarg);
+                usage(basename(argv[0]));
+                return EXIT_FAILURE;
+            }
+            if (CRYPTO_secure_malloc_init(sec_mem_size, 16) == 0) {
+                fprintf(stderr, "Secure heap not available\n");
+                return EXIT_FAILURE;
+            }
+            if (CRYPTO_secure_malloc_initialized() == 0) {
+                fprintf(stderr, "Secure heap not initialized\n");
+                return EXIT_FAILURE;
+            }
+            break;
+        }
         default:
             usage(basename(argv[0]));
             return EXIT_FAILURE;
@@ -415,7 +442,8 @@ int main(int argc, char * const argv[])
         if (share_ctx == 1) {
             if (!perflib_create_ssl_ctx_pair(TLS_server_method(), TLS_client_method(),
                                              0, 0, &sctx, &cctx, cert, privkey)) {
-                printf("Failed to create SSL_CTX pair\n");
+                ERR_print_errors_fp(stderr);
+                fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 goto err;
             }
         }
