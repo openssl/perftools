@@ -321,7 +321,6 @@ struct poll_event_connection {
     uint64_t pec_want_stream;
     uint64_t pec_want_unistream;
     struct client_stats *pec_cs;
-    int pec_shutdown;
 };
 
 /*
@@ -355,6 +354,7 @@ struct poll_manager {
     unsigned int pm_poll_set_sz;
     int pm_need_rebuild;
     int pm_continue;
+    const char *pm_name;
 };
 
 #define SSL_POLL_ERROR (SSL_POLL_EVENT_F | SSL_POLL_EVENT_EL | \
@@ -577,7 +577,8 @@ basename(char *path)
 enum pe_types {
     PE_NONE,
     PE_LISTENER,
-    PE_CONNECTION,
+    PE_CONNECTION_CLIENT,
+    PE_CONNECTION_SERVER,
     PE_SSTREAM,
     PE_SUSTREAM,
     PE_CSTREAM,
@@ -829,7 +830,8 @@ pe_type_to_name(const struct poll_event *pe)
     static const char *names[] = {
         "none",
         "listener",
-        "connection",
+        "client connection",
+        "server connection",
         "server stream (bidi)",
         "server stream (uni)",
         "client stream (bidi)",
@@ -846,7 +848,8 @@ pe_type_to_name(const struct poll_event *pe)
 static struct poll_event_connection *
 pe_to_connection(struct poll_event *pe)
 {
-    if ((pe == NULL) || (pe->pe_type != PE_CONNECTION))
+    if ((pe == NULL) || ((pe->pe_type != PE_CONNECTION_CLIENT) &&
+        (pe->pe_type != PE_CONNECTION_SERVER)))
         return NULL;
 
     return ((struct poll_event_connection *)pe);
@@ -942,7 +945,7 @@ new_qconn_pe(SSL *ssl_qconn)
 
         if (qconn_pe != NULL) {
             init_pe(qconn_pe, ssl_qconn);
-            qconn_pe->pe_type = PE_CONNECTION;
+            qconn_pe->pe_type = PE_CONNECTION_CLIENT; /* assume client */
             qconn_pe->pe_want_events = SSL_POLL_EVENT_ISB | SSL_POLL_EVENT_ISU;
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_EC | SSL_POLL_EVENT_ECD;
             /*
@@ -1273,6 +1276,7 @@ create_poll_manager(void)
     if (pm->pm_poll_set != NULL) {
         pm->pm_poll_set_sz = POLL_GROW;
         pm->pm_event_count = 0;
+        pm->pm_name = "";
     } else {
         OPENSSL_free(pm);
         return NULL;
@@ -1327,13 +1331,13 @@ rebuild_poll_set(struct poll_manager *pm)
     }
 
     i = 0;
-    DPRINTF(stderr, "%s there %zu events to poll\n", __func__,
-            QPOLL_TAILQ_COUNT(&pm->pm_head));
+    DPRINTF(stderr, "%s(%s) there %zu events to poll\n", __func__,
+            pm->pm_name, QPOLL_TAILQ_COUNT(&pm->pm_head));
     QPOLL_TAILQ_FOREACH(pe, &pm->pm_head, pe_tqe) {
         pe->pe_poll_item.events = pe->pe_want_events;
         pm->pm_poll_set[i++] = *pe;
-        DPRINTF(stderr, "\t%p (%s) " POLL_FMT " (disabled: " POLL_FMT ")\n",
-                pe, pe_type_to_name(pe),
+        DPRINTF(stderr, "\t%p @ %s (%s) " POLL_FMT " (disabled: " POLL_FMT ")\n",
+                pe,  pm->pm_name, pe_type_to_name(pe),
                 POLL_PRINTA(pe->pe_poll_item.events),
                 POLL_PRINTA(~pe->pe_want_mask));
     }
@@ -1695,6 +1699,7 @@ srvapp_setup_response(struct poll_event *pe)
 {
     struct poll_stream_context *pscx;
     struct poll_event_sustream *pesu;
+    struct poll_event_sstream *pess;
     int rv;
 
     switch (pe->pe_type) {
@@ -1703,6 +1708,8 @@ srvapp_setup_response(struct poll_event *pe)
         pscx = OPENSSL_malloc(sizeof (struct poll_stream_context));
         if (pscx == NULL)
             return -1;
+        DPRINTFS(stderr, "%s sustream setup %p [ %p ]\n", __func__, pe,
+                 pesu->pesu_rb);
         pscx->pscx = pesu->pesu_rb;
         pesu->pesu_rb = NULL;
         pscx->pscx_cb_ondestroy = (void(*)(void *))rb_destroy;
@@ -1716,6 +1723,9 @@ srvapp_setup_response(struct poll_event *pe)
         rv = 0;
         break;
     case PE_SSTREAM:
+        pess = pe_to_sstream(pe);
+        DPRINTFS(stderr, "%s sstream setup %p [ %p ]\n", __func__, pe,
+                 pess->pess_rb);
         pe->pe_cb_out = srvapp_write_sstreamcb;
         pe_resume_write(pe);
         rv = 0;
@@ -1850,6 +1860,12 @@ srvapp_read_sstreamcb(struct poll_event *pe)
             rv = handle_read_stream_state(pe);
             if (rv == 0 && pess->pess_rb != NULL)
                 rv = srvapp_setup_response(pe);
+            else
+                DPRINTFS(stderr, "%s error on setup (%p) [%p]\n", __func__,
+                         pe, pess->pess_rb);
+
+        } else {
+            DPRINTFS(stderr, "%s error on read (%p)\n", __func__, pe);
         }
 
         return rv;
@@ -1857,7 +1873,8 @@ srvapp_read_sstreamcb(struct poll_event *pe)
     pess->pess_wpos += read_len;
     pess->pess_wpos_sz -= read_len;
 
-    pess->pess_rb = parse_request(pess->pess_reqbuf);
+    if (pess->pess_rb == NULL)
+        pess->pess_rb = parse_request(pess->pess_reqbuf);
 
     return rv;
 }
@@ -1897,13 +1914,19 @@ srvapp_read_sustreamcb(struct poll_event *pe)
             rv = handle_read_stream_state(pe);
             if (rv == 0 && pesu->pesu_rb != NULL)
                 (void)srvapp_setup_response(pe);
+            else
+                DPRINTFS(stderr, "%s error on setup (%p) [%p]\n", __func__,
+                         pe, pesu->pesu_rb);
+        } else {
+            DPRINTFS(stderr, "%s error on read (%p)\n", __func__, pe);
         }
         return -1;
     }
     pesu->pesu_wpos += read_len;
     pesu->pesu_wpos_sz -= read_len;
 
-    pesu->pesu_rb = parse_request(pesu->pesu_reqbuf);
+    if (pesu->pesu_rb == NULL)
+        pesu->pesu_rb = parse_request(pesu->pesu_reqbuf);
 
     return rv;
 }
@@ -1928,8 +1951,10 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
 
     if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
 
-        if (QPOLL_TAILQ_EMPTY(&pec->pec_unistream_cx))
+        if (QPOLL_TAILQ_EMPTY(&pec->pec_unistream_cx)) {
+            qconn_pe->pe_want_events &= ~ SSL_POLL_EVENT_OSU;
             return 0;
+        }
 
         qs = SSL_new_stream(qconn, SSL_STREAM_FLAG_UNI);
         qs_pe = (struct poll_event *)new_sustream_pe(qs);
@@ -1949,13 +1974,11 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
         qs_pe->pe_cb_error = srvapp_handle_stream_error;
         qs_pe->pe_want_events = SSL_POLL_EVENT_EW;
 
-        if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
-            qs_pe->pe_cb_ondestroy = srvapp_ondestroy_sustreamcb;
-            qs_pe->pe_cb_in = srvapp_read_sustreamcb;
-            qs_pe->pe_cb_out = srvapp_write_sustreamcb;
-            rb = get_response_from_pec(pec, qs_pe->pe_type);
-            ((struct poll_event_sustream *)qs_pe)->pesu_rb = rb;
-        }
+        qs_pe->pe_cb_ondestroy = srvapp_ondestroy_sustreamcb;
+        qs_pe->pe_cb_in = srvapp_read_sustreamcb;
+        qs_pe->pe_cb_out = srvapp_write_sustreamcb;
+        rb = get_response_from_pec(pec, qs_pe->pe_type);
+        ((struct poll_event_sustream *)qs_pe)->pesu_rb = rb;
 
         if (rb == NULL) {
             /*
@@ -2083,6 +2106,7 @@ srvapp_accept_qconn(struct poll_event *listener_pe)
         qc_pe->pe_cb_ondestroy = app_destroy_qconn;
         add_pe_to_pm(listener_pe->pe_my_pm, qc_pe);
         qc_pe->pe_my_pm = listener_pe->pe_my_pm;
+        qc_pe->pe_type = PE_CONNECTION_SERVER;
     } else {
         SSL_free(qconn);
         return -1;
@@ -2176,6 +2200,9 @@ run_quic_server(SSL_CTX *ctx, struct poll_manager *pm, int fd)
             }
         }
     }
+
+    DPRINTFS(stderr, "%s stop_server: %d, pm_continue: %d\n", __func__,
+             stop_server, pm->pm_continue);
 
     ok = EXIT_SUCCESS;
 err:
@@ -2289,6 +2316,7 @@ server_thread(size_t port)
         ERR_print_errors_fp(stderr);
         errx(1, "Failed to create poll manager for server");
     }
+    pm->pm_name = "server";
 
     /* QUIC server connection acceptance loop. */
     if (run_quic_server(server_ctx, pm, fd) < 0) {
@@ -2563,7 +2591,6 @@ clntapp_update_pec(struct poll_event_connection *pec, struct stream_stats *ss)
     QPOLL_TAILQ_INSERT_HEAD(&pec->pec_cs->cs_done, ss, ss_tqe);
     if (QPOLL_TAILQ_COUNT(&pec->pec_cs->cs_done) == STREAM_COUNT) {
         SSL_shutdown(get_ssl_from_pe((struct poll_event *)pec));
-        pec->pec_shutdown = 1;
         DPRINTFC(stderr, "%s shutdown on %p\n", __func__, pec);
     }
 }
@@ -2613,6 +2640,20 @@ clntapp_ondestroy_custreamcb(struct poll_event *pe)
 }
 
 static int
+clntapp_null_run_cb(struct poll_event *qconn_pe)
+{
+    struct poll_event_connection *pec;
+
+    pec = pe_to_connection(qconn_pe);
+    assert(pec != NULL);
+    DPRINTFC(stderr, "%s no streams to create for connection %p\n",
+             __func__, pec);
+    SSL_shutdown(get_ssl_from_pe(qconn_pe));
+
+    return 0;
+}
+
+static int
 clntapp_new_stream_cb(struct poll_event *qconn_pe)
 {
     SSL *qconn;
@@ -2658,8 +2699,10 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     QPOLL_TAILQ_REMOVE(&pec->pec_cs->cs_todo, ss, ss_tqe);
     qconn = get_ssl_from_pe(qconn_pe);
     qs = SSL_new_stream(qconn, SS_TYPE_TO_SFLAG(want_type));
-    if (qs == NULL)
-        return -1;
+    if (qs == NULL) {
+        warnx("%s failed to create stream (%p)", __func__, qconn_pe);
+        return 0;
+    }
 
     if (want_type == SS_BIDISTREAM) {
         pecs = new_cstream_pe(qs);
@@ -2695,7 +2738,10 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
         qs_pe->pe_cb_error = clntapp_handle_stream_error;
         qs_pe->pe_want_events = SSL_POLL_EVENT_EW;
         pe_resume_write(qs_pe);
+        DPRINTFC(stderr, "%s got %p (%s) for %p\n", __func__, qs_pe,
+                 pe_type_to_name(qs_pe), qconn_pe);
     } else {
+        warnx("%s failed to create poll event (%p)", __func__, qconn_pe);
         SSL_free(qs);
         rv = -1;
     }
@@ -2735,7 +2781,8 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
         pecsu->pecsu_pec = pec;
         pscx = QPOLL_TAILQ_FIRST(&pec->pec_unistream_cx);
         if (pscx == NULL) {
-            warnx("%s no context for unistream client", __func__);
+            warnx("%s no context for unistream client (%p)",
+                   __func__, qconn_pe);
             clntapp_ondestroy_custreamcb(qs_pe);
             OPENSSL_free(qs_pe);
             SSL_free(qs);
@@ -2760,18 +2807,8 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
         pe_disable_write(qs_pe);
         pe_resume_read(qs_pe);
     } else {
-        qs_pe = (struct poll_event *)new_cstream_pe(qs);
-        if (qs_pe == NULL) {
-            SSL_free(qs);
-            return -1;
-        }
-        qs_pe->pe_cb_error = clntapp_handle_stream_error;
-        qs_pe->pe_cb_in = clntapp_read_cstreamcb;
-        qs_pe->pe_cb_ondestroy = clntapp_ondestroy_cstreamcb;
-        qs_pe->pe_want_events = SSL_POLL_EVENT_ER;
-        add_pe_to_pm(qconn_pe->pe_my_pm, qs_pe);
-        pe_pause_write(qs_pe);
-        pe_resume_read(qs_pe);
+        warnx("%s client can accept unidirectional streams only (%p)",
+              __func__, qconn_pe);
     }
 
     return 0;
@@ -2966,6 +3003,16 @@ create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
         }
     }
 
+    /*
+     * Force new stream event so we can detect client connects
+     * to server. The clntapp_new_stream_cb callback then detects there
+     * is nothing to do and initiates connection shutdown.
+     */
+    if ((qc_pe->pe_want_events & (SSL_POLL_EVENT_OS)) == 0) {
+        qc_pe->pe_want_events |= SSL_POLL_EVENT_OSB;
+        qc_pe->pe_cb_out = clntapp_null_run_cb;
+    }
+
     return qc_pe;
 
 fail:
@@ -3102,19 +3149,20 @@ client_thread(void)
         ERR_print_errors_fp(stderr);
         errx(1, "Failed to create poll manager for server");
     }
+    pm->pm_name = "client";
 
     start = ossl_time_now();
     for (i = 0; i < client_config.cc_clients; i++) {
         pec = create_client_pe(ctx, &cs[i]);
         if (pec == NULL) {
             ERR_print_errors_fp(stderr);
-            errx(1, "Failed to create poll manager for server");
+            errx(1, "Failed to create connection");
         }
 
         add_pe_to_pm(pm, pec);
-        SSL_connect(get_ssl_from_pe(pec));
         SSL_set_default_stream_mode(get_ssl_from_pe(pec),
                                     SSL_DEFAULT_STREAM_MODE_NONE);
+        SSL_connect(get_ssl_from_pe(pec));
     }
 
     rebuild_poll_set(pm);
@@ -3234,12 +3282,12 @@ main(int argc, char *argv[])
         errx(res, "number of clients must be in [1, 100]");
 
     client_config.cc_bstreams = strtoul(bstreamstr, NULL, 0);
-    if (client_config.cc_bstreams <= 0 || client_config.cc_bstreams > 1000)
-        errx(res, "number of bidi streams must be in <1, 1000>");
+    if (client_config.cc_bstreams < 0 || client_config.cc_bstreams > 1000)
+        errx(res, "number of bidi streams must be in <0, 1000>");
 
     client_config.cc_ustreams = strtoul(ustreamstr, NULL, 0);
-    if (client_config.cc_ustreams <= 0 || client_config.cc_ustreams > 1000)
-        errx(res, "number of uni streams must be in <1, 1000>");
+    if (client_config.cc_ustreams < 0 || client_config.cc_ustreams > 1000)
+        errx(res, "number of uni streams must be in <0, 1000>");
 
     client_config.cc_rep_sz = strtoul(rep_sizestr, NULL, 0);
     if (client_config.cc_rep_sz <= 0 || client_config.cc_rep_sz > STREAM_SZ_CAP)
