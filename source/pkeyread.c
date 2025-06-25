@@ -337,11 +337,13 @@ int main(int argc, char * const argv[])
             if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
                 fprintf(stderr, "Failed to run the test %s in %s format]\n",
                         sample_names[k], format_names[f]);
+                OPENSSL_free(times);
                 return EXIT_FAILURE;
             }
             report_result(k, f, terse);
         }
     }
 
+    OPENSSL_free(times);
     return EXIT_SUCCESS;
 }
