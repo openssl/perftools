@@ -263,7 +263,7 @@ void usage(const char *progname)
 int main(int argc, char * const argv[])
 {
     double persec;
-    OSSL_TIME duration, ttime;
+    OSSL_TIME duration;
     double avcalltime;
     int ret = EXIT_FAILURE;
     int i;
@@ -396,13 +396,14 @@ int main(int argc, char * const argv[])
         goto err;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    avcalltime = (double)0;
+    persec += (double)0;
+    for (i = 0; i < threadcount; i++) {
+        avcalltime += ((double)ossl_time2ticks(times[i]) / (num_calls / threadcount)) / (double)OSSL_TIME_US;
+        persec += (((num_calls * OSSL_TIME_SECOND) / (double)threadcount) / (double)ossl_time2ticks(times[i]));
+    }
 
-    avcalltime = ((double)ossl_time2ticks(ttime) / num_calls) / (double)OSSL_TIME_US;
-    persec = ((num_calls * OSSL_TIME_SECOND)
-             / (double)ossl_time2ticks(duration));
+    avcalltime /= (double)threadcount;
 
     if (terse) {
         printf("%lf\n", avcalltime);
