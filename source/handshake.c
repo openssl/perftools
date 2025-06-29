@@ -399,8 +399,8 @@ int main(int argc, char * const argv[])
     for (i = 0; i < threadcount; i++)
         total_count += counts[i];
 
-    avcalltime = (double)ossl_time2us(duration) * threadcount / total_count;
-    persec = total_count / (double)ossl_time2seconds(duration);
+    avcalltime = (double)RUN_TIME * 1e6 * threadcount/ total_count;
+    persec = (double)total_count / RUN_TIME;
 
     if (terse) {
         printf("%lf\n", avcalltime);
