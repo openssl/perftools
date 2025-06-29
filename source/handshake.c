@@ -22,7 +22,7 @@
 #include <openssl/ssl.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_TEST        10000
+#define RUN_TIME 5
 
 int err = 0;
 
@@ -33,7 +33,7 @@ static char *privkey = NULL;
 static OSSL_LIB_CTX **libctx_pool = NULL;
 
 
-OSSL_TIME *times;
+size_t *counts;
 
 static int threadcount;
 size_t num_calls;
@@ -44,13 +44,14 @@ typedef enum {
     TC_OSSL_LIB_CTX_PER_THREAD,
     TC_OSSL_LIB_CTX_POOL,
 } test_case_t;
+OSSL_TIME max_time;
 
 static void do_handshake(size_t num)
 {
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
     size_t i;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
 
@@ -59,9 +60,9 @@ static void do_handshake(size_t num)
         lcctx = cctx;
     }
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         if (share_ctx == 0) {
             if (!perflib_create_ssl_ctx_pair(TLS_server_method(),
                                              TLS_client_method(),
@@ -83,10 +84,10 @@ static void do_handshake(size_t num)
             SSL_CTX_free(lcctx);
             lsctx = lcctx = NULL;
         }
+        counts[num]++;
+        time = ossl_time_now();
     }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+    while (time.t < max_time.t);
 
     if (!ret)
         err = 1;
@@ -97,12 +98,10 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
     size_t i;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
     OSSL_LIB_CTX *libctx = NULL;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
-
-    start = ossl_time_now();
 
     libctx = OSSL_LIB_CTX_new();
     if (libctx == NULL) {
@@ -111,7 +110,9 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
         return;
     }
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    counts[num] = 0;
+
+    do {
         if (!perflib_create_ossl_lib_ctx_pair(libctx,
                                               TLS_server_method(),
                                               TLS_client_method(),
@@ -132,10 +133,10 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
         SSL_CTX_free(lsctx);
         SSL_CTX_free(lcctx);
         lsctx = lcctx = NULL;
+        counts[num]++;
+        time = ossl_time_now();
     }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+    while (time.t < max_time.t);
 
     if (!ret)
         err = 1;
@@ -148,12 +149,10 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
     size_t i;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
     OSSL_LIB_CTX *libctx = NULL;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
-
-    start = ossl_time_now();
 
     libctx = libctx_pool[num % ossl_lib_ctx_pool_size];
     if (share_ctx == 1) {
@@ -168,7 +167,9 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
         }
     }
 
-    for (i = 0; i < num_calls / threadcount; ++i) {
+    counts[num] = 0;
+
+    do {
         if (share_ctx == 0) {
             if (!perflib_create_ossl_lib_ctx_pair(libctx,
                                                   TLS_server_method(),
@@ -192,15 +193,15 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
             SSL_CTX_free(lcctx);
             lsctx = lcctx = NULL;
         }
+	counts[num]++;
+        time = ossl_time_now();
     }
+    while (time.t < max_time.t);
 
     if (share_ctx == 1) {
         SSL_CTX_free(lsctx);
         SSL_CTX_free(lcctx);
     }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
 
     if (!ret)
         err = 1;
@@ -263,7 +264,8 @@ void usage(const char *progname)
 int main(int argc, char * const argv[])
 {
     double persec;
-    OSSL_TIME duration, ttime;
+    OSSL_TIME duration;
+    size_t total_count = 0;
     double avcalltime;
     int ret = EXIT_FAILURE;
     int i;
@@ -342,15 +344,13 @@ int main(int argc, char * const argv[])
         printf("threadcount must be > 0\n");
         goto err;
     }
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
         printf("Failed to create times array\n");
         goto err;
     }
 
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     switch (test_case) {
     case TC_SSL_CTX: {
@@ -396,13 +396,11 @@ int main(int argc, char * const argv[])
         goto err;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
-    avcalltime = ((double)ossl_time2ticks(ttime) / num_calls) / (double)OSSL_TIME_US;
-    persec = ((num_calls * OSSL_TIME_SECOND)
-             / (double)ossl_time2ticks(duration));
+    avcalltime = (double)ossl_time2us(duration) * threadcount / total_count;
+    persec = total_count / (double)ossl_time2seconds(duration);
 
     if (terse) {
         printf("%lf\n", avcalltime);
@@ -415,7 +413,7 @@ int main(int argc, char * const argv[])
  err:
     OPENSSL_free(cert);
     OPENSSL_free(privkey);
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     if (share_ctx == 1) {
         SSL_CTX_free(sctx);
         SSL_CTX_free(cctx);
