@@ -22,25 +22,25 @@
 #include <openssl/crypto.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_TEST         1000000
+#define RUN_TIME 5
 
 int err = 0;
 static SSL_CTX *ctx;
 
-size_t num_calls;
 static int threadcount;
-static OSSL_TIME *times = NULL;
+
+size_t *counts;
+OSSL_TIME max_time;
 
 void do_sslnew(size_t num)
 {
-    size_t i;
     SSL *s;
     BIO *rbio, *wbio;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         s = SSL_new(ctx);
         rbio = BIO_new(BIO_s_mem());
         wbio = BIO_new(BIO_s_mem());
@@ -55,20 +55,19 @@ void do_sslnew(size_t num)
         }
 
         SSL_free(s);
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 }
 
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
-    OSSL_TIME ttime;
+    size_t total_count = 0;
     double avcalltime;
     int terse = 0;
     int rc = EXIT_FAILURE;
-    size_t i;
+    int i;
     int opt;
 
     while ((opt = getopt(argc, argv, "t")) != -1) {
@@ -92,13 +91,10 @@ int main(int argc, char *argv[])
         printf("threadcount must be > 0\n");
         return EXIT_FAILURE;
     }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
@@ -107,6 +103,8 @@ int main(int argc, char *argv[])
         printf("Failure to create SSL_CTX\n");
         goto out;
     }
+
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     if (!perflib_run_multi_thread_test(do_sslnew, threadcount, &duration)) {
         printf("Failed to run the test\n");
@@ -118,11 +116,10 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
-    avcalltime = ((double)ossl_time2ticks(ttime) / num_calls) / (double)OSSL_TIME_US;
+    avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
     if (terse)
         printf("%lf\n", avcalltime);
@@ -132,6 +129,6 @@ int main(int argc, char *argv[])
     rc = EXIT_SUCCESS;
 out:
     SSL_CTX_free(ctx);
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return rc;
 }
