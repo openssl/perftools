@@ -21,7 +21,7 @@
 #include <openssl/ssl.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_TEST        1000000
+#define RUN_TIME 5
 
 int err = 0;
 
@@ -31,19 +31,18 @@ static char *cert = NULL;
 static char *privkey = NULL;
 static const SSL_METHOD *smethod, *cmethod;
 
-OSSL_TIME *times;
-
 static int threadcount;
-size_t num_calls;
 int buf_size = 1024;
+
+size_t *counts;
+OSSL_TIME max_time;
 
 static void do_writeread(size_t num)
 {
     SSL *clientssl = NULL, *serverssl = NULL;
     SSL_CTX *lsctx = NULL, *lcctx = NULL;
     int ret = 1;
-    size_t i;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
     char *sbuf, *cbuf;
 
     /* Prepare client and server buffers. */
@@ -73,9 +72,7 @@ static void do_writeread(size_t num)
         return;
     }
 
-    start = ossl_time_now();
-
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         size_t written = 0;
         if (SSL_write_ex(clientssl, cbuf, buf_size, &written) <= 0) {
             fprintf(stderr, "Failed to write data\n");
@@ -93,10 +90,9 @@ static void do_writeread(size_t num)
             err = 1;
             return;
         }
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 
     perflib_shutdown_ssl_connection(serverssl, clientssl);
     if (share_ctx == 0) {
@@ -109,7 +105,8 @@ static void do_writeread(size_t num)
 
 int main(int argc, char * const argv[])
 {
-    OSSL_TIME duration, ttime;
+    OSSL_TIME duration;
+    size_t total_count = 0;
     double avcalltime;
     int ret = EXIT_FAILURE;
     int i;
@@ -171,15 +168,14 @@ int main(int argc, char * const argv[])
         fprintf(stderr, "threadcount must be > 0\n");
         goto err;
     }
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        fprintf(stderr, "Failed to create times array\n");
+
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        fprintf(stderr, "Failed to create counts array\n");
         goto err;
     }
 
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     if (share_ctx == 1) {
         if (!perflib_create_ssl_ctx_pair(smethod, cmethod, 0, 0,
@@ -199,11 +195,10 @@ int main(int argc, char * const argv[])
         goto err;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
-    avcalltime = ((double)ossl_time2ticks(ttime) / num_calls) / (double)OSSL_TIME_US;
+    avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
     if (terse) {
         printf("%lf\n", avcalltime);
@@ -215,7 +210,7 @@ int main(int argc, char * const argv[])
  err:
     OPENSSL_free(cert);
     OPENSSL_free(privkey);
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     if (share_ctx == 1) {
         SSL_CTX_free(sctx);
         SSL_CTX_free(cctx);
