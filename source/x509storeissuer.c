@@ -22,22 +22,22 @@
 #include <openssl/x509.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_TEST         1000000
+#define RUN_TIME 5
 
 static int err = 0;
 static X509_STORE *store = NULL;
 static X509 *x509 = NULL;
-size_t num_calls;
-OSSL_TIME *times;
 
 static int threadcount;
 
+size_t *counts;
+OSSL_TIME max_time;
+
 static void do_x509storeissuer(size_t num)
 {
-    size_t i;
     X509_STORE_CTX *ctx = X509_STORE_CTX_new();
     X509 *issuer = NULL;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
 
     if (ctx == NULL || !X509_STORE_CTX_init(ctx, store, x509, NULL)) {
         printf("Failed to initialise X509_STORE_CTX\n");
@@ -45,9 +45,9 @@ static void do_x509storeissuer(size_t num)
         goto err;
     }
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         /*
          * We actually expect this to fail. We've not configured any
          * certificates inside our store. We're just testing calling this
@@ -60,10 +60,9 @@ static void do_x509storeissuer(size_t num)
             goto err;
         }
         issuer = NULL;
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 
  err:
     X509_STORE_CTX_free(ctx);
@@ -72,7 +71,8 @@ static void do_x509storeissuer(size_t num)
 int main(int argc, char *argv[])
 {
     int i;
-    OSSL_TIME duration, ttime;
+    OSSL_TIME duration;
+    size_t total_count = 0;
     double avcalltime;
     int terse = 0;
     char *cert = NULL;
@@ -112,9 +112,6 @@ int main(int argc, char *argv[])
         printf("threadcount must be > 0\n");
         goto err;
     }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
 
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store)) {
@@ -135,11 +132,13 @@ int main(int argc, char *argv[])
     BIO_free(bio);
     bio = NULL;
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         goto err;
     }
+
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     if (!perflib_run_multi_thread_test(do_x509storeissuer, threadcount, &duration)) {
         printf("Failed to run the test\n");
@@ -151,11 +150,10 @@ int main(int argc, char *argv[])
         goto err;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
-    avcalltime = ((double)ossl_time2ticks(ttime) / num_calls) /(double)OSSL_TIME_US; 
+    avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
     if (terse)
         printf("%lf\n", avcalltime);
@@ -170,6 +168,6 @@ int main(int argc, char *argv[])
     X509_free(x509);
     BIO_free(bio);
     OPENSSL_free(cert);
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return ret;
 }
