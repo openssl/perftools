@@ -23,27 +23,28 @@
 #include <openssl/crypto.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_RUN 1000000
+#define RUN_TIME 5
 
-int threadcount = 0;
+size_t threadcount = 0;
 int err = 0;
 unsigned long *dataval = NULL;
 int writers = 0;
 int readers = 0;
 int write_lock_calls = 0;
 int read_lock_calls = 0;
-OSSL_TIME reader_end = { 0 };
-OSSL_TIME writer_end = { 0 };
 
 CRYPTO_RWLOCK *lock = NULL;
 
-void do_rw_wlock(size_t num)
+size_t *counts;
+OSSL_TIME max_time;
+
+void do_rw_wlock()
 {
-    int i;
     unsigned long *newval, *oldval;
     int local_write_lock_calls = 0;
+    OSSL_TIME time;
 
-    for (i = 0; i < NUM_CALLS_PER_RUN / threadcount; i++) {
+    do {
         newval = OPENSSL_malloc(sizeof(int));
         CRYPTO_THREAD_write_lock(lock);
         if (dataval == NULL)
@@ -55,25 +56,25 @@ void do_rw_wlock(size_t num)
         CRYPTO_THREAD_unlock(lock);
         local_write_lock_calls += 2; /* lock and unlock */
         OPENSSL_free(oldval);
-    }
+        time = ossl_time_now();
+    } while(time.t < max_time.t);
 
     CRYPTO_THREAD_write_lock(lock);
     write_lock_calls += local_write_lock_calls;
     writers--;
     if (writers == 0) {
-        writer_end = ossl_time_now();
         OPENSSL_free(dataval); /* free last allocation */
     }
     CRYPTO_THREAD_unlock(lock);
 }
 
-void do_rw_rlock(size_t num)
+void do_rw_rlock()
 {
-    int i;
     unsigned long last_val = 0;
     int local_read_lock_calls = 0;
+    OSSL_TIME time;
 
-    for (i = 0; i < NUM_CALLS_PER_RUN / threadcount; i++) {
+    do {
         CRYPTO_THREAD_read_lock(lock);
         if (dataval != NULL) {
             if (last_val != 0 && last_val > *dataval)
@@ -82,34 +83,32 @@ void do_rw_rlock(size_t num)
         }
         CRYPTO_THREAD_unlock(lock);
         local_read_lock_calls += 2; /* lock and unlock */
-    }
+        time = ossl_time_now();
+    } while(time.t < max_time.t);
 
     CRYPTO_THREAD_write_lock(lock);
     read_lock_calls += local_read_lock_calls;
     readers--;
-    if (readers == 0)
-        reader_end = ossl_time_now();
     CRYPTO_THREAD_unlock(lock);
 }
 
 void do_rwlocks(size_t num)
 {
     if (num >= threadcount - writers)
-        do_rw_wlock(num);
+        do_rw_wlock();
     else
-        do_rw_rlock(num);
+        do_rw_rlock();
 }
 
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
-    OSSL_TIME start;
-    uint64_t us;
     double avwcalltime;
     double avrcalltime;
     int terse = 0;
     char *writeenv;
     int opt;
+    int writer_threads;
 
     while ((opt = getopt(argc, argv, "t")) != -1) {
         switch (opt) {
@@ -141,6 +140,7 @@ int main(int argc, char *argv[])
         if (writers == 0)
             writers = threadcount / 2;
     }
+    writer_threads = writers;
 
     lock = CRYPTO_THREAD_lock_new();
     if (lock == NULL) {
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
         printf("Running rwlock test with %d writers and %d readers\n",
                writers, readers);
 
-    start = ossl_time_now();
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     if (!perflib_run_multi_thread_test(do_rwlocks, threadcount, &duration)) {
         printf("Failed to run the test\n");
@@ -166,18 +166,16 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    us = ossl_time2us(ossl_time_subtract(writer_end, start));
-    avwcalltime = (double)us / (double)write_lock_calls;
+    avwcalltime = (double)RUN_TIME * 1e6 * writer_threads / write_lock_calls;
 
     if (!terse)
-        printf("total write lock/unlock calls %d in %lf us\n",
-               write_lock_calls, (double)us);
+        printf("total write lock/unlock calls %d in %d s\n",
+               write_lock_calls, RUN_TIME);
 
-    us = ossl_time2us(ossl_time_subtract(reader_end, start));
-    avrcalltime = (double)us / (double)read_lock_calls;
+    avrcalltime = (double)RUN_TIME * 1e6 * (threadcount-writer_threads) / read_lock_calls;
     if (!terse)
-        printf("total read lock/unlock calls %d %lf us\n",
-               read_lock_calls, (double)us);
+        printf("total read lock/unlock calls %d %d s\n",
+               read_lock_calls, RUN_TIME);
 
     if (terse) {
         printf("%lf %lf\n", avwcalltime, avrcalltime);
