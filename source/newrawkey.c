@@ -21,10 +21,11 @@
 #include <openssl/evp.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_TEST         1000000
+#define RUN_TIME 5
 
 size_t num_calls;
-OSSL_TIME *times;
+size_t *counts;
+OSSL_TIME max_time;
 
 enum {
     ALGO_X25519,
@@ -336,7 +337,7 @@ void do_newrawkey(size_t num)
 {
     size_t i;
     EVP_PKEY *pkey;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
     const unsigned char *key_data = key_x25519;
     size_t key_len = sizeof(key_x25519);
 
@@ -362,9 +363,9 @@ void do_newrawkey(size_t num)
             break;
     }
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
         pkey = EVP_PKEY_new_raw_public_key_ex(NULL, alg_name, NULL, key_data,
                                               key_len);
@@ -379,16 +380,15 @@ void do_newrawkey(size_t num)
             err = 1;
         else
             EVP_PKEY_free(pkey);
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 }
 
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
-    OSSL_TIME ttime;
+    size_t total_count = 0;
     double av;
     int terse = 0;
     size_t i;
@@ -438,13 +438,11 @@ int main(int argc, char *argv[])
         printf("threadcount must be > 0\n");
         return EXIT_FAILURE;
     }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
@@ -458,9 +456,8 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
     /*
      * EVP_PKEY_new_raw_public_key is pretty fast, running in
@@ -470,7 +467,7 @@ int main(int argc, char *argv[])
      * zero in the math.  Instead, manually do the division, casting
      * our values as doubles so that we compute the proper time
      */
-    av = ((double)ossl_time2ticks(ttime) / num_calls) /(double)OSSL_TIME_US;
+    av = (double)RUN_TIME * 1e6 * threadcount/ total_count;
 
     if (terse)
         printf("%lf\n", av);
@@ -480,6 +477,6 @@ int main(int argc, char *argv[])
 
     rc = EXIT_SUCCESS;
 out:
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return rc;
 }
