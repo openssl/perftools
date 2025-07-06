@@ -26,10 +26,11 @@
 /* run 'make regen_key_samples' if header file is missing */
 #include "keys.h"
 
-#define NUM_CALLS_PER_TEST         10000
+#define RUN_TIME 5
 
 size_t num_calls;
-static OSSL_TIME *times = NULL;
+size_t *counts;
+OSSL_TIME max_time;
 
 int err = 0;
 
@@ -45,7 +46,7 @@ static void do_pemread(size_t num)
     BIO *pem;
     size_t i;
     size_t len;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
@@ -64,13 +65,13 @@ static void do_pemread(size_t num)
         return;
     }
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
     /*
      * Technically this includes the EVP_PKEY_free() in the timing - but I
      * think we can live with that
      */
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         key = PEM_read_bio_PrivateKey(pem, NULL, NULL, NULL);
         if (key == NULL) {
             fprintf(stderr, "Failed to create key: %llu [%s PEM]\n",
@@ -82,10 +83,10 @@ static void do_pemread(size_t num)
         }
         EVP_PKEY_free(key);
         BIO_reset(pem);
-    }
 
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 
     BIO_free(pem);
 }
@@ -108,7 +109,7 @@ static void do_derread(size_t num)
     int pk_buf_len;
     EVP_PKEY *pkey = NULL;
     int i;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
@@ -116,10 +117,9 @@ static void do_derread(size_t num)
         return;
     }
 
+    counts[num] = 0;
 
-    start = ossl_time_now();
-
-    for (i = 0; i < num_calls / threadcount && err == 0; i++) {
+    do {
         keydata = (const unsigned char *)sample_keys[sample_id][FORMAT_DER];
         keydata_sz = sample_key_sizes[sample_id][FORMAT_DER];
         pkey = d2i_PrivateKey(sample_id_to_evp(sample_id), NULL,
@@ -133,10 +133,9 @@ static void do_derread(size_t num)
 error:
         EVP_PKEY_free(pkey);
         pkey = NULL;
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 }
 
 static int sample_name_to_id(const char *sample_name)
@@ -168,15 +167,13 @@ static int format_name_to_id(const char *format_name)
 static double get_avcalltime(void)
 {
     int i;
-    OSSL_TIME t;
+    size_t total_count = 0;
     double avcalltime;
 
-    memset(&t, 0, sizeof(t));
     for (i = 0; i < threadcount; i++)
-        t = ossl_time_add(t, times[i]);
-    avcalltime = (double)ossl_time2ticks(t) / num_calls;
+        total_count += counts[i];
 
-    avcalltime =  avcalltime / (double)OSSL_TIME_US;
+    avcalltime = (double)RUN_TIME * 1e6 * threadcount/ total_count;
 
     return avcalltime;
 }
@@ -306,13 +303,11 @@ int main(int argc, char * const argv[])
         usage(argv);
         return EXIT_FAILURE;
     }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
@@ -337,13 +332,13 @@ int main(int argc, char * const argv[])
             if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
                 fprintf(stderr, "Failed to run the test %s in %s format]\n",
                         sample_names[k], format_names[f]);
-                OPENSSL_free(times);
+                OPENSSL_free(counts);
                 return EXIT_FAILURE;
             }
             report_result(k, f, terse);
         }
     }
 
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return EXIT_SUCCESS;
 }

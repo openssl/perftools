@@ -23,11 +23,12 @@
 #include <openssl/provider.h>
 #include "perflib/perflib.h"
 
-#define NUM_CALLS_PER_TEST         100000
+#define RUN_TIME 5
 
 size_t num_calls;
 static int err = 0;
-OSSL_TIME *times;
+size_t *counts;
+OSSL_TIME max_time;
 
 static int doit(OSSL_PROVIDER *provider, void *vcount)
 {
@@ -43,26 +44,26 @@ static void do_providerdoall(size_t num)
 {
     size_t i;
     int count;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         count = 0;
         if (!OSSL_PROVIDER_do_all(NULL, doit, &count) || count != 1) {
             err = 1;
             break;
         }
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 }
 
 int main(int argc, char *argv[])
 {
     int i;
-    OSSL_TIME duration, ttime;
+    OSSL_TIME duration;
+    size_t total_count = 0;
     double av;
     int terse = 0;
     int ret = EXIT_FAILURE;
@@ -89,13 +90,11 @@ int main(int argc, char *argv[])
         printf("threadcount must be > 0\n");
         return EXIT_FAILURE;
     }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         goto err;
     }
 
@@ -109,11 +108,10 @@ int main(int argc, char *argv[])
         goto err;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
-    av = ((double)ossl_time2ticks(ttime) / num_calls) / (double)OSSL_TIME_US;
+    av = (double)RUN_TIME * 1e6 * threadcount/ total_count;
 
     if (terse)
         printf("%lf\n", av);
@@ -123,6 +121,6 @@ int main(int argc, char *argv[])
 
     ret = EXIT_SUCCESS;
  err:
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return ret;
 }

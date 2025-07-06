@@ -22,20 +22,21 @@
 /* run 'make regen_key_samples' if header file is missing */
 #include "keys_setpeer.h"
 
-#define NUM_CALLS_PER_TEST         10000
+#define RUN_TIME 5
 
 int err = 0;
 
 size_t num_calls;
 static int threadcount;
-static OSSL_TIME *times = NULL;
+size_t *counts;
 
 EVP_PKEY *pkey = NULL;
+OSSL_TIME max_time;
 
 void do_setpeer(size_t num)
 {
     size_t i;
-    OSSL_TIME start, end;
+    OSSL_TIME time;
 
     EVP_PKEY_CTX *pkey_ctx = NULL;
 
@@ -53,17 +54,16 @@ void do_setpeer(size_t num)
         return;
     }
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         if (EVP_PKEY_derive_set_peer(pkey_ctx, pkey) <= 0) {
             err = 1;
             break;
         }
-    }
-
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
 
     EVP_PKEY_CTX_free(pkey_ctx);
 }
@@ -84,15 +84,13 @@ static int sample_name_to_id(const char *sample_name)
 static double get_avcalltime(void)
 {
     int i;
-    OSSL_TIME t;
+    size_t total_count = 0;
     double avcalltime;
 
-    memset(&t, 0, sizeof(t));
     for (i = 0; i < threadcount; i++)
-        t = ossl_time_add(t, times[i]);
-    avcalltime = (double)ossl_time2ticks(t) / num_calls;
+        total_count += counts[i];
 
-    avcalltime =  avcalltime / (double)OSSL_TIME_US;
+    avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
     return avcalltime;
 }
@@ -132,7 +130,7 @@ static void usage(char * const argv[])
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
-    OSSL_TIME ttime;
+    size_t total_count = 0;
     double avcalltime;
     int terse = 0;
     int rc = EXIT_FAILURE;
@@ -181,13 +179,11 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
@@ -241,6 +237,6 @@ int main(int argc, char *argv[])
 
     rc = EXIT_SUCCESS;
 out:
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return rc;
 }

@@ -31,7 +31,7 @@
 # define OPENSSL_DO_PQ
 #endif
 
-#define NUM_CALLS_PER_TEST         10000000
+#define RUN_TIME 5
 
 /*
  * Update the constant numbers below if you add or remove
@@ -58,7 +58,8 @@
 #define FETCH_ENTRY_PQ_ALGS_N      \
     (FETCH_ENTRY_ML_KEM_N + FETCH_ENTRY_ML_DSA_N + FETCH_ENTRY_SLH_DSA_N)
 
-OSSL_TIME *times;
+size_t *counts;
+OSSL_TIME max_time;
 
 int err = 0;
 int pq = 0;
@@ -158,7 +159,7 @@ static struct fetch_data_entry fetch_entries[] = {
 
 void do_fetch(size_t num)
 {
-    OSSL_TIME start, end;
+    OSSL_TIME time;
     size_t i, j;
     const char *fetch_alg = NULL;
     int array_size = ARRAY_SIZE(fetch_entries);
@@ -171,7 +172,7 @@ void do_fetch(size_t num)
         array_size -= FETCH_ENTRY_PQ_ALGS_N;
     }
 
-    start = ossl_time_now();
+    counts[num] = 0;
 
     /*
      * Going through the fetch entries num_calls / threadcount times.
@@ -180,7 +181,7 @@ void do_fetch(size_t num)
      * to be a multiple of the number of fetch entries therefore at the last
      * iteration we may not check all the algorithms.
      */
-    for (i = 0; i < num_calls / threadcount; i++) {
+    do {
         /*
          * If we set a fetch type, always use that
          */
@@ -278,15 +279,16 @@ void do_fetch(size_t num)
             err = 1;
             return;
         }
+        counts[num]++;
+        time = ossl_time_now();
     }
-    end = ossl_time_now();
-    times[num] = ossl_time_subtract(end, start);
+    while (time.t < max_time.t);
 }
 
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
-    OSSL_TIME ttime;
+    size_t total_count = 0;
     double av;
     int terse = 0;
     size_t i;
@@ -352,17 +354,16 @@ int main(int argc, char *argv[])
         printf("threadcount must be > 0\n");
         return EXIT_FAILURE;
     }
-    num_calls = NUM_CALLS_PER_TEST;
-    if (NUM_CALLS_PER_TEST % threadcount > 0) /* round up */
-        num_calls += threadcount - NUM_CALLS_PER_TEST % threadcount;
+
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     ctx = OSSL_LIB_CTX_new();
     if (ctx == NULL)
         return EXIT_FAILURE;
 
-    times = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
-    if (times == NULL) {
-        printf("Failed to create times array\n");
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (counts == NULL) {
+        printf("Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
@@ -376,9 +377,8 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    ttime = times[0];
-    for (i = 1; i < threadcount; i++)
-        ttime = ossl_time_add(ttime, times[i]);
+    for (i = 0; i < threadcount; i++)
+        total_count += counts[i];
 
     /*
      * EVP_fetch_* calls are pretty fast, running in
@@ -388,7 +388,7 @@ int main(int argc, char *argv[])
      * zero in the math.  Instead, manually do the division, casting
      * our values as doubles so that we compute the proper time
      */
-    av = ((double)ossl_time2ticks(ttime) / num_calls) /(double)OSSL_TIME_US;
+    av = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
     if (terse)
         printf("%lf\n", av);
@@ -398,6 +398,6 @@ int main(int argc, char *argv[])
     rc = EXIT_SUCCESS;
 out:
     OSSL_LIB_CTX_free(ctx);
-    OPENSSL_free(times);
+    OPENSSL_free(counts);
     return rc;
 }
