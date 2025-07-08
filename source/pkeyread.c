@@ -45,7 +45,6 @@ static void do_pemread(size_t num)
     EVP_PKEY *key;
     BIO *pem;
     size_t i;
-    size_t len;
     OSSL_TIME time;
 
     if (sample_id >= SAMPLE_ALL) {
@@ -93,8 +92,6 @@ static void do_pemread(size_t num)
 
 static int sample_id_to_evp(int sample_id)
 {
-    int rv;
-
     if ((sample_id < 0) || (sample_id >= SAMPLE_ALL))
         return EVP_PKEY_NONE;
 
@@ -105,10 +102,7 @@ static void do_derread(size_t num)
 {
     const unsigned char *keydata;
     size_t keydata_sz;
-    const unsigned char *pk_buf = NULL;
-    int pk_buf_len;
     EVP_PKEY *pkey = NULL;
-    int i;
     OSSL_TIME time;
 
     if (sample_id >= SAMPLE_ALL) {

@@ -281,8 +281,7 @@ void do_fetch(size_t num)
         }
         counts[num]++;
         time = ossl_time_now();
-    }
-    while (time.t < max_time.t);
+    } while (time.t < max_time.t);
 }
 
 int main(int argc, char *argv[])
@@ -292,6 +291,7 @@ int main(int argc, char *argv[])
     double av;
     int terse = 0;
     size_t i;
+    int j;
     int rc = EXIT_FAILURE;
     char *fetch_type = getenv("EVP_FETCH_TYPE");
     int opt;
@@ -377,8 +377,8 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    for (i = 0; i < threadcount; i++)
-        total_count += counts[i];
+    for (j = 0; j < threadcount; j++)
+        total_count += counts[j];
 
     /*
      * EVP_fetch_* calls are pretty fast, running in

@@ -111,5 +111,5 @@ int main(int argc, char *argv[])
     rc = EXIT_SUCCESS;
 out:
     OPENSSL_free(counts);
-    return EXIT_SUCCESS;
+    return rc;
 }

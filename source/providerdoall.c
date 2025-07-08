@@ -42,7 +42,6 @@ static int threadcount;
 
 static void do_providerdoall(size_t num)
 {
-    size_t i;
     int count;
     OSSL_TIME time;
 
