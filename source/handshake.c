@@ -460,27 +460,22 @@ int main(int argc, char * const argv[])
         break;
     }
     case TC_OSSL_LIB_CTX_PER_THREAD: {
-         ret =
-            perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
-                                          threadcount, &duration);
-        if (!ret) {
+        if (!perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
+                                           threadcount, &duration)) {
             printf("Failed to run the test\n");
             goto err;
         }
         break;
     }
     case TC_OSSL_LIB_CTX_POOL: {
-        int ret = test_ossl_lib_ctx_pool(threadcount, &duration);
-        if (!ret) {
+        if (!test_ossl_lib_ctx_pool(threadcount, &duration)) {
             printf("Failed to run the test\n");
             goto err;
         }
         break;
     }
     case TC_SSL_CTX_POOL: {
-        ret
-          = test_ssl_ctx_pool(threadcount, &duration);
-        if (!ret) {
+        if (!test_ssl_ctx_pool(threadcount, &duration)) {
             printf("Failed to run the test\n");
             goto err;
         }
