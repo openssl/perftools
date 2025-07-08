@@ -60,7 +60,7 @@ void do_rsasign(size_t num)
 
     for (i = 0; i < num_calls / threadcount; i++) {
         if (EVP_PKEY_sign_init(ctx) <= 0
-                || EVP_PKEY_sign(ctx, sig, &siglen, (const unsigned char *)tbs, SHA_DIGEST_LENGTH) <= 0) {
+                || EVP_PKEY_sign(ctx, sig, &siglen, tbs, SHA_DIGEST_LENGTH) <= 0) {
             err = 1;
             break;
         }
