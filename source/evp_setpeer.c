@@ -130,8 +130,6 @@ static void usage(char * const argv[])
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
-    size_t total_count = 0;
-    double avcalltime;
     int terse = 0;
     int rc = EXIT_FAILURE;
     size_t i;
