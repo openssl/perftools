@@ -43,7 +43,6 @@ static char *cert = NULL;
 static char *privkey = NULL;
 static struct ctxs **ctx_pool = NULL;
 
-
 size_t *counts;
 
 static int threadcount;
@@ -57,6 +56,7 @@ typedef enum {
     TC_SSL_CTX_POOL,
 } test_case_t;
 OSSL_TIME max_time;
+static test_case_t test_case = TC_SSL_CTX;
 
 static void do_handshake(size_t num)
 {
@@ -152,7 +152,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     OSSL_LIB_CTX_free(libctx);
 }
 
-static void do_handshake_ossl_lib_ctx_pool(size_t num)
+static void do_handshake_ctx_pool(size_t num)
 {
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
@@ -162,7 +162,14 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
     struct ctxs *ctx = NULL;
 
     ctx = ctx_pool[num % pool_size];
-    if (share_ctx == 1) {
+
+    if (test_case == TC_SSL_CTX_POOL) {
+        // Use pre-created SSL_CTX from the pool
+        lsctx = ctx->sctx;
+        lcctx = ctx->cctx;
+    }
+
+    if (share_ctx == 1 && test_case == TC_OSSL_LIB_CTX_POOL) {
         if (!perflib_create_ossl_lib_ctx_pair(ctx->libctx,
                                               TLS_server_method(),
                                               TLS_client_method(),
@@ -177,7 +184,7 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
     counts[num] = 0;
 
     do {
-        if (share_ctx == 0) {
+        if (share_ctx == 0 && test_case == TC_OSSL_LIB_CTX_POOL) {
             if (!perflib_create_ossl_lib_ctx_pair(ctx->libctx,
                                                   TLS_server_method(),
                                                   TLS_client_method(),
@@ -195,7 +202,7 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
                                              SSL_ERROR_NONE);
         perflib_shutdown_ssl_connection(serverssl, clientssl);
         serverssl = clientssl = NULL;
-        if (share_ctx == 0) {
+        if (share_ctx == 0 && test_case == TC_OSSL_LIB_CTX_POOL) {
             SSL_CTX_free(lsctx);
             SSL_CTX_free(lcctx);
             lsctx = lcctx = NULL;
@@ -205,34 +212,10 @@ static void do_handshake_ossl_lib_ctx_pool(size_t num)
     }
     while (time.t < max_time.t);
 
-    if (share_ctx == 1) {
+    if (share_ctx == 1 && test_case == TC_OSSL_LIB_CTX_POOL) {
         SSL_CTX_free(lsctx);
         SSL_CTX_free(lcctx);
     }
-
-    if (!ret)
-        err = 1;
-}
-
-static void do_handshake_ssl_ctx_pool(size_t num)
-{
-    SSL *clientssl = NULL, *serverssl = NULL;
-    int ret = 1;
-    OSSL_TIME time;
-    struct ctxs *ssl_ctx = NULL;
-
-    counts[num] = 0;
-    ssl_ctx = ctx_pool[num % pool_size];
-    do {
-        ret = perflib_create_ssl_objects(ssl_ctx->sctx, ssl_ctx->cctx, &serverssl, &clientssl,
-                                         NULL, NULL);
-        ret &= perflib_create_ssl_connection(serverssl, clientssl,
-                                             SSL_ERROR_NONE);
-        perflib_shutdown_ssl_connection(serverssl, clientssl);
-        serverssl = clientssl = NULL;
-        counts[num]++;
-        time = ossl_time_now();
-    } while (time.t < max_time.t);
 
     if (!ret)
         err = 1;
@@ -305,11 +288,14 @@ static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
 {
     int ret = 0;
 
-    ret = init_ctx_pool(INIT_LIB_CTX);
+    if (test_case == TC_SSL_CTX_POOL)
+        ret = init_ctx_pool(INIT_LIB_AND_SSL_CTX);
+    else
+        ret = init_ctx_pool(INIT_LIB_CTX);
     if (!ret)
         goto err;
 
-    ret = perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_pool, threadcount, duration);
+    ret = perflib_run_multi_thread_test(do_handshake_ctx_pool, threadcount, duration);
     if (!ret)
         printf("Failed to run the test\n");
 
@@ -318,24 +304,6 @@ static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
 
     return ret;
  }
-
-static int test_ssl_ctx_pool(size_t threadcount, OSSL_TIME *duration)
-{
-    int ret = 0;
-
-    ret = init_ctx_pool(INIT_LIB_AND_SSL_CTX);
-    if (!ret)
-        goto err;
-
-    ret = perflib_run_multi_thread_test(do_handshake_ssl_ctx_pool, threadcount, duration);
-    if (!ret)
-        printf("Failed to run the test\n");
-
- err:
-    free_ctx_pool();
-
-    return ret;
-}
 
 void usage(const char *progname)
 {
@@ -360,7 +328,6 @@ int main(int argc, char * const argv[])
     int opt;
     int p_flag = 0, P_flag = 0, l_flag = 0;
     char *endptr = NULL;
-    test_case_t test_case = TC_SSL_CTX;
 
     while ((opt = getopt(argc, argv, "tspPo:l")) != -1) {
         switch (opt) {
@@ -467,15 +434,9 @@ int main(int argc, char * const argv[])
         }
         break;
     }
+    case TC_SSL_CTX_POOL:
     case TC_OSSL_LIB_CTX_POOL: {
         if (!test_ossl_lib_ctx_pool(threadcount, &duration)) {
-            printf("Failed to run the test\n");
-            goto err;
-        }
-        break;
-    }
-    case TC_SSL_CTX_POOL: {
-        if (!test_ssl_ctx_pool(threadcount, &duration)) {
             printf("Failed to run the test\n");
             goto err;
         }
