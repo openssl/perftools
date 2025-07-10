@@ -164,7 +164,7 @@ static void do_handshake_ctx_pool(size_t num)
     ctx = ctx_pool[num % pool_size];
 
     if (test_case == TC_SSL_CTX_POOL) {
-        // Use pre-created SSL_CTX from the pool
+        /* Use pre-created SSL_CTX from the pool */
         lsctx = ctx->sctx;
         lcctx = ctx->cctx;
     }
