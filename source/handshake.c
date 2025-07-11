@@ -376,9 +376,9 @@ int main(int argc, char * const argv[])
             break;
         case 'S': {
             char *end = NULL;
-            errno = 0;
             int sec_mem_size;
 
+            errno = 0;
             sec_mem_size = (int)strtol(optarg, &end, 10);
             if (errno || end == NULL || *end || sec_mem_size <= 0) {
                 fprintf(stderr, "Invalid secure memory size: '%s'\n", optarg);
