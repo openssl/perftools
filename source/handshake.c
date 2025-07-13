@@ -124,15 +124,17 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     counts[num] = 0;
 
     do {
-        if (!perflib_create_ossl_lib_ctx_pair(libctx,
-                                              TLS_server_method(),
-                                              TLS_client_method(),
-                                              0, 0, &lsctx, &lcctx, cert,
-                                              privkey)) {
-            ERR_print_errors_fp(stderr);
-            fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
-            err = 1;
-            return;
+        if (lsctx == NULL) {
+            if (!perflib_create_ossl_lib_ctx_pair(libctx,
+                                                  TLS_server_method(),
+                                                  TLS_client_method(),
+                                                  0, 0, &lsctx, &lcctx, cert,
+                                                  privkey)) {
+                ERR_print_errors_fp(stderr);
+                fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
+                err = 1;
+                return;
+            }
         }
 
 
@@ -142,12 +144,17 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
                                              SSL_ERROR_NONE);
         perflib_shutdown_ssl_connection(serverssl, clientssl);
         serverssl = clientssl = NULL;
-        SSL_CTX_free(lsctx);
-        SSL_CTX_free(lcctx);
-        lsctx = lcctx = NULL;
+        if (share_ctx == 0) {
+            SSL_CTX_free(lsctx);
+            SSL_CTX_free(lcctx);
+            lsctx = lcctx = NULL;
+        }
         counts[num]++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    SSL_CTX_free(lsctx);
+    SSL_CTX_free(lcctx);
 
     if (!ret)
         err = 1;
