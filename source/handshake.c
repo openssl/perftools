@@ -151,6 +151,9 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
+    SSL_CTX_free(lsctx);
+    SSL_CTX_free(lcctx);
+
     if (!ret)
         err = 1;
 
