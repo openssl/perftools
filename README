@@ -166,3 +166,22 @@ writeread [-t] [-s] [-d] [-b size] <certsdir> <threadcount>
 -b - size of buffer to write and read, default is 1024 bytes.
 certsdir - directory where the test can locate servercert.pem and serverkey.pem.
 threadcount - number of concurrent threads to run in test.
+
+quic_server_ssl_poll_http
+-------
+
+Non-blocking single threaded server uses SSL_poll(3ossl). It can accept more
+than one QUIC connection. The server handles HTTP/1.0 GET requests only.
+Server always drains the incoming stream initiated by client.  It answers to
+any GET request. The default reply is 200 OK with 12345 bytes of payload.
+Client may request desired payload with URL as follows:
+    /any/path/to_8192whatever/foo_4096.txt
+The URL parser attempts to find leftmost number, which denotes the number
+of bytes client expects in response. In the case above the server answers
+with 8192 bytes of data. The current server implementation can be used
+for basic performance evaluation of OpenSSL QUIC stack using simple
+HTTP/1.0 QUIC clients. It's been tested with tquic_client [1]. To run
+server use command as follows:
+    ./quic_server_ssl_poll_http 8000 servercert.pem serverkey.pem
+
+[1] https://tquic.net/docs/getting_started/demo#run-the-quic-client
