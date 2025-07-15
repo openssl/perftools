@@ -114,7 +114,7 @@ add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 	perflib/time.c)
 
 if (WIN32)
-    target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c)
+    target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c perflib/err.c)
 endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
@@ -126,6 +126,9 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
 
     add_executable(providerdoall providerdoall.c)
     target_link_libraries(providerdoall PRIVATE perf)
+
+    add_executable(ssl_poll_perf ssl_poll_perf.c)
+    target_link_libraries(ssl_poll_perf PRIVATE perf)
 endif()
 
 add_executable(randbytes randbytes.c)

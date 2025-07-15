@@ -32,6 +32,13 @@ typedef pthread_t thread_t;
 
 # endif
 
+struct thread_arg_st {
+    void (*func)(size_t num);
+    size_t num;
+};
+
+int perflib_run_thread(thread_t *t, struct thread_arg_st *arg);
+int perflib_wait_for_thread(thread_t thread);
 int perflib_run_multi_thread_test(void (*f)(size_t), size_t threadcount,
                                   OSSL_TIME *duration);
 char *perflib_mk_file_path(const char *dir, const char *file);
