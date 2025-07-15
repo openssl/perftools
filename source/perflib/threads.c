@@ -9,11 +9,6 @@
 
 #include "perflib/perflib.h"
 
-struct thread_arg_st {
-    void (*func)(size_t num);
-    size_t num;
-};
-
 #if defined(_WIN32)
 
 static DWORD WINAPI thread_run(LPVOID varg)
