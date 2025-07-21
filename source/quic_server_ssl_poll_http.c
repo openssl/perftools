@@ -30,8 +30,9 @@
 
 /* Include the appropriate header file for SOCK_STREAM */
 #ifdef _WIN32 /* Windows */
-# include <stdarg.h>
 # include <winsock2.h>
+# include "perflib/basename.h"
+# include "perflib/err.h"
 #else /* Linux/Unix */
 # include <err.h>
 # include <sys/socket.h>
@@ -525,49 +526,6 @@ struct client_stats {
 static int terse = 0;
 
 #ifdef _WIN32
-static const char *progname;
-
-static void
-vwarnx(const char *fmt, va_list ap)
-{
-    if (progname != NULL)
-        fprintf(stderr, "%s: ", progname);
-    vfprintf(stderr, fmt, ap);
-    putc('\n', stderr);
-}
-
-static void
-errx(int status, const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start(ap, fmt);
-    vwarnx(fmt, ap);
-    va_end(ap);
-    exit(status);
-}
-
-static void
-warnx(const char *fmt, ...)
-{
-    va_list ap;
-
-    va_start(ap, fmt);
-    vwarnx(fmt, ap);
-    va_end(ap);
-}
-
-/*
- * we can get away with this mock-up on windows.
- * we generate payload for any URL we obtain in
- * GET request. mock-up is good enough for us.
- */
-static char *
-basename(char *path)
-{
-    return path;
-}
-
 # define strncasecmp(_a_, _b_, _c_) _strnicmp((_a_), (_b_), (_c_))
 
 # define ctime_r(_t_, _b_) ctime_s((_b_), sizeof ((_b_)), (_t_))
