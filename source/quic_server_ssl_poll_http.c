@@ -2089,6 +2089,9 @@ run_quic_server(SSL_CTX *ctx, struct poll_manager *pm, int fd)
     struct poll_event *pe;
     struct poll_event_listener *listener_pe = NULL;
     size_t poll_items;
+    /*
+     * 1sec timeout for server loop to check stopping condition periodically
+     */
     struct timeval tv = { 1, 0 };
 
     /* Create a new QUIC listener */
@@ -2790,11 +2793,10 @@ run_quic_client(struct poll_manager *pm)
     size_t poll_items;
     unsigned int i;
     struct poll_event *pe;
-    struct timeval tv = { 1, 0 };
 
     while (pm->pm_event_count > 0) {
         ok = SSL_poll((SSL_POLL_ITEM *)pm->pm_poll_set, pm->pm_event_count,
-                      sizeof (struct poll_event), &tv, 0, &poll_items);
+                      sizeof (struct poll_event), NULL, 0, &poll_items);
 
         if (ok == 0 && poll_items == 0)
             break;
