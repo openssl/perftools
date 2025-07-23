@@ -70,6 +70,7 @@
  * then the server sends 64kB of data in HTTP/1.0 response.
  */
 
+#define DEBUG 1
 #ifdef DEBUG
 # define DPRINTF fprintf
 # define DPRINTFC fprintf
@@ -905,8 +906,7 @@ new_qconn_pe(SSL *ssl_qconn)
         if (qconn_pe != NULL) {
             init_pe(qconn_pe, ssl_qconn);
             qconn_pe->pe_type = PE_CONNECTION_CLIENT; /* assume client */
-            qconn_pe->pe_want_events = SSL_POLL_EVENT_ISB | SSL_POLL_EVENT_ISU;
-            qconn_pe->pe_want_events |= SSL_POLL_EVENT_EC | SSL_POLL_EVENT_ECD;
+            qconn_pe->pe_want_events = SSL_POLL_EVENT_EC | SSL_POLL_EVENT_ECD;
             /*
              * SSL_POLL_EVENT_OSB (or SSL_POLL_EVENT_OSU) must be monitored
              * once there is a request for outbound stream created by app.
@@ -2066,6 +2066,7 @@ srvapp_accept_qconn(struct poll_event *listener_pe)
         add_pe_to_pm(listener_pe->pe_my_pm, qc_pe);
         qc_pe->pe_my_pm = listener_pe->pe_my_pm;
         qc_pe->pe_type = PE_CONNECTION_SERVER;
+        qc_pe->pe_want_events |= SSL_POLL_EVENT_ISB | SSL_POLL_EVENT_ISU;
     } else {
         SSL_free(qconn);
         return -1;
