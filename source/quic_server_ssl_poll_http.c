@@ -1478,22 +1478,21 @@ app_handle_qconn_error(struct poll_event *pe)
     int rv = -2;
 
     if (pe->pe_poll_item.revents & SSL_POLL_EVENT_EC) {
+        /*
+	 * Keep to call SSL_shutdown() to drain the connection (let all streams
+	 * to finish transfer)
+         */
+        rv = SSL_shutdown(get_ssl_from_pe(pe));
         DPRINTF(stderr,
-                "%s connection shutdown started on %p (%s), keep polling\n",
-                __func__, pe, pe_type_to_name(pe));
+                "%s connection shutdown started on %p (%s), "
+                "shutdown %s keep polling\n",
+                __func__, pe, pe_type_to_name(pe),
+                (rv == 0) ? "in progress" : (rv == 1) ? "done" : "error");
         /*
-         * shutdown has started, Not sure what we should be doing here.
-         * So the plan is to call SSL_shutdown() here and stop monitoring
-         * _EVENT_EC here. We will keep _EVENT_ECD monitored.
-         * Shall we call shutdown too?
+	 * override error we got in shutdown and keep connection in loop. There
+	 * should be _ECD event saying connection is drained and can be
+	 * destroyed.
          */
-        SSL_shutdown(get_ssl_from_pe(pe));
-        /*
-         * adjust _want_events, don't forget to ask poll manager to rebuild
-         * poll set so _want_events can take effect in next loop iteration
-         */
-        pe->pe_want_events &= ~SSL_POLL_EVENT_EC;
-        pe->pe_my_pm->pm_need_rebuild = 1;
         rv = 0;
     }
 
