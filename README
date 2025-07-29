@@ -167,7 +167,7 @@ writeread [-t] [-s] [-d] [-b size] <certsdir> <threadcount>
 certsdir - directory where the test can locate servercert.pem and serverkey.pem.
 threadcount - number of concurrent threads to run in test.
 
-quic_server_ssl_poll_http
+ssl_poll_perf
 -------
 
 Tool to evaluate performance of QUIC client and server which both use

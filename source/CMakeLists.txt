@@ -127,8 +127,8 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(providerdoall providerdoall.c)
     target_link_libraries(providerdoall PRIVATE perf)
 
-    add_executable(quic_server_ssl_poll_http quic_server_ssl_poll_http.c)
-    target_link_libraries(quic_server_ssl_poll_http PRIVATE perf)
+    add_executable(ssl_poll_perf ssl_poll_perf.c)
+    target_link_libraries(ssl_poll_perf PRIVATE perf)
 endif()
 
 add_executable(randbytes randbytes.c)
