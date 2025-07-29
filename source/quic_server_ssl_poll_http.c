@@ -229,6 +229,10 @@
     } while (0)
 
 /*
+ * OPOLL_* definitions ends here
+ */
+
+/*
  * every poll_event structure has members enumerated here in poll_event_base
  * The poll events are kept in list which is managed by poll_manager instance.
  * However SSL_poll(9ossl) expects an array of SSL_POLL_ITEM structures. Therefore
@@ -242,7 +246,7 @@
  *    - pe_cb_in() - triggered when inbound data/stream/connection is coming
  *    - pe_cb_out() - triggered when outbound data/stream/connection is coming
  *    - pe_cb_error() - triggered when polled object enters an error state
- *    - pe_cb_destroy() - this a destructor, application destroy pe_appdata
+ *    - pe_cb_ondestroy() - this a destructor, application destroy pe_appdata
  * The remaining members are rather self explanatory.
  */
 #define poll_event_base \
@@ -267,10 +271,9 @@ struct poll_event_listener {
 };
 
 /*
- * The poll_event is associated with SSL object which is typically QUIC stream.
- * There are two types of streams in QUIC:
- *    - uni-directional (simplex)
- *    - bi-directional (duplex)
+ * The poll_event is associated with SSL object which can be one of those:
+ *    - QUIC uni-directional (simplex) streams
+ *    - QUIC bi-directional (duplex) streams
  *    - QUIC connection
  *    - QUIC listener
  * bi-directional streams are easy to handle: we create them, then we read
