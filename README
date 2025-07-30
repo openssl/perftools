@@ -168,27 +168,27 @@ certsdir - directory where the test can locate servercert.pem and serverkey.pem.
 threadcount - number of concurrent threads to run in test.
 
 ssl_poll_perf
--------
+-------------
 
 Tool to evaluate performance of QUIC client and server which both use
 SSL_poll(3ossl). Application creates two threads, one for client the
 other for server. Server and client can both accept/create simultanous
 connections. Each connection then can carry multiple unidirectional/bidirectional
-streams. The streams handle HTTP/1.0 GET reques/responses only.
+streams. The streams handle HTTP/1.0 GET request/responses only.
 Server always drains the incoming stream initiated by client.  It answers to
 any GET request. The default reply is 200 OK with 12345 bytes of payload.
 Client may request desired payload with URL as follows:
     /any/path/to_8192whatever/foo_4096.txt
-In which case the server will send response with 4kB http/1.0 body.
+In which case the server will send response with 8kB http/1.0 body.
 The URL parser attempts to find leftmost number, which denotes the number
 of bytes client expects in response.
 The test program supports options as follows:
 -c - number of connections to create (default 10)
 -b - number of bidirectional streams each connection creates (default 10)
 -u - number of unidirectional streams each connection creates (default 10)
--s - the size of replay body. The value doubles for every new stream until 100MB cap,
+-s - the size of reply body. The value doubles for every new stream until 100MB cap,
      initial value is 64
--w - the size of rqequest body. The value doubles for every new stream until 100MB cap,
+-w - the size of request body. The value doubles for every new stream until 100MB cap,
      initial value is 64
 -p - port number to use
 -t - terse output
