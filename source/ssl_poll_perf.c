@@ -2181,7 +2181,6 @@ err:
  */
 static const unsigned char alpn_ossltest[] = {
     8,  'h', 't', 't', 'p', '/', '1', '.', '0',
-    10, 'h', 'q', '-', 'i', 'n', 't', 'e', 'r', 'o', 'p',
 };
 
 /*
@@ -2217,8 +2216,6 @@ create_srv_ctx(const char *cert_path, const char *key_path)
         DPRINTFS(stderr, "couldn't load key file: %s\n", key_path);
         goto err;
     }
-
-    SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
     /* Setup ALPN negotiation callback to decide which ALPN is accepted. */
     SSL_CTX_set_alpn_select_cb(ctx, select_alpn, NULL);
@@ -2406,10 +2403,9 @@ clntapp_setup_response(struct poll_event *pe)
 }
 
 /*
- * clntapp_write_cb() callback notifies application the QUIC stack
- * is ready to send data. The write callback attempts to process
- * all buffers in write queue.
- * if write queue becomes empty, stream is concluded.
+ * clntapp_write_common() sets up a handling of response from server once all
+ * data are written from client. This is common code for client write callbacks
+ * for bidirectional and unidirectional stream.
  */
 static int
 clntapp_write_common(struct poll_event *pe, struct request_buffer *rb,
@@ -2444,8 +2440,8 @@ clntapp_write_common(struct poll_event *pe, struct request_buffer *rb,
             rv = -1;
     } else {
         rv = SSL_write_ex(get_ssl_from_pe(pe), buf, wlen, &written);
-        ss->ss_tx += written;
         if (rv == 1) {
+            ss->ss_tx += written;
             rb_advrpos(rb, (unsigned int)written);
             rv = 0;
         } else {
