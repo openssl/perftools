@@ -2335,12 +2335,12 @@ clntapp_handle_stream_error(struct poll_event *pe)
 }
 
 static void *
-clntapp_create_request(size_t req_sz, size_t payload_sz)
+clntapp_create_request(size_t arg_sz, size_t payload_sz)
 {
     struct request_txt_full *rtf;
     char request[80];
 
-    snprintf(request, sizeof(request), "/foo/%zu", req_sz);
+    snprintf(request, sizeof(request), "/foo/%zu", arg_sz);
 
     rtf = new_txt_full_request(request,
                                (payload_sz > 0) ? "foo" : NULL, payload_sz);
@@ -3047,7 +3047,7 @@ create_test_scenario(void)
 {
     struct client_stats *cs;
     struct stream_stats *ss;
-    unsigned int req_sz, body_sz;
+    unsigned int arg_sz, body_sz;
     unsigned int i, j;
 
     cs = OPENSSL_zalloc(sizeof(struct client_stats) *
@@ -3058,31 +3058,31 @@ create_test_scenario(void)
             QPOLL_TAILQ_INIT(&cs[i].cs_todo);
             QPOLL_TAILQ_INIT(&cs[i].cs_done);
 
-            req_sz = client_config.cc_rep_sz;
+            arg_sz = client_config.cc_rep_sz;
             body_sz = client_config.cc_req_sz;
             for (j = 0; j < client_config.cc_ustreams; j++) {
-                ss = create_stream_stats(req_sz, body_sz, SS_UNISTREAM);
+                ss = create_stream_stats(arg_sz, body_sz, SS_UNISTREAM);
                 if (ss == NULL) {
                     destroy_test_scenario(cs);
                     return NULL;
                 }
-                req_sz = req_sz * 2;
-                req_sz = (req_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : req_sz;
+                arg_sz = arg_sz * 2;
+                arg_sz = (arg_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : arg_sz;
                 body_sz = body_sz * 2;
                 body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
                 QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
 
-            req_sz = client_config.cc_rep_sz;
+            arg_sz = client_config.cc_rep_sz;
             body_sz = client_config.cc_req_sz;
             for (j = 0; j < client_config.cc_bstreams; j++) {
-                ss = create_stream_stats(req_sz, body_sz, SS_BIDISTREAM);
+                ss = create_stream_stats(arg_sz, body_sz, SS_BIDISTREAM);
                 if (ss == NULL) {
                     destroy_test_scenario(cs);
                     return NULL;
                 }
-                req_sz = req_sz * 2;
-                req_sz = (req_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : req_sz;
+                arg_sz = arg_sz * 2;
+                arg_sz = (arg_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : arg_sz;
                 body_sz = body_sz * 2;
                 body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
                 QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
