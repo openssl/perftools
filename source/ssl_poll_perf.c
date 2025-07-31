@@ -3065,10 +3065,6 @@ create_test_scenario(void)
                     destroy_test_scenario(cs);
                     return NULL;
                 }
-                arg_sz = arg_sz * 2;
-                arg_sz = (arg_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : arg_sz;
-                body_sz = body_sz * 2;
-                body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
                 QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
 
@@ -3080,10 +3076,6 @@ create_test_scenario(void)
                     destroy_test_scenario(cs);
                     return NULL;
                 }
-                arg_sz = arg_sz * 2;
-                arg_sz = (arg_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : arg_sz;
-                body_sz = body_sz * 2;
-                body_sz = (body_sz > STREAM_SZ_CAP) ? STREAM_SZ_CAP : body_sz;
                 QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
             }
         }
