@@ -307,8 +307,7 @@ struct poll_stream_context {
 /*
  * It facilitates transfer of app data from one stream to the other.
  * There are two lists:
- *    - pec_stream_cx for bi-directioanl streams (this list is unused
- *      currently).
+ *    - pec_stream_cx for bi-directioanl streams
  *    - pec_unistream_cx for uni-direcitonal (simplex) streams.
  *
  * Then there are two counters:
@@ -374,16 +373,16 @@ struct poll_manager {
 
 /*
  * bi-directional stream at server. The instances are
- * always named as pess
+ * always named as pesb
  */
-struct poll_event_sstream {
+struct poll_event_sbstream {
     poll_event_base;
-    struct poll_event_connection *pess_pec;
-    struct rr_buffer *pess_rb;
-    char *pess_wpos;
-    unsigned int pess_wpos_sz;
-    int pess_got_request;
-    char pess_reqbuf[8192];
+    struct poll_event_connection *pesb_pec;
+    struct rr_buffer *pesb_rb;
+    char *pesb_wpos;
+    unsigned int pesb_wpos_sz;
+    int pesb_got_request;
+    char pesb_reqbuf[8192];
 };
 
 /*
@@ -412,7 +411,7 @@ struct poll_event_cstream {
 };
 
 /*
- * uni-directional streams ate client. The instances are
+ * uni-directional streams at client. The instances are
  * always named pecsu
  */
 struct poll_event_custream {
@@ -434,13 +433,13 @@ struct client_context {
 /*
  * request/response buffer (a.k.a. rr_buffer)
  */
-enum {
+enum rb_type {
     RB_TYPE_NONE,
     RB_TYPE_TEXT_SIMPLE,
     RB_TYPE_TEXT_FULL
-};
+} ;
 #define rr_buffer_base \
-    unsigned char rb_type; \
+    enum rb_type rb_type; \
     unsigned int rb_rpos; \
     void (*rb_advrpos_cb)(struct rr_buffer *, unsigned int);\
     unsigned int (*rb_read_cb)(struct rr_buffer *, char *, \
@@ -818,13 +817,13 @@ pe_to_connection(struct poll_event *pe)
     return (struct poll_event_connection *)pe;
 }
 
-static struct poll_event_sstream *
+static struct poll_event_sbstream *
 pe_to_sstream(struct poll_event *pe)
 {
     if ((pe == NULL) || (pe->pe_type != PE_SSTREAM))
         return NULL;
 
-    return (struct poll_event_sstream *)pe;
+    return (struct poll_event_sbstream *)pe;
 }
 
 static struct poll_event_sustream *
@@ -925,25 +924,25 @@ new_qconn_pe(SSL *ssl_qconn)
     return qconn_pe;
 }
 
-static struct poll_event_sstream *
+static struct poll_event_sbstream *
 new_sstream_pe(SSL *ssl_qs)
 {
-    struct poll_event_sstream *pess;
+    struct poll_event_sbstream *pesb;
 
     if (ssl_qs != NULL) {
-        pess = OPENSSL_zalloc(sizeof(struct poll_event_sstream));
+        pesb = OPENSSL_zalloc(sizeof(struct poll_event_sbstream));
 
-        if (pess != NULL) {
-            init_pe((struct poll_event *)pess, ssl_qs);
-            pess->pess_wpos = pess->pess_reqbuf;
-            pess->pess_wpos_sz = sizeof(pess->pess_reqbuf) - 1;
-            ((struct poll_event *)pess)->pe_type = PE_SSTREAM;
+        if (pesb != NULL) {
+            init_pe((struct poll_event *)pesb, ssl_qs);
+            pesb->pesb_wpos = pesb->pesb_reqbuf;
+            pesb->pesb_wpos_sz = sizeof(pesb->pesb_reqbuf) - 1;
+            ((struct poll_event *)pesb)->pe_type = PE_SSTREAM;
         }
     } else {
-        pess = NULL;
+        pesb = NULL;
     }
 
-    return pess;
+    return pesb;
 }
 
 static struct poll_event_sustream *
@@ -1522,9 +1521,9 @@ app_handle_qconn_error(struct poll_event *pe)
 static void
 srvapp_ondestroy_sstreamcb(struct poll_event *pe)
 {
-    struct poll_event_sstream *pess = pe_to_sstream(pe);
+    struct poll_event_sbstream *pesb = pe_to_sstream(pe);
 
-    rb_destroy(pess->pess_rb);
+    rb_destroy(pesb->pesb_rb);
 }
 
 static void
@@ -1618,21 +1617,21 @@ srvapp_write_common(struct poll_event *pe, struct rr_buffer *rb)
 static int
 srvapp_write_sstreamcb(struct poll_event *pe)
 {
-    struct poll_event_sstream *pess;
+    struct poll_event_sbstream *pesb;
 
-    pess = pe_to_sstream(pe);
-    if (pess == NULL) {
+    pesb = pe_to_sstream(pe);
+    if (pesb == NULL) {
         warnx("%s unexpected type for %p (want SSTREAM, got %s\n)\n",
               __func__, pe, pe_type_to_name(pe));
         return -1;
     }
 
-    if (pess->pess_rb == NULL) {
+    if (pesb->pesb_rb == NULL) {
         warnx("%s no response buffer\n", __func__);
         return -1;
     }
 
-    return srvapp_write_common(pe, pess->pess_rb);
+    return srvapp_write_common(pe, pesb->pesb_rb);
 }
 
 static int
@@ -1660,7 +1659,7 @@ srvapp_setup_response(struct poll_event *pe)
 {
     struct poll_stream_context *pscx;
     struct poll_event_sustream *pesu;
-    struct poll_event_sstream *pess;
+    struct poll_event_sbstream *pesb;
     int rv;
 
     switch (pe->pe_type) {
@@ -1684,9 +1683,9 @@ srvapp_setup_response(struct poll_event *pe)
         rv = 0;
         break;
     case PE_SSTREAM:
-        pess = pe_to_sstream(pe);
+        pesb = pe_to_sstream(pe);
         DPRINTFS(stderr, "%s sstream setup %p [ %p ]\n", __func__, pe,
-                 pess->pess_rb);
+                 pesb->pesb_rb);
         pe->pe_cb_out = srvapp_write_sstreamcb;
         pe_resume_write(pe);
         rv = 0;
@@ -1788,7 +1787,7 @@ parse_request(const char *buf)
 static int
 srvapp_read_sstreamcb(struct poll_event *pe)
 {
-    struct poll_event_sstream *pess = pe_to_sstream(pe);
+    struct poll_event_sbstream *pesb = pe_to_sstream(pe);
     size_t read_len;
     int rv;
     char devnull[4096];
@@ -1797,14 +1796,14 @@ srvapp_read_sstreamcb(struct poll_event *pe)
      * if we could not parse the request in the first chunk (8k), then just
      * wrap around and continue reading data from client.
      */
-    if (pess->pess_wpos_sz == 0) {
-        pess->pess_wpos = pess->pess_reqbuf;
-        pess->pess_wpos_sz = sizeof(pess->pess_reqbuf) - 1;
+    if (pesb->pesb_wpos_sz == 0) {
+        pesb->pesb_wpos = pesb->pesb_reqbuf;
+        pesb->pesb_wpos_sz = sizeof(pesb->pesb_reqbuf) - 1;
     }
 
-    if (pess->pess_rb == NULL)
-        rv = SSL_read_ex(get_ssl_from_pe(pe), pess->pess_wpos,
-                         pess->pess_wpos_sz, &read_len);
+    if (pesb->pesb_rb == NULL)
+        rv = SSL_read_ex(get_ssl_from_pe(pe), pesb->pesb_wpos,
+                         pesb->pesb_wpos_sz, &read_len);
     else
         rv = SSL_read_ex(get_ssl_from_pe(pe), devnull, sizeof(devnull),
                          &read_len);
@@ -1819,11 +1818,11 @@ srvapp_read_sstreamcb(struct poll_event *pe)
         rv = handle_ssl_error(pe, rv, __func__);
         if (rv == 0) {
             rv = handle_read_stream_state(pe);
-            if (rv == 0 && pess->pess_rb != NULL)
+            if (rv == 0 && pesb->pesb_rb != NULL)
                 rv = srvapp_setup_response(pe);
             else
                 DPRINTFS(stderr, "%s error on setup (%p) [%p]\n", __func__,
-                         pe, pess->pess_rb);
+                         pe, pesb->pesb_rb);
 
         } else {
             DPRINTFS(stderr, "%s error on read (%p)\n", __func__, pe);
@@ -1831,11 +1830,11 @@ srvapp_read_sstreamcb(struct poll_event *pe)
 
         return rv;
     }
-    pess->pess_wpos += read_len;
-    pess->pess_wpos_sz -= read_len;
+    pesb->pesb_wpos += read_len;
+    pesb->pesb_wpos_sz -= read_len;
 
-    if (pess->pess_rb == NULL)
-        pess->pess_rb = parse_request(pess->pess_reqbuf);
+    if (pesb->pesb_rb == NULL)
+        pesb->pesb_rb = parse_request(pesb->pesb_reqbuf);
 
     return rv;
 }
@@ -1983,7 +1982,7 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
     SSL *qs;
     struct poll_event *qs_pe;
     struct poll_event_connection *pec = pe_to_connection(qconn_pe);
-    struct poll_event_sstream *pess;
+    struct poll_event_sbstream *pesb;
     struct poll_event_sustream *pesu;
 
     if (pec == NULL) {
@@ -2019,8 +2018,8 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
         pe_resume_read(qs_pe);
     } else {
         qs = SSL_accept_stream(qconn, SSL_ACCEPT_STREAM_BIDI);
-        pess = new_sstream_pe(qs);
-        qs_pe = (struct poll_event *) pess;
+        pesb = new_sstream_pe(qs);
+        qs_pe = (struct poll_event *) pesb;
         if (qs_pe == NULL) {
             /*
              * keep polling on connection. Returning -1 here
@@ -2032,7 +2031,7 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
             SSL_free(qs);
             return 0;
         }
-        pess->pess_pec = pec;
+        pesb->pesb_pec = pec;
 
         qs_pe->pe_cb_in = srvapp_read_sstreamcb;
         qs_pe->pe_cb_out = srvapp_write_sstreamcb;
@@ -3116,9 +3115,6 @@ client_thread(void)
 
     SSL_CTX_set_verify(ctx, SSL_VERIFY_NONE, NULL);
 
-    if (!SSL_CTX_set_default_verify_paths(ctx))
-        errx(1, "%s SSL_CTX_set_default_verify_paths() failed", __func__);
-
     pm = create_poll_manager();
     if (pm == NULL) {
         ERR_print_errors_fp(stderr);
@@ -3183,7 +3179,7 @@ static void usage(const char *progname)
             "stream then carries `s` * 2, third `s` * 3, etc.\n"
             "Request body increases using the same pattern starting with\n"
             "`w` size.\n", progname);
-    exit(1);
+    exit(EXIT_FAILURE);
 }
 
 /* Minimal QUIC HTTP/1.0 server. */
@@ -3253,24 +3249,24 @@ main(int argc, char *argv[])
     client_config.cc_portstr = portstr;
 
     client_config.cc_clients = strtoul(ccountstr, NULL, 0);
-    if (client_config.cc_clients <= 0 || client_config.cc_clients > 100)
+    if (client_config.cc_clients == 0 || client_config.cc_clients > 100)
         errx(res, "number of clients must be in [1, 100]");
 
     client_config.cc_bstreams = strtoul(bstreamstr, NULL, 0);
-    if (client_config.cc_bstreams < 0 || client_config.cc_bstreams > 1000)
+    if (client_config.cc_bstreams > 1000)
         errx(res, "number of bidi streams must be in <0, 1000>");
 
     client_config.cc_ustreams = strtoul(ustreamstr, NULL, 0);
-    if (client_config.cc_ustreams < 0 || client_config.cc_ustreams > 1000)
+    if (client_config.cc_ustreams > 1000)
         errx(res, "number of uni streams must be in <0, 1000>");
 
     client_config.cc_rep_sz = strtoul(rep_sizestr, NULL, 0);
-    if (client_config.cc_rep_sz <= 0 || client_config.cc_rep_sz > STREAM_SZ_CAP)
+    if (client_config.cc_rep_sz == 0 || client_config.cc_rep_sz > STREAM_SZ_CAP)
         errx(res, "data size to request outside of range <1, %u>",
              STREAM_SZ_CAP);
 
     client_config.cc_req_sz = strtoul(req_sizestr, NULL, 0);
-    if (client_config.cc_rep_sz < 0 || client_config.cc_rep_sz > STREAM_SZ_CAP)
+    if (client_config.cc_rep_sz > STREAM_SZ_CAP)
         errx(res, "request payload  size is outside of range <0, %u>",
              STREAM_SZ_CAP);
 
