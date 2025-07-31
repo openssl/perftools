@@ -1288,7 +1288,7 @@ rebuild_poll_set(struct poll_manager *pm)
         if (new_poll_set == NULL)
             return -1;
         pm->pm_poll_set = new_poll_set;
-        pm->pm_poll_set_sz -= POLL_GROW;
+        pm->pm_poll_set_sz -= POLL_DOWNSIZ;
     }
 
     i = 0;
