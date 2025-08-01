@@ -27,6 +27,7 @@
 #include <ctype.h>
 #include <sys/types.h>
 #include <time.h>
+#include <stdlib.h>
 
 /* Include the appropriate header file for SOCK_STREAM */
 #ifdef _WIN32 /* Windows */
@@ -2669,7 +2670,7 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     qs = SSL_new_stream(qconn, SS_TYPE_TO_SFLAG(want_type));
     if (qs == NULL) {
         warnx("%s failed to create stream (%p)", __func__, qconn_pe);
-        return 0;
+        abort();
     }
 
     if (want_type == SS_BIDISTREAM) {
