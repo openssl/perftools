@@ -292,6 +292,9 @@ struct poll_event_listener {
  *      client may establish more streams to send more requests
  *    - once outbound stream is created, poll manager moves response
  *      connection to outbound stream.
+ *
+ * The function return values here follow unix convention, where
+ * 0 indicates success, -1 indicates failure.
  */
 
 /*
