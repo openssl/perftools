@@ -186,9 +186,7 @@ The test program supports options as follows:
 -c - number of connections to create (default 10)
 -b - number of bidirectional streams each connection creates (default 10)
 -u - number of unidirectional streams each connection creates (default 10)
--s - the size of reply body. The value doubles for every new stream until 100MB cap,
-     initial value is 64
--w - the size of request body. The value doubles for every new stream until 100MB cap,
-     initial value is 64
+-s - the size of reply body, the maximum size is 100MB. The default size is 64.
+-w - the size of request body, the maximum size is 100MB. The default size is 64.
 -p - port number to use
 -t - terse output
