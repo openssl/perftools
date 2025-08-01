@@ -1,4 +1,4 @@
-all: randbytes handshake sslnew newrawkey rsasign x509storeissuer providerdoall rwlocks pkeyread evp_fetch evp_setpeer writeread
+all: randbytes handshake sslnew newrawkey rsasign x509storeissuer providerdoall rwlocks pkeyread evp_fetch evp_setpeer writeread ssl_poll_perf
 # Build target for OpenSSL 1.1.1 builds
 all111: randbytes handshake sslnew newrawkey rsasign x509storeissuer rwlocks pkeyread evp_setpeer writeread
 
@@ -56,3 +56,6 @@ evp_setpeer: evp_setpeer.c libperf.a
 
 writeread: writeread.c libperf.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o writeread writeread.c -lperf -lcrypto -lssl
+
+ssl_poll_perf: ssl_poll_perf.c libperf.a
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o ssl_poll_perf ssl_poll_perf.c -lperf -lcrypto -lssl
