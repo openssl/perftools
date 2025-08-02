@@ -297,7 +297,6 @@ int main(int argc, char * const argv[])
         usage(argv);
         return EXIT_FAILURE;
     }
-    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
@@ -323,6 +322,7 @@ int main(int argc, char * const argv[])
     for (k = key_id_min; k < key_id_max; k++) {
         for (f = format_id_min; f < format_id_max; f++) {
             sample_id = k;
+            max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
             if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
                 fprintf(stderr, "Failed to run the test %s in %s format]\n",
                         sample_names[k], format_names[f]);
