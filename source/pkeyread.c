@@ -7,6 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
+#include <math.h> /* sqrt() */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -27,6 +28,23 @@
 #include "keys.h"
 
 #define RUN_TIME 5
+static size_t timeout_us = RUN_TIME * 1000000;
+
+enum {
+    VERBOSITY_TERSE,
+    VERBOSITY_DEFAULT,
+    VERBOSITY_VERBOSE,
+};
+
+struct call_times {
+    double avg;
+    double min;
+    double max;
+    double stddev;
+    double median;
+    size_t min_idx;
+    size_t max_idx;
+};
 
 size_t num_calls;
 size_t *counts;
@@ -44,8 +62,10 @@ static void do_pemread(size_t num)
     size_t keydata_sz;
     EVP_PKEY *key;
     BIO *pem;
-    size_t i;
     OSSL_TIME time;
+    size_t count = 0;
+
+    counts[num] = 0;
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
@@ -64,8 +84,6 @@ static void do_pemread(size_t num)
         return;
     }
 
-    counts[num] = 0;
-
     /*
      * Technically this includes the EVP_PKEY_free() in the timing - but I
      * think we can live with that
@@ -73,20 +91,25 @@ static void do_pemread(size_t num)
     do {
         key = PEM_read_bio_PrivateKey(pem, NULL, NULL, NULL);
         if (key == NULL) {
-            fprintf(stderr, "Failed to create key: %llu [%s PEM]\n",
-                    (unsigned long long)i,
+            fprintf(stderr, "Failed to create key [%s PEM]\n",
                     sample_names[sample_id]);
             err = 1;
-            BIO_free(pem);
-            return;
+            goto end;
         }
         EVP_PKEY_free(key);
-        BIO_reset(pem);
+        if (BIO_reset(pem) == 0) {
+            fprintf(stderr, "Failed to reset BIO [%s PEM]\n",
+                    sample_names[sample_id]);
+            err = 1;
+            goto end;
+        }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
+end:
+    counts[num] = count;
     BIO_free(pem);
 }
 
@@ -158,33 +181,90 @@ static int format_name_to_id(const char *format_name)
     return i;
 }
 
-static double get_avcalltime(void)
+static int cmp_size_t(const void *a_ptr, const void *b_ptr)
+{
+    const size_t * const a = a_ptr;
+    const size_t * const b = b_ptr;
+
+    return *a - *b;
+}
+
+static void get_calltimes(struct call_times *times, int verbosity)
 {
     int i;
     size_t total_count = 0;
-    double avcalltime;
+    size_t min_count = SIZE_MAX;
+    size_t max_count = 0;
 
-    for (i = 0; i < threadcount; i++)
+    for (i = 0; i < threadcount; i++) {
         total_count += counts[i];
 
-    avcalltime = (double)RUN_TIME * 1e6 * threadcount/ total_count;
+        if (verbosity >= VERBOSITY_VERBOSE) {
+            if (counts[i] < min_count) {
+                min_count = counts[i];
+                times->max_idx = i;
+            }
 
-    return avcalltime;
-}
-
-static void report_result(int key_id, int format_id, int terse)
-{
-    if (err) {
-	fprintf(stderr, "Error during test of %s in %s format\n",
-	        sample_names[key_id], format_names[format_id]);
-	exit(EXIT_FAILURE);
+            if (counts[i] > max_count) {
+                max_count = counts[i];
+                times->min_idx = i;
+            }
+        }
     }
 
-    if (terse)
-	printf("%lf\n", get_avcalltime());
-    else
-	printf("Average time per %s(%s) call: %lfus\n",
-	       format_names[format_id], sample_names[key_id], get_avcalltime());
+    times->avg = (double) timeout_us * threadcount/ total_count;
+
+    if (verbosity >= VERBOSITY_VERBOSE) {
+        double variance = 0;
+
+        /* Maximum count means minimum time and vice versa */
+        times->min = (double) timeout_us / max_count;
+        times->max = (double) timeout_us / min_count;
+
+        qsort(counts, threadcount, sizeof(counts[0]), cmp_size_t);
+        times->median = (double) timeout_us / counts[threadcount / 2];
+
+        for (i = 0; i < threadcount; i++) {
+            double dev = (double) timeout_us / counts[i] - times->avg;
+
+            variance += dev * dev;
+        }
+
+        times->stddev = sqrt(variance / threadcount);
+    }
+}
+
+static void report_result(int key_id, int format_id, int verbosity)
+{
+    struct call_times times = { 0 };
+
+    if (err) {
+        fprintf(stderr, "Error during test of %s in %s format\n",
+                sample_names[key_id], format_names[format_id]);
+        exit(EXIT_FAILURE);
+    }
+
+    get_calltimes(&times, verbosity);
+
+    switch (verbosity) {
+    case VERBOSITY_TERSE:
+        printf("%lf\n", times.avg);
+        break;
+    case VERBOSITY_DEFAULT:
+        printf("Average time per %s(%s) call: %lfus\n",
+               format_names[format_id], sample_names[key_id], times.avg);
+        break;
+    case VERBOSITY_VERBOSE:
+        printf("%s(%s):%*s avg: %9.3lf us, median: %9.3lf us"
+               ", min: %9.3lf us @thread %3zu, max: %9.3lf us @thread %3zu"
+               ", stddev: %9.3lf us (%8.4lf%%)\n",
+               format_names[format_id], sample_names[key_id],
+               (int) (10 - strlen(format_names[format_id]) - strlen(sample_names[key_id])), "",
+               times.avg, times.median,
+               times.min, times.min_idx, times.max, times.max_idx,
+               times.stddev, 100.0 * times.stddev / times.avg);
+        break;
+    }
 }
 
 static void usage(char * const argv[])
@@ -192,7 +272,10 @@ static void usage(char * const argv[])
     const char **key_name = sample_names;
     const char **format_name = format_names;
 
-    fprintf(stderr, "%s -k key_name -f format_name [-t] terse threadcount\n"
+    fprintf(stderr, "%s -k key_name -f format_name [-t] [-v] [-T time] threadcount\n"
+        "\t-t  terse output\n"
+        "\t-v  verbose output, includes min, max, stddev, and median times\n"
+        "\t-T  timeout for each test run in seconds, can be fractional"
         "\twhere key_name is one of these: ", argv[0]);
     fprintf(stderr, "%s", *key_name);
     do {
@@ -216,27 +299,37 @@ static void usage(char * const argv[])
 int main(int argc, char * const argv[])
 {
     OSSL_TIME duration;
-    int ch, i;
+    int ch;
     int key_id, key_id_min, key_id_max, k;
     int format_id, format_id_min, format_id_max, f;
-    int terse = 0;
+    int verbosity = VERBOSITY_DEFAULT;
     char *key = NULL;
     char *key_format = NULL;
-    int kf;
     void (*do_f[2])(size_t) = {
         do_pemread,
         do_derread
-    };
-    const char *fname[] = {
-        "PEM_read_bio_PrivateKey",
-        "X509_PUBKEY_get0_param"
     };
 
     key_id = SAMPLE_INVALID;
     format_id = FORMAT_INVALID;
 
-    while ((ch = getopt(argc, argv, "k:f:t")) != -1) {
+    while ((ch = getopt(argc, argv, "T:k:f:tv")) != -1) {
         switch (ch) {
+        case 'T': {
+            double timeout_s;
+            char *endptr;
+
+            timeout_s = strtod(optarg, &endptr);
+
+            if (endptr == NULL || *endptr != '\0') {
+                fprintf(stderr, "incorrect timeout value: \"%s\"\n", optarg);
+                usage(argv);
+                return EXIT_FAILURE;
+            }
+
+            timeout_us = timeout_s * 1e6;
+            break;
+        }
         case 'k':
             key = optarg;
             break;
@@ -244,7 +337,10 @@ int main(int argc, char * const argv[])
             key_format = optarg;
             break;
         case 't':
-            terse = 1;
+            verbosity = VERBOSITY_TERSE;
+            break;
+        case 'v':
+            verbosity = VERBOSITY_VERBOSE;
             break;
         }
     }
@@ -297,7 +393,6 @@ int main(int argc, char * const argv[])
         usage(argv);
         return EXIT_FAILURE;
     }
-    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
@@ -323,13 +418,14 @@ int main(int argc, char * const argv[])
     for (k = key_id_min; k < key_id_max; k++) {
         for (f = format_id_min; f < format_id_max; f++) {
             sample_id = k;
+            max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
             if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
                 fprintf(stderr, "Failed to run the test %s in %s format]\n",
                         sample_names[k], format_names[f]);
                 OPENSSL_free(counts);
                 return EXIT_FAILURE;
             }
-            report_result(k, f, terse);
+            report_result(k, f, verbosity);
         }
     }
 
