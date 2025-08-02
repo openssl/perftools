@@ -72,7 +72,6 @@
  * then the server sends 64kB of data in HTTP/1.0 response.
  */
 
-#define DEBUG 1
 #ifdef DEBUG
 # define DPRINTF fprintf
 # define DPRINTFC fprintf
