@@ -49,6 +49,7 @@
 #include <openssl/err.h>
 #include <openssl/quic.h>
 #include "perflib/perflib.h"
+#include "perflib/list.h"
 
 #ifndef _WIN32
 # include <unistd.h>
@@ -105,135 +106,6 @@
     (_revents_) & SSL_POLL_EVENT_OSU ? "SSL_POLL_EVENT_OSU " : ""
 
 /*
- * Code below comes from sys/queue.h found on OpenBSD. The head member
- * is modified to track number of elements on the list. Macros are
- * also renamed so they start with QPOLL_ prefix.
- */
-/* $OpenBSD: queue.h,v 1.46 2020/12/30 13:33:12 millert Exp $ */
-/* $NetBSD: queue.h,v 1.11 1996/05/16 05:17:14 mycroft Exp $ */
-
-/*
- * Copyright (c) 1991, 1993
- *  The Regents of the University of California.  All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in the
- *    documentation and/or other materials provided with the distribution.
- * 3. Neither the name of the University nor the names of its contributors
- *    may be used to endorse or promote products derived from this software
- *    without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
- * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
- * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
- * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
- * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
- * SUCH DAMAGE.
- *
- * @(#)queue.h 8.5 (Berkeley) 8/20/94
- */
-
-/*
- * Tail queue definitions.
- */
-#define QPOLL_TAILQ_HEAD(name, type) \
-    struct name { \
-        struct type *tqh_first; /* first element */ \
-        struct type **tqh_last; /* addr of last next element */ \
-        size_t tqh_count; /* number of members on queue */ \
-    }
-
-#define QPOLL_TAILQ_HEAD_INITIALIZER(head) \
-    { NULL, &(head).tqh_first, 0 }
-
-#define QPOLL_TAILQ_ENTRY(type) \
-    struct { \
-        struct type *tqe_next; /* next element */ \
-        struct type **tqe_prev; /* address of previous next element */ \
-    }
-
-/*
- * Tail queue access methods.
- */
-#define QPOLL_TAILQ_FIRST(head) ((head)->tqh_first)
-#define QPOLL_TAILQ_END(head) NULL
-#define QPOLL_TAILQ_NEXT(elm, field) ((elm)->field.tqe_next)
-#define QPOLL_TAILQ_LAST(head, headname) \
-    (*(((struct headname *)((head)->tqh_last))->tqh_last))
-#define QPOLL_TAILQ_COUNT(head) ((head)->tqh_count)
-
-/* XXX */
-#define QPOLL_TAILQ_PREV(elm, headname, field) \
-    (*(((struct headname *)((elm)->field.tqe_prev))->tqh_last))
-#define QPOLL_TAILQ_EMPTY(head) (QPOLL_TAILQ_FIRST(head) == QPOLL_TAILQ_END(head))
-
-#define QPOLL_TAILQ_FOREACH(var, head, field) \
-    for ((var) = QPOLL_TAILQ_FIRST(head); \
-         (var) != QPOLL_TAILQ_END(head); \
-         (var) = QPOLL_TAILQ_NEXT(var, field))
-
-#define QPOLL_TAILQ_FOREACH_SAFE(var, head, field, tvar) \
-    for ((var) = QPOLL_TAILQ_FIRST(head); \
-         (var) != QPOLL_TAILQ_END(head) && \
-         ((tvar) = QPOLL_TAILQ_NEXT(var, field), 1); \
-         (var) = (tvar))
-
-/*
- * Tail queue functions.
- */
-#define QPOLL_TAILQ_INIT(head) \
-    do { \
-        (head)->tqh_first = NULL; \
-        (head)->tqh_last = &(head)->tqh_first; \
-        (head)->tqh_last = &(head)->tqh_first; \
-        (head)->tqh_count = 0; \
-    } while (0)
-
-#define QPOLL_TAILQ_INSERT_HEAD(head, elm, field) \
-    do { \
-        if (((elm)->field.tqe_next = (head)->tqh_first) != NULL) \
-            (head)->tqh_first->field.tqe_prev = &(elm)->field.tqe_next; \
-        else \
-            (head)->tqh_last = &(elm)->field.tqe_next; \
-        (head)->tqh_first = (elm); \
-        (elm)->field.tqe_prev = &(head)->tqh_first; \
-        (head)->tqh_count++; \
-    } while (0)
-
-#define QPOLL_TAILQ_INSERT_TAIL(head, elm, field) \
-    do { \
-        (elm)->field.tqe_next = NULL; \
-        (elm)->field.tqe_prev = (head)->tqh_last; \
-        *(head)->tqh_last = (elm); \
-        (head)->tqh_last = &(elm)->field.tqe_next; \
-        (head)->tqh_count++; \
-    } while (0)
-
-#define QPOLL_TAILQ_REMOVE(head, elm, field) \
-    do { \
-        if (((elm)->field.tqe_next) != NULL) \
-            (elm)->field.tqe_next->field.tqe_prev = (elm)->field.tqe_prev; \
-        else \
-            (head)->tqh_last = (elm)->field.tqe_prev; \
-        *(elm)->field.tqe_prev = (elm)->field.tqe_next; \
-        (head)->tqh_count--; \
-    } while (0)
-
-/*
- * QPOLL_* definitions end here
- */
-
-/*
  * every poll_event structure has members enumerated here in poll_event_base
  * The poll events are kept in list which is managed by poll_manager instance.
  * However SSL_poll(9ossl) expects an array of SSL_POLL_ITEM structures. Therefore
@@ -252,7 +124,7 @@
  */
 #define poll_event_base \
     SSL_POLL_ITEM pe_poll_item; \
-    QPOLL_TAILQ_ENTRY(poll_event) pe_tqe; \
+    OSSL_LIST_MEMBER(pe, struct poll_event);\
     uint64_t pe_want_events; \
     uint64_t pe_want_mask; \
     struct poll_manager *pe_my_pm; \
@@ -303,10 +175,14 @@ struct poll_event_listener {
  * on server when uni-directional streams are used.
  */
 struct poll_stream_context {
-    QPOLL_TAILQ_ENTRY(poll_stream_context) pscx_tqe;
+    OSSL_LIST_MEMBER(pscx, struct poll_stream_context);
     void *pscx;
     void(*pscx_cb_ondestroy)(void *);
 };
+
+DEFINE_LIST_OF(pe, struct poll_event);
+
+DEFINE_LIST_OF(pscx, struct poll_stream_context);
 
 /*
  * It facilitates transfer of app data from one stream to the other.
@@ -324,8 +200,8 @@ struct poll_stream_context {
  */
 struct poll_event_connection {
     poll_event_base;
-    QPOLL_TAILQ_HEAD(, poll_stream_context) pec_stream_cx;
-    QPOLL_TAILQ_HEAD(, poll_stream_context) pec_unistream_cx;
+    OSSL_LIST(pscx) pec_stream_cx;
+    OSSL_LIST(pscx) pec_unistream_cx;
     uint64_t pec_want_stream;
     uint64_t pec_want_unistream;
     struct client_stats *pec_cs;
@@ -356,7 +232,7 @@ struct poll_event_connection {
  *    - pm qconn
  */
 struct poll_manager {
-    QPOLL_TAILQ_HEAD(pm, poll_event) pm_head;
+    OSSL_LIST(pe) pm_head;
     unsigned int pm_event_count;
     struct poll_event *pm_poll_set;
     unsigned int pm_poll_set_sz;
@@ -506,6 +382,7 @@ enum {
                                SSL_STREAM_FLAG_UNI : 0)
 #define SS_TYPE_TO_POLLEV(_t_) (((_t_) == SS_UNISTREAM) ? \
                                 SSL_POLL_EVENT_OSU : SSL_POLL_EVENT_OSB)
+
 /*
  * client calculates stats for every stream (pair of streams in case
  * of unidirectional streams).
@@ -516,8 +393,10 @@ struct stream_stats {
     size_t ss_rx;
     size_t ss_tx;
     char ss_type;
-    QPOLL_TAILQ_ENTRY(stream_stats) ss_tqe;
+    OSSL_LIST_MEMBER(ss, struct stream_stats);
 };
+
+DEFINE_LIST_OF(ss, struct stream_stats);
 
 /*
  * Here we manage statistics and also tasks which we still need to perform and
@@ -526,8 +405,8 @@ struct stream_stats {
 struct client_stats {
     size_t cs_rx;
     size_t cs_tx;
-    QPOLL_TAILQ_HEAD(, stream_stats) cs_todo;
-    QPOLL_TAILQ_HEAD(, stream_stats) cs_done;
+    OSSL_LIST(ss) cs_todo;
+    OSSL_LIST(ss) cs_done;
 };
 
 static int terse = 0;
@@ -918,8 +797,8 @@ new_qconn_pe(SSL *ssl_qconn)
              * once there is a request for outbound stream created by app.
              */
             pec = (struct poll_event_connection *)qconn_pe;
-            QPOLL_TAILQ_INIT(&pec->pec_unistream_cx);
-            QPOLL_TAILQ_INIT(&pec->pec_stream_cx);
+            ossl_list_pscx_init(&pec->pec_unistream_cx);
+            ossl_list_pscx_init(&pec->pec_stream_cx);
         }
     } else {
         qconn_pe = NULL;
@@ -1211,7 +1090,7 @@ static void
 add_pe_to_pm(struct poll_manager *pm, struct poll_event *pe)
 {
     if (pe->pe_my_pm == NULL) {
-        QPOLL_TAILQ_INSERT_HEAD(&pm->pm_head, pe, pe_tqe);
+        ossl_list_pe_insert_head(&pm->pm_head, pe);
         pm->pm_need_rebuild = 1;
         pe->pe_my_pm = pm;
     }
@@ -1221,7 +1100,7 @@ static void
 remove_pe_from_pm(struct poll_manager *pm, struct poll_event *pe)
 {
     if (pe->pe_my_pm == pm) {
-        QPOLL_TAILQ_REMOVE(&pm->pm_head, pe, pe_tqe);
+        ossl_list_pe_remove(&pm->pm_head, pe);
         pm->pm_need_rebuild = 1;
         pe->pe_my_pm = NULL;
     }
@@ -1236,7 +1115,7 @@ create_poll_manager(void)
     if (pm == NULL)
         return NULL;
 
-    QPOLL_TAILQ_INIT(&pm->pm_head);
+    ossl_list_pe_init(&pm->pm_head);
     pm->pm_poll_set = OPENSSL_malloc(sizeof(struct poll_event) * POLL_GROW);
     if (pm->pm_poll_set != NULL) {
         pm->pm_poll_set_sz = POLL_GROW;
@@ -1262,7 +1141,7 @@ rebuild_poll_set(struct poll_manager *pm)
     if (pm->pm_need_rebuild == 0)
         return 0;
 
-    pe_num = QPOLL_TAILQ_COUNT(&pm->pm_head);
+    pe_num = ossl_list_pe_num(&pm->pm_head);
     if (pe_num > pm->pm_poll_set_sz) {
         /*
          * grow poll set by POLL_GROW
@@ -1297,8 +1176,8 @@ rebuild_poll_set(struct poll_manager *pm)
 
     i = 0;
     DPRINTF(stderr, "%s(%s) there %zu events to poll\n", __func__,
-            pm->pm_name, QPOLL_TAILQ_COUNT(&pm->pm_head));
-    QPOLL_TAILQ_FOREACH(pe, &pm->pm_head, pe_tqe) {
+            pm->pm_name, ossl_list_pe_num(&pm->pm_head));
+    OSSL_LIST_FOREACH(pe, pe, &pm->pm_head) {
         pe->pe_poll_item.events = pe->pe_want_events;
         pm->pm_poll_set[i++] = *pe;
         DPRINTF(stderr, "\t%p @ %s (%s) " POLL_FMT " (disabled: " POLL_FMT ")\n",
@@ -1320,7 +1199,7 @@ destroy_poll_manager(struct poll_manager *pm)
     if (pm == NULL)
         return;
 
-    QPOLL_TAILQ_FOREACH_SAFE(pe, &pm->pm_head, pe_tqe, pe_safe) {
+    OSSL_LIST_FOREACH_DELSAFE(pe, pe_safe, pe, &pm->pm_head) {
         destroy_pe(pe);
     }
 
@@ -1400,7 +1279,7 @@ request_new_stream(struct poll_event_connection *pec, uint64_t qsflag,
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_OSU;
         else
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_ISU;
-        QPOLL_TAILQ_INSERT_TAIL(&pec->pec_unistream_cx, pscx, pscx_tqe);
+        ossl_list_pscx_insert_tail(&pec->pec_unistream_cx, pscx);
     } else {
         pec->pec_want_stream++;
         if (accept == 0)
@@ -1408,7 +1287,7 @@ request_new_stream(struct poll_event_connection *pec, uint64_t qsflag,
         else
             qconn_pe->pe_want_events |= SSL_POLL_EVENT_ISB;
 
-        QPOLL_TAILQ_INSERT_TAIL(&pec->pec_stream_cx, pscx, pscx_tqe);
+        ossl_list_pscx_insert_tail(&pec->pec_stream_cx, pscx);
     }
 
     /*
@@ -1426,10 +1305,10 @@ get_response_from_pec(struct poll_event_connection *pec, int stype)
     switch (stype) {
     case PE_SUSTREAM:
     case PE_CUSTREAM:
-        pscx = QPOLL_TAILQ_FIRST(&pec->pec_unistream_cx);
+        pscx = ossl_list_pscx_head(&pec->pec_unistream_cx);
         if (pscx != NULL) {
             pec->pec_want_unistream--;
-            QPOLL_TAILQ_REMOVE(&pec->pec_unistream_cx, pscx, pscx_tqe);
+            ossl_list_pscx_remove(&pec->pec_unistream_cx, pscx);
             rv = pscx->pscx;
             OPENSSL_free(pscx);
         } else {
@@ -1438,10 +1317,10 @@ get_response_from_pec(struct poll_event_connection *pec, int stype)
         break;
     case PE_SSTREAM:
     case PE_CSTREAM:
-        pscx = QPOLL_TAILQ_FIRST(&pec->pec_stream_cx);
+        pscx = ossl_list_pscx_head(&pec->pec_stream_cx);
         if (pscx != NULL) {
             pec->pec_want_stream--;
-            QPOLL_TAILQ_REMOVE(&pec->pec_stream_cx, pscx, pscx_tqe);
+            ossl_list_pscx_remove(&pec->pec_stream_cx, pscx);
             rv = pscx->pscx;
             OPENSSL_free(pscx);
         } else {
@@ -1465,14 +1344,12 @@ app_destroy_qconn(struct poll_event *pe)
     if (pec == NULL)
         return;
 
-    QPOLL_TAILQ_FOREACH_SAFE(pscx, &pec->pec_unistream_cx, pscx_tqe,
-                             pscx_save) {
+    OSSL_LIST_FOREACH_DELSAFE(pscx, pscx_save, pscx, &pec->pec_unistream_cx) {
         pscx->pscx_cb_ondestroy(pscx->pscx);
         OPENSSL_free(pscx);
     }
 
-    QPOLL_TAILQ_FOREACH_SAFE(pscx, &pec->pec_stream_cx, pscx_tqe,
-                             pscx_save) {
+    OSSL_LIST_FOREACH_DELSAFE(pscx, pscx_save, pscx, &pec->pec_stream_cx) {
         pscx->pscx_cb_ondestroy(pscx->pscx);
         OPENSSL_free(pscx);
     }
@@ -1669,7 +1546,7 @@ srvapp_setup_response(struct poll_event *pe)
     switch (pe->pe_type) {
     case PE_SUSTREAM:
         pesu = pe_to_sustream(pe);
-        pscx = OPENSSL_malloc(sizeof(struct poll_stream_context));
+        pscx = OPENSSL_zalloc(sizeof(struct poll_stream_context));
         if (pscx == NULL)
             return -1;
         DPRINTFS(stderr, "%s sustream setup %p [ %p ]\n", __func__, pe,
@@ -1915,7 +1792,7 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
 
     if (qconn_pe->pe_poll_item.revents & SSL_POLL_EVENT_OSU) {
 
-        if (QPOLL_TAILQ_EMPTY(&pec->pec_unistream_cx)) {
+        if (ossl_list_pscx_is_empty(&pec->pec_unistream_cx)) {
             qconn_pe->pe_want_events &= ~ SSL_POLL_EVENT_OSU;
             return 0;
         }
@@ -2368,7 +2245,7 @@ clntapp_setup_response(struct poll_event *pe)
     int rv;
 
     if (pecsu != NULL) {
-        pscx = OPENSSL_malloc(sizeof(struct poll_stream_context));
+        pscx = OPENSSL_zalloc(sizeof(struct poll_stream_context));
         if (pscx == NULL) {
             warnx("%s cannot allocate memory for poll stream context", __func__);
             return -1;
@@ -2554,8 +2431,8 @@ clntapp_update_pec(struct poll_event_connection *pec, struct stream_stats *ss)
     pec->pec_cs->cs_tx += ss->ss_tx;
     pec->pec_cs->cs_rx += ss->ss_rx;
     /* ? timeestamp ? */
-    QPOLL_TAILQ_INSERT_HEAD(&pec->pec_cs->cs_done, ss, ss_tqe);
-    if (QPOLL_TAILQ_COUNT(&pec->pec_cs->cs_done) == STREAM_COUNT) {
+    ossl_list_ss_insert_head(&pec->pec_cs->cs_done, ss);
+    if (ossl_list_ss_num(&pec->pec_cs->cs_done) == STREAM_COUNT) {
         e = SSL_shutdown(get_ssl_from_pe((struct poll_event *)pec));
         DPRINTFC(stderr, "%s shutdown on %p (%d)\n", __func__, pec, e);
     }
@@ -2641,7 +2518,7 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     else
         want_type = SS_UNISTREAM;
 
-    QPOLL_TAILQ_FOREACH(ss, &pec->pec_cs->cs_todo, ss_tqe) {
+    OSSL_LIST_FOREACH(ss, ss, &pec->pec_cs->cs_todo) {
         if (ss->ss_type == want_type)
             break;
     }
@@ -2651,7 +2528,7 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
         qconn_pe->pe_want_events &= ~(SS_TYPE_TO_POLLEV(want_type));
 
         /* if all requests are dispatch stop polling write side completely */
-        ss = QPOLL_TAILQ_FIRST(&pec->pec_cs->cs_todo);
+        ss = ossl_list_ss_head(&pec->pec_cs->cs_todo);
         if (ss == NULL) {
             pe_pause_write(qconn_pe);
             DPRINTFC(stderr, "%s conn %p no more requests to handle\n",
@@ -2665,7 +2542,7 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
         return 0;
     }
 
-    QPOLL_TAILQ_REMOVE(&pec->pec_cs->cs_todo, ss, ss_tqe);
+    ossl_list_ss_remove(&pec->pec_cs->cs_todo, ss);
     qconn = get_ssl_from_pe(qconn_pe);
     qs = SSL_new_stream(qconn, SS_TYPE_TO_SFLAG(want_type));
     if (qs == NULL) {
@@ -2752,7 +2629,7 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
          * to response handler.
          */
         pecsu->pecsu_pec = pec;
-        pscx = QPOLL_TAILQ_FIRST(&pec->pec_unistream_cx);
+        pscx = ossl_list_pscx_head(&pec->pec_unistream_cx);
         if (pscx == NULL) {
             warnx("%s no context for unistream client (%p)",
                    __func__, qconn_pe);
@@ -2766,7 +2643,7 @@ clntapp_accept_stream_cb(struct poll_event *qconn_pe)
              */
             return 0;
         }
-        QPOLL_TAILQ_REMOVE(&pec->pec_unistream_cx, pscx, pscx_tqe);
+        ossl_list_pscx_remove(&pec->pec_unistream_cx, pscx);
         pecsu->pecsu_ss = ((struct client_context *)pscx->pscx)->ccx_ss;
         ((struct client_context *)pscx->pscx)->ccx_ss = NULL;
         pecsu->pecsu_rb = ((struct client_context *)pscx->pscx)->ccx_rb;
@@ -2962,7 +2839,7 @@ create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
     /*
      * client wants to send request, it needs to create outbound stream.
      */
-    if ((ss = QPOLL_TAILQ_FIRST(&cs->cs_todo)) != NULL) {
+    if ((ss = ossl_list_ss_head(&cs->cs_todo)) != NULL) {
         switch (ss->ss_type) {
         case SS_UNISTREAM:
             qc_pe->pe_want_events |= SSL_POLL_EVENT_OSU;
@@ -3000,7 +2877,7 @@ create_stream_stats(unsigned int req_sz, unsigned int body_sz, char type)
 {
     struct stream_stats *ss;
 
-    ss = OPENSSL_malloc(sizeof(struct stream_stats));
+    ss = OPENSSL_zalloc(sizeof(struct stream_stats));
     if (ss != NULL) {
         ss->ss_req_sz = req_sz;
         ss->ss_body_sz = body_sz;
@@ -3021,13 +2898,13 @@ destroy_test_scenario(struct client_stats cs[])
     OPENSSL_assert(cs != NULL);
 
     for (i = 0; i < client_config.cc_clients; i++) {
-        while ((ss = QPOLL_TAILQ_FIRST(&cs[i].cs_todo)) != NULL) {
-            QPOLL_TAILQ_REMOVE(&cs[i].cs_todo, ss, ss_tqe);
+        while ((ss = ossl_list_ss_head(&cs[i].cs_todo)) != NULL) {
+            ossl_list_ss_remove(&cs[i].cs_todo, ss);
             OPENSSL_free(ss);
         }
 
-        while ((ss = QPOLL_TAILQ_FIRST(&cs[i].cs_done)) != NULL) {
-            QPOLL_TAILQ_REMOVE(&cs[i].cs_done, ss, ss_tqe);
+        while ((ss = ossl_list_ss_head(&cs[i].cs_done)) != NULL) {
+            ossl_list_ss_remove(&cs[i].cs_done, ss);
             OPENSSL_free(ss);
         }
     }
@@ -3054,8 +2931,8 @@ create_test_scenario(void)
 
     if (cs != NULL) {
         for (i = 0; i < client_config.cc_clients; i++) {
-            QPOLL_TAILQ_INIT(&cs[i].cs_todo);
-            QPOLL_TAILQ_INIT(&cs[i].cs_done);
+            ossl_list_ss_init(&cs[i].cs_todo);
+            ossl_list_ss_init(&cs[i].cs_done);
 
             arg_sz = client_config.cc_rep_sz;
             body_sz = client_config.cc_req_sz;
@@ -3065,7 +2942,7 @@ create_test_scenario(void)
                     destroy_test_scenario(cs);
                     return NULL;
                 }
-                QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
+                ossl_list_ss_insert_tail(&cs[i].cs_todo, ss);
             }
 
             arg_sz = client_config.cc_rep_sz;
@@ -3076,7 +2953,7 @@ create_test_scenario(void)
                     destroy_test_scenario(cs);
                     return NULL;
                 }
-                QPOLL_TAILQ_INSERT_TAIL(&cs[i].cs_todo, ss, ss_tqe);
+                ossl_list_ss_insert_tail(&cs[i].cs_todo, ss);
             }
         }
     }
