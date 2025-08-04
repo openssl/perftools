@@ -46,6 +46,9 @@ static void do_pemread(size_t num)
     BIO *pem;
     size_t i;
     OSSL_TIME time;
+    size_t count = 0;
+
+    counts[num] = 0;
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
@@ -64,8 +67,6 @@ static void do_pemread(size_t num)
         return;
     }
 
-    counts[num] = 0;
-
     /*
      * Technically this includes the EVP_PKEY_free() in the timing - but I
      * think we can live with that
@@ -77,16 +78,17 @@ static void do_pemread(size_t num)
                     (unsigned long long)i,
                     sample_names[sample_id]);
             err = 1;
-            BIO_free(pem);
-            return;
+            goto end;
         }
         EVP_PKEY_free(key);
         BIO_reset(pem);
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
+end:
+    counts[num] = count;
     BIO_free(pem);
 }
 
