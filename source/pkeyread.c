@@ -27,6 +27,7 @@
 #include "keys.h"
 
 #define RUN_TIME 5
+static size_t timeout_us = RUN_TIME * 1000000;
 
 size_t num_calls;
 size_t *counts;
@@ -172,7 +173,7 @@ static double get_avcalltime(void)
     for (i = 0; i < threadcount; i++)
         total_count += counts[i];
 
-    avcalltime = (double)RUN_TIME * 1e6 * threadcount/ total_count;
+    avcalltime = (double) timeout_us * threadcount/ total_count;
 
     return avcalltime;
 }
@@ -197,7 +198,8 @@ static void usage(char * const argv[])
     const char **key_name = sample_names;
     const char **format_name = format_names;
 
-    fprintf(stderr, "%s -k key_name -f format_name [-t] terse threadcount\n"
+    fprintf(stderr, "%s -k key_name -f format_name [-t] terse [-T time] threadcount\n"
+        "\t-T  timeout for each test run in seconds, can be fractional"
         "\twhere key_name is one of these: ", argv[0]);
     fprintf(stderr, "%s", *key_name);
     do {
@@ -235,8 +237,23 @@ int main(int argc, char * const argv[])
     key_id = SAMPLE_INVALID;
     format_id = FORMAT_INVALID;
 
-    while ((ch = getopt(argc, argv, "k:f:t")) != -1) {
+    while ((ch = getopt(argc, argv, "T:k:f:t")) != -1) {
         switch (ch) {
+        case 'T': {
+            double timeout_s;
+            char *endptr;
+
+            timeout_s = strtod(optarg, &endptr);
+
+            if (endptr == NULL || *endptr != '\0') {
+                fprintf(stderr, "incorrect timeout value: \"%s\"\n", optarg);
+                usage(argv);
+                return EXIT_FAILURE;
+            }
+
+            timeout_us = timeout_s * 1e6;
+            break;
+        }
         case 'k':
             key = optarg;
             break;
@@ -322,7 +339,7 @@ int main(int argc, char * const argv[])
     for (k = key_id_min; k < key_id_max; k++) {
         for (f = format_id_min; f < format_id_max; f++) {
             sample_id = k;
-            max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
+            max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
             if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
                 fprintf(stderr, "Failed to run the test %s in %s format]\n",
                         sample_names[k], format_names[f]);
