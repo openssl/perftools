@@ -49,7 +49,7 @@ regen_key_samples:
 	./genkeys_setpeer.sh > keys_setpeer.h
 
 pkeyread: pkeyread.c keys.h libperf.a
-	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o pkeyread pkeyread.c -lperf -lcrypto
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o pkeyread pkeyread.c -lperf -lcrypto -lm
 
 evp_setpeer: evp_setpeer.c libperf.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) -o evp_setpeer evp_setpeer.c -lperf -lcrypto
