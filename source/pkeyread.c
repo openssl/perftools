@@ -44,7 +44,6 @@ static void do_pemread(size_t num)
     size_t keydata_sz;
     EVP_PKEY *key;
     BIO *pem;
-    size_t i;
     OSSL_TIME time;
     size_t count = 0;
 
@@ -74,14 +73,18 @@ static void do_pemread(size_t num)
     do {
         key = PEM_read_bio_PrivateKey(pem, NULL, NULL, NULL);
         if (key == NULL) {
-            fprintf(stderr, "Failed to create key: %llu [%s PEM]\n",
-                    (unsigned long long)i,
+            fprintf(stderr, "Failed to create key [%s PEM]\n",
                     sample_names[sample_id]);
             err = 1;
             goto end;
         }
         EVP_PKEY_free(key);
-        BIO_reset(pem);
+        if (BIO_reset(pem) == 0) {
+            fprintf(stderr, "Failed to reset BIO [%s PEM]\n",
+                    sample_names[sample_id]);
+            err = 1;
+            goto end;
+        }
 
         count++;
         time = ossl_time_now();
@@ -218,20 +221,15 @@ static void usage(char * const argv[])
 int main(int argc, char * const argv[])
 {
     OSSL_TIME duration;
-    int ch, i;
+    int ch;
     int key_id, key_id_min, key_id_max, k;
     int format_id, format_id_min, format_id_max, f;
     int terse = 0;
     char *key = NULL;
     char *key_format = NULL;
-    int kf;
     void (*do_f[2])(size_t) = {
         do_pemread,
         do_derread
-    };
-    const char *fname[] = {
-        "PEM_read_bio_PrivateKey",
-        "X509_PUBKEY_get0_param"
     };
 
     key_id = SAMPLE_INVALID;
