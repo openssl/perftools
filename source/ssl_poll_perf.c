@@ -1450,11 +1450,12 @@ srvapp_handle_stream_error(struct poll_event *pe)
 }
 
 /*
- * srvapp_write_cb() callback notifies application the QUIC stack
+ * srvapp_write_common() callback notifies application the QUIC stack
  * is ready to send data. The write callback attempts to process
  * all buffers in write queue.  if write queue becomes empty, stream is
  * concluded.
- * This function implements backend common to uni/bidi streams.
+ * This function implements backend common to unidirectional and
+ * bidirectional streams.
  */
 static int
 srvapp_write_common(struct poll_event *pe, struct rr_buffer *rb)
