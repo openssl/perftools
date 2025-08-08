@@ -1452,8 +1452,9 @@ srvapp_handle_stream_error(struct poll_event *pe)
 /*
  * srvapp_write_cb() callback notifies application the QUIC stack
  * is ready to send data. The write callback attempts to process
- * all buffers in write queue.
- * if write queue becomes empty, stream is concluded.
+ * all buffers in write queue.  if write queue becomes empty, stream is
+ * concluded.
+ * This function implements backend common to uni/bidi streams.
  */
 static int
 srvapp_write_common(struct poll_event *pe, struct rr_buffer *rb)
@@ -1534,6 +1535,15 @@ srvapp_write_sustreamcb(struct poll_event *pe)
     return srvapp_write_common(pe, pesu->pesu_rb);
 }
 
+/*
+ * Function sets up a response to be sent out by server.
+ * For bidirectional streams we just activate write-side
+ * callback which then fires as soon as write buffers are
+ * available.
+ *
+ * For unidirectional streams we must request a new stream
+ * first to be able to send reply out.
+ */
 static int
 srvapp_setup_response(struct poll_event *pe)
 {
@@ -1719,6 +1729,13 @@ srvapp_read_sstreamcb(struct poll_event *pe)
     return rv;
 }
 
+/*
+ * Server callback for uni-directional stream. Unlike bidirectional
+ * streams, we need to open a new uni-directional stream to send
+ * a reply back. As soon as function reads request it sets up
+ * a response object and schedules a new stream callback which fires
+ * as outbound unidirectional stream is available to send reply.
+ */
 static int
 srvapp_read_sustreamcb(struct poll_event *pe)
 {
@@ -1772,7 +1789,8 @@ srvapp_read_sustreamcb(struct poll_event *pe)
 }
 
 /*
- * create new outbound stream
+ * Callback creates new outbound unidirectional stream
+ * to send reply back from server to client.
  */
 static int
 srvapp_new_stream_cb(struct poll_event *qconn_pe)
@@ -1853,7 +1871,8 @@ srvapp_new_stream_cb(struct poll_event *qconn_pe)
 }
 
 /*
- * accept stream from remote peer
+ * accept stream from remote peer. This function accepts both types
+ * of streams (unidirectional and bidirectional).
  */
 static int
 srvapp_accept_stream_cb(struct poll_event *qconn_pe)
@@ -1926,6 +1945,9 @@ srvapp_accept_stream_cb(struct poll_event *qconn_pe)
     return 0;
 }
 
+/*
+ * The server callback which accepts a new connection from client.
+ */
 static int
 srvapp_accept_qconn(struct poll_event *listener_pe)
 {
@@ -2210,6 +2232,11 @@ clntapp_handle_stream_error(struct poll_event *pe)
     return rv;
 }
 
+/*
+ * function creates a request object for client. The request buffer
+ * is object has a file-like semantics, so it keeps a position
+ * where next byte needs to be read from.
+ */
 static void *
 clntapp_create_request(size_t arg_sz, size_t payload_sz)
 {
@@ -2235,6 +2262,15 @@ clntapp_ondestroy_ccxcb(void *ccx_arg)
     }
 }
 
+/*
+ * As soon as client sends its request out, it must prepare its read side to
+ * read reply for server.  Bidirectional streams are straightforward, the
+ * client just starts receiving a read notifications when reply from server
+ * is available. Unidirectional streams are more complicated as client
+ * needs to accept a stream first to start reading a reply from server.
+ * The function here sets up an accept callback to create inbound stream
+ * for server reply.
+ */
 static int
 clntapp_setup_response(struct poll_event *pe)
 {
@@ -2361,6 +2397,9 @@ clntapp_write_custreamcb(struct poll_event *pe)
     return clntapp_write_common(pe, pecsu->pecsu_rb, pecsu->pecsu_ss);
 }
 
+/*
+ * Callback reads reply from server on bidirectional stream.
+ */
 static int
 clntapp_read_cstreamcb(struct poll_event *pe)
 {
@@ -2388,6 +2427,9 @@ clntapp_read_cstreamcb(struct poll_event *pe)
     return rv;
 }
 
+/*
+ * Callback reads reply from server on unidirectional stream.
+ */
 static int
 clntapp_read_custreamcb(struct poll_event *pe)
 {
@@ -2416,6 +2458,10 @@ clntapp_read_custreamcb(struct poll_event *pe)
     return rv;
 }
 
+/*
+ * Function is called when stream is destroyed. As soon as all streams
+ * are destroyed we call SSL_shutdown() to close connection.
+ */
 static void
 clntapp_update_pec(struct poll_event_connection *pec, struct stream_stats *ss)
 {
@@ -2437,6 +2483,9 @@ clntapp_update_pec(struct poll_event_connection *pec, struct stream_stats *ss)
     }
 }
 
+/*
+ * Callback fires when bidirectional client stream gets destroyed.
+ */
 static void
 clntapp_ondestroy_cstreamcb(struct poll_event *pe)
 {
@@ -2459,6 +2508,9 @@ clntapp_ondestroy_cstreamcb(struct poll_event *pe)
     DPRINTFC(stderr, "%s %p @ %p\n", __func__, pe, pec);
 }
 
+/*
+ * Callback fires when unidirectional client stream gets destroyed.
+ */
 static void
 clntapp_ondestroy_custreamcb(struct poll_event *pe)
 {
@@ -2481,6 +2533,12 @@ clntapp_ondestroy_custreamcb(struct poll_event *pe)
     DPRINTFC(stderr, "%s %p @ %p\n", __func__, pe, pec);
 }
 
+/*
+ * This deals with the situation when client is told to connect only (-u 0 -b
+ * 0). To determine the client could complete handshake successfully we ask
+ * SSL_poll() to let us know when outbound stream becomes available. As soon as
+ * outbound stream is available we close the connection.
+ */
 static int
 clntapp_null_run_cb(struct poll_event *qconn_pe)
 {
@@ -2495,6 +2553,11 @@ clntapp_null_run_cb(struct poll_event *qconn_pe)
     return 0;
 }
 
+/*
+ * Callback fires when new stream is available to send request out.  The
+ * callback inspects the todo list of request to be sent.  If no requests are
+ * available the callback stops polling for outbound stream event availability.
+ */
 static int
 clntapp_new_stream_cb(struct poll_event *qconn_pe)
 {
@@ -2517,6 +2580,10 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     else
         want_type = SS_UNISTREAM;
 
+    /*
+     * Search a todo list for desired session type
+     * (either unidirectional stream session or bidirectional stream session)
+     */
     OSSL_LIST_FOREACH(ss, ss, &pec->pec_cs->cs_todo) {
         if (ss->ss_type == want_type)
             break;
@@ -2598,6 +2665,10 @@ clntapp_new_stream_cb(struct poll_event *qconn_pe)
     return rv;
 }
 
+/*
+ * Callback fires to accept unidirectional stream from server
+ * to read reply.
+ */
 static int
 clntapp_accept_stream_cb(struct poll_event *qconn_pe)
 {
