@@ -32,8 +32,6 @@
 /* Include the appropriate header file for SOCK_STREAM */
 #ifdef _WIN32 /* Windows */
 # include <winsock2.h>
-# include "perflib/basename.h"
-# include "perflib/err.h"
 #else /* Linux/Unix */
 # include <err.h>
 # include <sys/socket.h>
@@ -55,6 +53,8 @@
 # include <unistd.h>
 #else
 # include <windows.h>
+# include "perflib/basename.h"
+# include "perflib/err.h"
 # include "perflib/getopt.h"
 #endif /* _WIN32 */
 
@@ -668,7 +668,7 @@ new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
     return rtf;
 }
 
-static __attribute__((unused)) const char *
+static const char *
 pe_type_to_name(const struct poll_event *pe)
 {
     static const char *names[] = {
@@ -950,7 +950,7 @@ pe_disable_write(struct poll_event *pe)
  * or error is permanent. In case of permanent error the
  * poll event pe should be removed from poll manager and destroyed.
  */
-static __attribute__((unused)) const char *
+static const char *
 err_str_n(unsigned long e, char *buf, size_t buf_sz)
 {
     ERR_error_string_n(e, buf, buf_sz);
@@ -1003,7 +1003,7 @@ handle_ssl_error(struct poll_event *pe, int rc, const char *caller)
     return rv;
 }
 
-static __attribute__((unused)) const char *
+static const char *
 stream_state_str(int stream_state)
 {
     const char *rv;

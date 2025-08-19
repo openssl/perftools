@@ -8,10 +8,12 @@
  */
 
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 const char *progname;
 
-static void
+void
 vwarnx(const char *fmt, va_list ap)
 {
     if (progname != NULL)
@@ -20,7 +22,7 @@ vwarnx(const char *fmt, va_list ap)
     putc('\n', stderr);
 }
 
-static void
+void
 errx(int status, const char *fmt, ...)
 {
     va_list ap;
@@ -31,7 +33,7 @@ errx(int status, const char *fmt, ...)
     exit(status);
 }
 
-static void
+void
 warnx(const char *fmt, ...)
 {
     va_list ap;

@@ -113,7 +113,7 @@ find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
 add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 	perflib/time.c)
 
-if (WIN32)
+if(WIN32)
     target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c perflib/err.c)
 endif()
 
@@ -127,8 +127,15 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(providerdoall providerdoall.c)
     target_link_libraries(providerdoall PRIVATE perf)
 
+endif()
+
+if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3.6 )
     add_executable(ssl_poll_perf ssl_poll_perf.c)
-    target_link_libraries(ssl_poll_perf PRIVATE perf)
+    if(WIN32)
+        target_link_libraries(ssl_poll_perf PUBLIC wsock32 ws2_32 PRIVATE perf)
+    else()
+        target_link_libraries(ssl_poll_perf PRIVATE perf)
+    endif()
 endif()
 
 add_executable(randbytes randbytes.c)
