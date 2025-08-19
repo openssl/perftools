@@ -7,8 +7,8 @@
  * https://www.openssl.org/source/license.html
  */
 
-#ifndef OSSL_PERFLIB_GETOPT_H
-# define OSSL_PERFLIB_GETOPT_H
+#ifndef OSSL_PERFLIB_ERR_H
+# define OSSL_PERFLIB_ERR_H
 # pragma once
 
 #include <stdarg.h>
