@@ -160,7 +160,11 @@ add_executable(rwlocks rwlocks.c)
 target_link_libraries(rwlocks PRIVATE perf)
 
 add_executable(pkeyread pkeyread.c)
-target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
+if(WIN32)
+    target_link_libraries(pkeyread PRIVATE perf)
+else()
+    target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
+endif()
 
 add_executable(evp_setpeer evp_setpeer.c)
 target_link_libraries(evp_setpeer PRIVATE perf)
