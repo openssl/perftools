@@ -18,6 +18,7 @@
 # include "perflib/getopt.h"
 # include "perflib/basename.h"
 #endif	/* _WIN32 */
+#include <openssl/opensslv.h>
 #include <openssl/evp.h>
 #include "perflib/perflib.h"
 
