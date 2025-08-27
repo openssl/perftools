@@ -95,6 +95,19 @@
 # option on command line. This also assumes you have 32-bit version of
 # OpenSSL library ready in -DOPENSSL_ROOT_DIR path.
 #
+# Using cmake 4.x on MacOS
+# ========================
+# According to cmake changelog [1] you may need to add -DCMAKE_OSX_SYSROOT=macosx
+# option to prevent cmake to search for header files in /usr/local/include.
+# You typically needs it if openssl library you want to test is installed
+# in non-standard location (for example in ~/openssl.binaries. In that
+# case you want to build tools using commands:
+#	cmake -S . -B build -DOPENSSL_ROOT_DIR=~/openssl.binaries \
+#		-DCMAKE_OSX_SYSROOT=macosx
+#	cmake --build build
+#
+# [1] https://cmake.org/cmake/help/v4.0/release/4.0.html#other-changes
+#
 
 cmake_minimum_required(VERSION 3.10)
 project(perf-tools)
