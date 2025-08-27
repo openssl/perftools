@@ -1,0 +1,280 @@
+name: "Test"
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  debian-11:
+    strategy:
+      fail-fast: false
+      matrix:
+        openssl-branch:
+          - "openssl-3.0"
+          - "openssl-3.2"
+          - "openssl-3.3"
+          - "openssl-3.4"
+          - "openssl-3.5"
+          - "master"
+    runs-on: "ubuntu-latest"
+    container: "docker.io/library/debian:11"
+    steps:
+    - name: "Install prerequisites"
+      run: |
+        apt-get update
+        apt-get install -y cmake gcc g++ make perl
+    - name: "Checkout openssl"
+      uses: "actions/checkout@v5"
+      with:
+        repository: "openssl/openssl"
+        ref: ${{ matrix.openssl-branch }}
+        fetch-depth: 1
+        path: "openssl"
+    - name: "Config openssl build"
+      working-directory: "./openssl"
+      run: |
+        ./config --prefix="$PWD/dist"
+    - name: "Build openssl"
+      working-directory: "./openssl"
+      run: |
+        make -j
+    - name: "Install openssl"
+      working-directory: "./openssl"
+      run: |
+        make install_sw
+    - name: "Checkout perftools"
+      uses: "actions/checkout@v5"
+      with:
+        path: "perftools"
+    - name: "Config perftools build"
+      working-directory: "./perftools/source"
+      run: |
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+    - name: "Build perftools"
+      working-directory: "./perftools/source"
+      run: |
+         cmake --build build --config Release
+
+  ubuntu-20-04:
+    strategy:
+      fail-fast: false
+      matrix:
+        openssl-branch:
+          - "openssl-3.0"
+          - "openssl-3.2"
+          - "openssl-3.3"
+          - "openssl-3.4"
+          - "openssl-3.5"
+          - "master"
+    runs-on: "ubuntu-latest"
+    container: "docker.io/library/ubuntu:20.04"
+    steps:
+    - name: "Install prerequisites"
+      env:
+        DEBIAN_FRONTEND: "noninteractive"
+      run: |
+        apt-get update
+        apt-get install -y cmake gcc g++ make perl
+    - name: "Checkout openssl"
+      uses: "actions/checkout@v5"
+      with:
+        repository: "openssl/openssl"
+        ref: ${{ matrix.openssl-branch }}
+        fetch-depth: 1
+        path: "openssl"
+    - name: "Config openssl build"
+      working-directory: "./openssl"
+      run: |
+        ./config --prefix="$PWD/dist"
+    - name: "Build openssl"
+      working-directory: "./openssl"
+      run: |
+        make -j
+    - name: "Install openssl"
+      working-directory: "./openssl"
+      run: |
+        make install_sw
+    - name: "Checkout perftools"
+      uses: "actions/checkout@v5"
+      with:
+        path: "perftools"
+    - name: "Config perftools build"
+      working-directory: "./perftools/source"
+      run: |
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+    - name: "Build perftools"
+      working-directory: "./perftools/source"
+      run: |
+         cmake --build build --config Release
+
+  freebsd-13:
+    strategy:
+      fail-fast: false
+      matrix:
+        openssl-branch:
+          - "openssl-3.0"
+          - "openssl-3.2"
+          - "openssl-3.3"
+          - "openssl-3.4"
+          - "openssl-3.5"
+          - "master"
+    runs-on: "ubuntu-latest"
+    steps:
+    - name: "Install prerequisites"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          sudo pkg install -y cmake gcc perl5
+    - name: "Checkout openssl"
+      uses: "actions/checkout@v5"
+      with:
+        repository: "openssl/openssl"
+        ref: ${{ matrix.openssl-branch }}
+        fetch-depth: 1
+        path: "openssl"
+    - name: "Config openssl build"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          cd openssl
+          ./config --prefix="$PWD/dist"
+    - name: "Build openssl"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          cd openssl
+          make -j 4
+    - name: "Install openssl"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          cd openssl
+          make install_sw
+    - name: "Checkout perftools"
+      uses: "actions/checkout@v5"
+      with:
+        path: "perftools"
+    - name: "Config perftools build"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          cd perftools/source
+          cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+    - name: "Build perftools"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          cd perftools/source
+          cmake --build build --config Release
+
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        openssl-branch:
+          - "openssl-3.0"
+          - "openssl-3.2"
+          - "openssl-3.3"
+          - "openssl-3.4"
+          - "openssl-3.5"
+          - "master"
+    runs-on: "windows-latest"
+    steps:
+    - name: "Install prerequisites"
+      run: |
+        choco install nasm
+        "C:\Program Files\NASM" | Out-File -FilePath "$env:GITHUB_PATH" -Append
+    - name: "Checkout openssl"
+      uses: "actions/checkout@v5"
+      with:
+        repository: "openssl/openssl"
+        ref: ${{ matrix.openssl-branch }}
+        fetch-depth: 1
+        path: "openssl"
+    - name: "Config openssl build"
+      working-directory: ".\\openssl"
+      shell: cmd
+      run: |
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        perl Configure no-makedepend
+    - name: "Build openssl"
+      working-directory: ".\\openssl"
+      shell: cmd
+      run: |
+        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        nmake
+    - name: "Checkout perftools"
+      uses: "actions/checkout@v5"
+      with:
+        path: "perftools"
+    - name: "Config perftools build"
+      working-directory: ".\\perftools\\source"
+      run: |
+        cmake -S . -B .\build -DOPENSSL_ROOT_DIR="$env:GITHUB_WORKSPACE\openssl"
+    - name: "Build perftools"
+      working-directory: ".\\perftools\\source"
+      run: |
+         cmake --build .\build --config Release
+
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        openssl-branch:
+          - "openssl-3.0"
+          - "openssl-3.2"
+          - "openssl-3.3"
+          - "openssl-3.4"
+          - "openssl-3.5"
+          - "master"
+    runs-on: "macos-latest"
+    steps:
+    - name: "Checkout openssl"
+      uses: "actions/checkout@v5"
+      with:
+        repository: "openssl/openssl"
+        ref: ${{ matrix.openssl-branch }}
+        fetch-depth: 1
+        path: "openssl"
+    - name: "Config openssl build"
+      working-directory: "./openssl"
+      run: |
+        ./config --prefix="$PWD/dist"
+    - name: "Build openssl"
+      working-directory: "./openssl"
+      run: |
+        make -j
+    - name: "Install openssl"
+      working-directory: "./openssl"
+      run: |
+        make install_sw
+    - name: "Checkout perftools"
+      uses: "actions/checkout@v5"
+      with:
+        path: "perftools"
+    - name: "Config perftools build"
+      working-directory: "./perftools/source"
+      run: |
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+    - name: "Build perftools"
+      working-directory: "./perftools/source"
+      run: |
+         cmake --build build --config Release
