@@ -99,7 +99,7 @@
 # ========================
 # According to cmake changelog [1] you may need to add -DCMAKE_OSX_SYSROOT=macosx
 # option to prevent cmake to search for header files in /usr/local/include.
-# You typically needs it if openssl library you want to test is installed
+# You typically need it if openssl library you want to test is installed
 # in non-standard location (for example in ~/openssl.binaries. In that
 # case you want to build tools using commands:
 #	cmake -S . -B build -DOPENSSL_ROOT_DIR=~/openssl.binaries \
