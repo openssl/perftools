@@ -7,6 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,6 +24,20 @@ vwarnx(const char *fmt, va_list ap)
 }
 
 void
+vwarn(const char *fmt, va_list ap)
+{
+    int saved_errno = errno;
+
+    if (progname != NULL)
+        fprintf(stderr, "%s: ", progname);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, ": ");
+
+    errno = saved_errno;
+    perror(NULL);
+}
+
+void
 errx(int status, const char *fmt, ...)
 {
     va_list ap;
@@ -34,11 +49,32 @@ errx(int status, const char *fmt, ...)
 }
 
 void
+err(int status, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vwarn(fmt, ap);
+    va_end(ap);
+    exit(status);
+}
+
+void
 warnx(const char *fmt, ...)
 {
     va_list ap;
 
     va_start(ap, fmt);
     vwarnx(fmt, ap);
+    va_end(ap);
+}
+
+void
+warn(const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vwarn(fmt, ap);
     va_end(ap);
 }
