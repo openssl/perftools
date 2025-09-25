@@ -22,8 +22,13 @@
 extern const char *progname;
 
 extern void vwarnx(const char *, va_list);
+extern void vwarn(const char *, va_list);
+
 extern void errx(int, const char *, ...);
+extern void err(int, const char *, ...);
+
 extern void warnx(const char *, ...);
+extern void warn(const char *, ...);
 
 # endif /* !_WIN32 */
 
