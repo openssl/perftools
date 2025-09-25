@@ -420,7 +420,7 @@ int main(int argc, char * const argv[])
             sample_id = k;
             max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
             if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
-                fprintf(stderr, "Failed to run the test %s in %s format]\n",
+                fprintf(stderr, "Failed to run the test %s in %s format\n",
                         sample_names[k], format_names[f]);
                 OPENSSL_free(counts);
                 return EXIT_FAILURE;
