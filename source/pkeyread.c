@@ -396,7 +396,7 @@ int main(int argc, char * const argv[])
 
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
-        printf("Failed to create counts array\n");
+        fprintf(stderr, "Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
