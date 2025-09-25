@@ -121,18 +121,27 @@ lock/unlock pairs are reported as a performance measurement
 
 ## pkeyread
 
-The `pkeyread` test repeatedly calls the [PEM_read_bio_PrivateKey()](https://docs.openssl.org/master/man3/PEM_read_bio_PrivateKey/) function on a
-memory BIO with a private key of desired type, when it is running in pem mode
-(-f pem).  If test is running in der mode (-f der) it calls to
-[d2i_PrivateKey_ex()](https://docs.openssl.org/master/man3/d2i_PrivateKey/) function to repeatedly read private key of desired type.
-It does 10000 repetitions divided evenly among each thread. The number of
-threads to use is provided by option `-t`. The test reports average time per
-call. Use option `-k` to select key type for benchmark.  The list of keys for
-testing is as follows: dh, dhx, dsa, ec, rsa, xkey.  To run benchmark for all
-keys and formats using 4 threads run pkeyread as follows:
+The `pkeyread` test benchmarks reading of private keys of the specified type
+in the specified format.  If PEM format is specified (`-f pem`),
+the [`PEM_read_bio_PrivateKey()`](https://docs.openssl.org/master/man3/PEM_read_bio_PrivateKey/)
+function is called repeatedly on a memory BIO with a private key
+of desired type; in case of DER format specification (`-f der`),
+[`d2i_PrivateKey_ex()`](https://docs.openssl.org/master/man3/d2i_PrivateKey/)
+is called repeatedly to read private key of the desired type.
+The calls are performed repeatedly until the timeout (specified in the `-T`
+option, 5 seconds by default) is reached.
+The number of threads to use is provided by the only positional option.
+By default, the test reports average time per call.  If `-t` ("terse output")
+option is specified, only the number is printed, without key type and format.
+If `-v` ("verbose") option is specified, additional information is printed
+for each run: median, minimum, maximum time among threads, as well as standard
+deviation.
+The mandatory option `-k` selects the key type for benchmark.  The list of keys
+for testing is as follows: dh, dhx, dsa, ec, rsa, x25519.  To run benchmark
+for all keys and formats using 4 threads, run `pkeyread` as follows:
 
 ```sh
-./pkeyread -f all -k all -t 4
+./pkeyread -f all -k all 4
 ```
 
 ## evp_setpeer
