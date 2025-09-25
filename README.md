@@ -136,6 +136,8 @@ option is specified, only the number is printed, without key type and format.
 If `-v` ("verbose") option is specified, additional information is printed
 for each run: median, minimum, maximum time among threads, as well as standard
 deviation.
+If `-b` ("bind") option is provided, thread affinity is set to the threads
+so the available cores are assigned in a round robin manner.
 The mandatory option `-k` selects the key type for benchmark.  The list of keys
 for testing is as follows: dh, dhx, dsa, ec, rsa, x25519.  To run benchmark
 for all keys and formats using 4 threads, run `pkeyread` as follows:

@@ -275,7 +275,8 @@ static void usage(char * const argv[])
     fprintf(stderr, "%s -k key_name -f format_name [-t] [-v] [-T time] threadcount\n"
         "\t-t  terse output\n"
         "\t-v  verbose output, includes min, max, stddev, and median times\n"
-        "\t-T  timeout for each test run in seconds, can be fractional"
+        "\t-T  timeout for each test run in seconds, can be fractional\n"
+        "\t-b  Set CPU affinity for the threads (in round robin fashion)\n"
         "\twhere key_name is one of these: ", argv[0]);
     fprintf(stderr, "%s", *key_name);
     do {
@@ -303,6 +304,7 @@ int main(int argc, char * const argv[])
     int key_id, key_id_min, key_id_max, k;
     int format_id, format_id_min, format_id_max, f;
     int verbosity = VERBOSITY_DEFAULT;
+    int bind_threads = 0;
     char *key = NULL;
     char *key_format = NULL;
     void (*do_f[2])(size_t) = {
@@ -313,7 +315,7 @@ int main(int argc, char * const argv[])
     key_id = SAMPLE_INVALID;
     format_id = FORMAT_INVALID;
 
-    while ((ch = getopt(argc, argv, "T:k:f:tv")) != -1) {
+    while ((ch = getopt(argc, argv, "T:k:f:tvb")) != -1) {
         switch (ch) {
         case 'T': {
             double timeout_s;
@@ -341,6 +343,9 @@ int main(int argc, char * const argv[])
             break;
         case 'v':
             verbosity = VERBOSITY_VERBOSE;
+            break;
+        case 'b':
+            bind_threads = 1;
             break;
         }
     }
@@ -419,7 +424,9 @@ int main(int argc, char * const argv[])
         for (f = format_id_min; f < format_id_max; f++) {
             sample_id = k;
             max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
-            if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
+            if (!perflib_run_multi_thread_test_ex(do_f[f], threadcount,
+                &duration, bind_threads ? perflib_roundrobin_affinity : NULL,
+                NULL)) {
                 fprintf(stderr, "Failed to run the test %s in %s format\n",
                         sample_names[k], format_names[f]);
                 OPENSSL_free(counts);
