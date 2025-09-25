@@ -9,6 +9,7 @@
 
 #include <string.h>
 #include <openssl/crypto.h>
+#include <openssl/macros.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/ssl.h>
