@@ -23,7 +23,7 @@
 
 #define RUN_TIME 5
 
-int err = 0;
+int error = 0;
 
 static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
@@ -57,7 +57,7 @@ static void do_writeread(size_t num)
         if (!perflib_create_ssl_ctx_pair(smethod, cmethod, 0, 0,
                                          &lsctx, &lcctx, cert, privkey)) {
             fprintf(stderr, "Failed to create SSL_CTX pair\n");
-            err = 1;
+            error = 1;
             return;
         }
     }
@@ -68,7 +68,7 @@ static void do_writeread(size_t num)
     ret &= perflib_create_bare_ssl_connection(serverssl, clientssl,
                                               SSL_ERROR_NONE);
     if (!ret) {
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -76,18 +76,18 @@ static void do_writeread(size_t num)
         size_t written = 0;
         if (SSL_write_ex(clientssl, cbuf, buf_size, &written) <= 0) {
             fprintf(stderr, "Failed to write data\n");
-            err = 1;
+            error = 1;
             return;
         }
         size_t readbytes;
         if (SSL_read_ex(serverssl, sbuf, buf_size, &readbytes) <= 0) {
             fprintf(stderr, "Failed to read data\n");
-            err = 1;
+            error = 1;
             return;
         }
         if (readbytes != written) {
             fprintf(stderr, "Failed to read %ld bytes, got %ld\n", written, readbytes);
-            err = 1;
+            error = 1;
             return;
         }
         counts[num]++;
@@ -190,7 +190,7 @@ int main(int argc, char * const argv[])
         goto err;
     }
 
-    if (err) {
+    if (error) {
         fprintf(stderr, "Error during test\n");
         goto err;
     }
