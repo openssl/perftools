@@ -28,7 +28,7 @@ size_t num_calls;
 size_t *counts;
 OSSL_TIME max_time;
 
-int err = 0;
+int error = 0;
 
 static int threadcount;
 
@@ -41,7 +41,7 @@ void do_randbytes(size_t num)
 
     do {
         if (!RAND_bytes(buf, sizeof(buf)))
-            err = 1;
+            error = 1;
         counts[num]++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto out;
     }

@@ -20,11 +20,12 @@
 #endif	/* _WIN32 */
 #include <openssl/bio.h>
 #include <openssl/x509.h>
+#include "perflib/err.h"
 #include "perflib/perflib.h"
 
 #define RUN_TIME 5
 
-static int err = 0;
+static int error = 0;
 static X509_STORE *store = NULL;
 static X509 *x509 = NULL;
 
@@ -41,7 +42,7 @@ static void do_x509storeissuer(size_t num)
 
     if (ctx == NULL || !X509_STORE_CTX_init(ctx, store, x509, NULL)) {
         printf("Failed to initialise X509_STORE_CTX\n");
-        err = 1;
+        error = 1;
         goto err;
     }
 
@@ -55,7 +56,7 @@ static void do_x509storeissuer(size_t num)
          */
         if (X509_STORE_CTX_get1_issuer(&issuer, ctx, x509) != 0) {
             printf("Unexpected result from X509_STORE_CTX_get1_issuer\n");
-            err = 1;
+            error = 1;
             X509_free(issuer);
             goto err;
         }
@@ -157,7 +158,7 @@ int main(int argc, char *argv[])
         goto err;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto err;
     }

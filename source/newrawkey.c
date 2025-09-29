@@ -37,7 +37,7 @@ enum {
 } algorithm = ALGO_X25519;
 const char *alg_name = "X25519";
 
-int err = 0;
+int error = 0;
 
 static unsigned char key_x25519[32] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b,
@@ -376,7 +376,7 @@ void do_newrawkey(size_t num)
                                            sizeof(key_data));
 #endif
         if (pkey == NULL)
-            err = 1;
+            error = 1;
         else
             EVP_PKEY_free(pkey);
         counts[num]++;
@@ -454,7 +454,7 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto out;
     }
