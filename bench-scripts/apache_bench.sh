@@ -63,8 +63,10 @@ CERT_ALT_SUBJ=${BENCH_CERT_ALT_SUBJ:-'subjectAltName=DNS:localhost,IP:127.0.0.1'
 TEST_TIME=${BENCH_TEST_TIME:-'5M'}
 HOST=${BENCH_HOST:-'127.0.0.1'}
 APACHE_VERSION='2.4.65'
+HAPROXY='no'
 
 . ./common_util.sh
+. ./haproxy_bench.sh
 
 function install_wolfssl_for_apache {
 	typeset VERSION=$1
@@ -810,18 +812,25 @@ function enable_mpm_prefork {
 
 function run_test {
 	typeset SSL_LIB=$1
-	typeset HTTP='https'
+	typeset HAPROXY=$2
 	typeset i=0
 	typeset PORT=${HTTPS_PORT}
+	typeset PROTOCOL="https"
 	if [[ -z "${SSL_LIB}" ]] ; then
 		SSL_LIB='openssl-master'
 	fi
+	if [[ -z "${HAPROXY}" ]] ; then
+		HAPROXY='no'
+	fi
 	typeset RESULTS="${SSL_LIB}".txt
 	if [[ "${SSL_LIB}" = 'nossl' ]] ; then
-		HTTP='http'
 		SSL_LIB='openssl-master'
 		RESULTS='nossl.txt'
 		PORT=${HTTP_PORT}
+		PROTOCOL="http"
+	fi
+	if [[ "${HAPROXY}" != 'no' ]] ; then
+		RESULTS="haproxy-${SSL_LIB}-${HAPROXY}.txt"
 	fi
 	typeset HTDOCS="${INSTALL_ROOT}/${SSL_LIB}"/htdocs
 	typeset SIEGE="${INSTALL_ROOT}"/openssl-master/bin/siege
@@ -839,10 +848,34 @@ function run_test {
 	#
 	# generate URLs for sewage
 	#
+	# The different modes for haproxy are:
+	# no: client - server
+	# no-ssl: client -http- haproxy -http- server
+	# server: client -https- haproxy -http- server
+	# client: client -http- haproxy -https- server
+	# both: client -https- haproxy -https- server
+	#
+	# Otherwise said, haproxy is a client when it encrypts the outgoing encryption;
+	# or it's client side.
+	#
 	rm -f siege_urls.txt
 	for i in `ls -1 ${HTDOCS}/*.txt` ; do
-		echo "${HTTP}://${HOST}:${PORT}/`basename $i`" >> siege_urls.txt
+		if [[ "${HAPROXY}" = "no" ]] ; then
+			echo "${PROTOCOL}://${HOST}:${PORT}/`basename $i`" >> siege_urls.txt
+		elif [[ "${HAPROXY}" = "no-ssl" ]] ; then
+			echo "http://${HOST}:${HAPROXY_NOSSL_PORT}/`basename $i`" >> siege_urls.txt
+		elif [[ "${HAPROXY}" = "server" ]] ; then
+			echo "https://${HOST}:${HAPROXY_C2P_PORT}/`basename $i`" >> siege_urls.txt
+		elif [[ "${HAPROXY}" = "client" ]] ; then
+			echo "http://${HOST}:${HAPROXY_P2S_PORT}/`basename $i`" >> siege_urls.txt
+		elif [[ "${HAPROXY}" = "both" ]] ; then
+			echo "https://${HOST}:${HAPROXY_C2S_PORT}/`basename $i`" >> siege_urls.txt
+		fi
 	done
+
+	if [[ "${HAPROXY}" = "server" ]] || [[ "${HAPROXY}" = "both" ]] ; then
+		conf_siege_haproxy_cert $SSL_LIB
+	fi
 
 	#
 	# start apache httpd server
@@ -856,13 +889,14 @@ function run_test {
 	LD_LIBRARY_PATH=${INSTALL_ROOT}/openssl-master/lib "${SIEGE}" -t ${TEST_TIME}  -b \
 	    -f siege_urls.txt 2> "${RESULT_DIR}/${RESULTS}"
 	if [[ $? -ne 0 ]] ; then
-		echo  "${INSTALL_ROOT}/${SSL_LIB} can not run siege"
+		echo "${INSTALL_ROOT}/${SSL_LIB} can not run siege"
 		cat "${RESULT_DIR}/${RESULTS}"
 		exit 1
 	fi
 
 	LD_LIBRARY_PATH=${INSTALL_ROOT}/${SSL_LIB}/lib \
 	    ${INSTALL_ROOT}/${SSL_LIB}/bin/httpd -k stop || exit 1
+	sleep 1
 	pgrep httpd
 	while [[ $? -eq 0 ]] ; do
 		sleep 1
@@ -881,6 +915,10 @@ function run_test {
 	    ${RESULT_DIR}/httpd-${SSL_LIB}.conf
 	cp ${INSTALL_ROOT}/${SSL_LIB}/conf/extra/httpd-ssl.conf \
 	    ${RESULT_DIR}/httpd-ssl-${SSL_LIB}.conf
+
+	if [[ "${HAPROXY}" = "server" ]] || [[ "${HAPROXY}" = "both" ]] ; then
+		unconf_siege_haproxy_cert
+	fi
 }
 
 function setup_tests {
@@ -888,6 +926,7 @@ function setup_tests {
 	install_siege openssl-master
 	install_apache openssl-master
 	config_apache openssl-master
+	install_haproxy openssl-master
 	cd "${WORKSPACE_ROOT}"
 	clean_build
 
@@ -895,6 +934,7 @@ function setup_tests {
 		install_openssl openssl-$i ;
 		install_apache openssl-$i
 		config_apache openssl-$i
+		install_haproxy openssl-$i
 		cd "${WORKSPACE_ROOT}"
 		clean_build
 	done
@@ -967,6 +1007,7 @@ function setup_tests {
 
 function run_tests {
 	typeset SAVE_RESULT_DIR="${RESULT_DIR}"
+	typeset HAPROXY_OPTIONS=('no' 'client' 'server' 'both')
 
 	for i in event worker pre-fork ; do
 		mkdir -p ${RESULT_DIR}/$i || exit 1
@@ -975,12 +1016,25 @@ function run_tests {
 	enable_mpm_event
 	RESULT_DIR="${SAVE_RESULT_DIR}/event"
 	run_test nossl
+	run_haproxy
+	run_test nossl 'no-ssl'
+	kill_haproxy
 	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
 		enable_mpm_event openssl-${i}
-		run_test openssl-${i}
+		run_haproxy openssl-${i}
+		for OPTION in ${HAPROXY_OPTIONS[@]}
+		do
+			run_test openssl-${i} ${OPTION}
+		done
+		kill_haproxy
 	done
 	enable_mpm_event openssl-master
-	run_test openssl-master
+	run_haproxy openssl-master
+	for OPTION in ${HAPROXY_OPTIONS[@]}
+	do
+		run_test openssl-master ${OPTION}
+	done
+	kill_haproxy
 	enable_mpm_event OpenSSL_1_1_1-stable
 	run_test OpenSSL_1_1_1-stable
 	enable_mpm_event libressl-4.1.0
@@ -995,12 +1049,26 @@ function run_tests {
 	enable_mpm_worker
 	RESULT_DIR="${SAVE_RESULT_DIR}/worker"
 	run_test nossl
+	run_haproxy
+	run_test nossl 'no-ssl'
+	kill_haproxy
 	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
 		enable_mpm_worker openssl-${i}
 		run_test openssl-${i}
+		run_haproxy openssl-${i}
+		for OPTION in ${HAPROXY_OPTIONS[@]}
+		do
+			run_test openssl-${i} ${OPTION}
+		done
+		kill_haproxy
 	done
 	enable_mpm_worker openssl-master
-	run_test openssl-master
+	run_haproxy openssl-master
+	for OPTION in ${HAPROXY_OPTIONS[@]}
+	do
+		run_test openssl-master ${OPTION}
+	done
+	kill_haproxy
 	enable_mpm_worker OpenSSL_1_1_1-stable
 	run_test OpenSSL_1_1_1-stable
 	enable_mpm_worker libressl-4.1.0
@@ -1015,12 +1083,26 @@ function run_tests {
 	enable_mpm_prefork
 	RESULT_DIR="${SAVE_RESULT_DIR}/pre-fork"
 	run_test nossl
+	run_haproxy
+	run_test nossl 'no-ssl'
+	kill_haproxy
 	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
 		enable_mpm_prefork openssl-${i}
 		run_test openssl-${i}
+		run_haproxy openssl-${i}
+		for OPTION in ${HAPROXY_OPTIONS[@]}
+		do
+			run_test openssl-${i} ${OPTION}
+		done
+		kill_haproxy
 	done
 	enable_mpm_prefork openssl-master
-	run_test openssl-master
+	run_haproxy openssl-master
+	for OPTION in ${HAPROXY_OPTIONS[@]}
+	do
+		run_test openssl-master ${OPTION}
+	done
+	kill_haproxy
 	enable_mpm_prefork OpenSSL_1_1_1-stable
 	run_test OpenSSL_1_1_1-stable
 	enable_mpm_prefork libressl-4.1.0

@@ -292,6 +292,7 @@ set term png size 1600, 600
 set boxwidth 0.4
 set autoscale
 set output "${PNG_FILE}"
+set xtics rotate by 90 right
 plot "${DATA_FILE}" using 1:3:xtic(2) with boxes
 EOF
 	gnuplot ${PLOT_FILE}
