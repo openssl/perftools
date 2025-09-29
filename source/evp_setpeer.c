@@ -24,7 +24,7 @@
 
 #define RUN_TIME 5
 
-int err = 0;
+int error = 0;
 
 size_t num_calls;
 static int threadcount;
@@ -42,13 +42,13 @@ void do_setpeer(size_t num)
 
     pkey_ctx = EVP_PKEY_CTX_new(pkey, NULL);
     if (pkey_ctx == NULL) {
-        err = 1;
+        error = 1;
         printf("Failed to create pkey_ctx\n");
         return;
     }
 
     if (EVP_PKEY_derive_init(pkey_ctx) <= 0) {
-        err = 1;
+        error = 1;
         printf("Failed to init pkey_ctx\n");
         EVP_PKEY_CTX_free(pkey_ctx);
         return;
@@ -58,7 +58,7 @@ void do_setpeer(size_t num)
 
     do {
         if (EVP_PKEY_derive_set_peer(pkey_ctx, pkey) <= 0) {
-            err = 1;
+            error = 1;
             break;
         }
         counts[num]++;
@@ -97,7 +97,7 @@ static double get_avcalltime(void)
 
 static void report_result(int key_id, int terse)
 {
-    if (err) {
+    if (error) {
         fprintf(stderr, "Error during test of %s\n",
                 sample_names[key_id]);
         exit(EXIT_FAILURE);
@@ -228,7 +228,7 @@ int main(int argc, char *argv[])
         EVP_PKEY_free(pkey);
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto out;
     }

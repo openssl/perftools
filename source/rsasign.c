@@ -26,7 +26,7 @@
 
 #define RUN_TIME 5
 
-int err = 0;
+int error = 0;
 EVP_PKEY *rsakey = NULL;
 
 size_t *counts;
@@ -61,7 +61,7 @@ void do_rsasign(size_t num)
         if (EVP_PKEY_sign_init(ctx) <= 0
                 || EVP_PKEY_sign(ctx, sig, &siglen, (const unsigned char*)tbs,
                                  SHA_DIGEST_LENGTH) <= 0) {
-            err = 1;
+            error = 1;
             break;
         }
         counts[num]++;
@@ -130,7 +130,7 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto out;
     }

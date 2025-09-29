@@ -25,7 +25,7 @@
 
 #define RUN_TIME 5
 
-int err = 0;
+int error = 0;
 
 typedef enum {
   INIT_LIB_CTX,
@@ -102,7 +102,7 @@ static void do_handshake(size_t num)
     } while (time.t < max_time.t);
 
     if (!ret)
-        err = 1;
+        error = 1;
 }
 
 static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
@@ -117,7 +117,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     libctx = OSSL_LIB_CTX_new();
     if (libctx == NULL) {
         fprintf(stderr, "%s:%d: Failed to create ossl lib context\n", __FILE__, __LINE__);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -132,7 +132,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
                                                   privkey)) {
                 ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
-                err = 1;
+                error = 1;
                 return;
             }
         }
@@ -157,7 +157,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     SSL_CTX_free(lcctx);
 
     if (!ret)
-        err = 1;
+        error = 1;
 
     OSSL_LIB_CTX_free(libctx);
 }
@@ -187,7 +187,7 @@ static void do_handshake_ctx_pool(size_t num)
                                               privkey)) {
             ERR_print_errors_fp(stderr);
             fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
-            err = 1;
+            error = 1;
             return;
         }
     }
@@ -203,7 +203,7 @@ static void do_handshake_ctx_pool(size_t num)
                                                   privkey)) {
                 ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
-                err = 1;
+                error = 1;
                 return;
             }
         }
@@ -230,7 +230,7 @@ static void do_handshake_ctx_pool(size_t num)
     }
 
     if (!ret)
-        err = 1;
+        error = 1;
 }
 
 static void free_ctx_pool()
@@ -482,7 +482,7 @@ int main(int argc, char * const argv[])
         goto err;
     };
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto err;
     }
