@@ -9,13 +9,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        openssl-branch:
-          - "openssl-3.0"
-          - "openssl-3.2"
-          - "openssl-3.3"
-          - "openssl-3.4"
-          - "openssl-3.5"
-          - "master"
+        release: [
+          {
+            openssl-branch: "openssl-3.0",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.2",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.3",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.4",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.5",
+            cmakeopts: '',
+          }, {
+            openssl-branch: "master",
+            cmakeopts: '',
+          }
+        ]
     runs-on: "ubuntu-latest"
     container: "docker.io/library/debian:11"
     steps:
@@ -27,7 +41,7 @@ jobs:
       uses: "actions/checkout@v5"
       with:
         repository: "openssl/openssl"
-        ref: ${{ matrix.openssl-branch }}
+        ref: ${{ matrix.release.openssl-branch }}
         fetch-depth: 1
         path: "openssl"
     - name: "Config openssl build"
@@ -49,23 +63,41 @@ jobs:
     - name: "Config perftools build"
       working-directory: "./perftools/source"
       run: |
-        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: "./perftools/source"
       run: |
          cmake --build build --config Release
+    - name: "Run perftools"
+      working-directory: "./perftools/source"
+      run: |
+         cmake --build build --config Release --target run -j 4
 
   ubuntu-20-04:
     strategy:
       fail-fast: false
       matrix:
-        openssl-branch:
-          - "openssl-3.0"
-          - "openssl-3.2"
-          - "openssl-3.3"
-          - "openssl-3.4"
-          - "openssl-3.5"
-          - "master"
+        release: [
+          {
+            openssl-branch: "openssl-3.0",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.0',
+          }, {
+            openssl-branch: "openssl-3.2",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.2',
+          }, {
+            openssl-branch: "openssl-3.3",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.3',
+          }, {
+            openssl-branch: "openssl-3.4",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.4',
+          }, {
+            openssl-branch: "openssl-3.5",
+            cmakeopts: '-D OPENSSL_VERSION=3.5',
+          }, {
+            openssl-branch: "master",
+            cmakeopts: '-D OPENSSL_VERSION=4.0',
+          }
+        ]
     runs-on: "ubuntu-latest"
     container: "docker.io/library/ubuntu:20.04"
     steps:
@@ -79,7 +111,7 @@ jobs:
       uses: "actions/checkout@v5"
       with:
         repository: "openssl/openssl"
-        ref: ${{ matrix.openssl-branch }}
+        ref: ${{ matrix.release.openssl-branch }}
         fetch-depth: 1
         path: "openssl"
     - name: "Config openssl build"
@@ -101,23 +133,41 @@ jobs:
     - name: "Config perftools build"
       working-directory: "./perftools/source"
       run: |
-        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: "./perftools/source"
       run: |
          cmake --build build --config Release
+    - name: "Run perftools"
+      working-directory: "./perftools/source"
+      run: |
+         cmake --build build --config Release --target run -j 4
 
   freebsd-13:
     strategy:
       fail-fast: false
       matrix:
-        openssl-branch:
-          - "openssl-3.0"
-          - "openssl-3.2"
-          - "openssl-3.3"
-          - "openssl-3.4"
-          - "openssl-3.5"
-          - "master"
+        release: [
+          {
+            openssl-branch: "openssl-3.0",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.2",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.3",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.4",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.5",
+            cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "master",
+            cmakeopts: '',
+          }
+        ]
     runs-on: "ubuntu-latest"
     steps:
     - name: "Install prerequisites"
@@ -132,7 +182,7 @@ jobs:
       uses: "actions/checkout@v5"
       with:
         repository: "openssl/openssl"
-        ref: ${{ matrix.openssl-branch }}
+        ref: ${{ matrix.release.openssl-branch }}
         fetch-depth: 1
         path: "openssl"
     - name: "Config openssl build"
@@ -174,7 +224,7 @@ jobs:
         shutdown_vm: false
         run: |
           cd perftools/source
-          cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+          cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
       with:
@@ -184,18 +234,41 @@ jobs:
         run: |
           cd perftools/source
           cmake --build build --config Release
+    - name: "Run perftools"
+      uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
+      with:
+        operating_system: "freebsd"
+        version: "13.4"
+        shutdown_vm: false
+        run: |
+          cd perftools/source
+          cmake --build build --config Release --target run -j 4
 
   windows:
     strategy:
       fail-fast: false
       matrix:
-        openssl-branch:
-          - "openssl-3.0"
-          - "openssl-3.2"
-          - "openssl-3.3"
-          - "openssl-3.4"
-          - "openssl-3.5"
-          - "master"
+        release: [
+          {
+            openssl-branch: "openssl-3.0",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.2",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.3",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.4",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+          }, {
+            openssl-branch: "openssl-3.5",
+            cmakeopts: '',
+          }, {
+            openssl-branch: "master",
+            cmakeopts: '',
+          }
+        ]
     runs-on: "windows-latest"
     steps:
     - name: "Install prerequisites"
@@ -206,7 +279,7 @@ jobs:
       uses: "actions/checkout@v5"
       with:
         repository: "openssl/openssl"
-        ref: ${{ matrix.openssl-branch }}
+        ref: ${{ matrix.release.openssl-branch }}
         fetch-depth: 1
         path: "openssl"
     - name: "Config openssl build"
@@ -228,30 +301,48 @@ jobs:
     - name: "Config perftools build"
       working-directory: ".\\perftools\\source"
       run: |
-        cmake -S . -B .\build -DOPENSSL_ROOT_DIR="$env:GITHUB_WORKSPACE\openssl"
+        cmake -S . -B .\build -DOPENSSL_ROOT_DIR="$env:GITHUB_WORKSPACE\openssl" ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: ".\\perftools\\source"
       run: |
          cmake --build .\build --config Release
+    - name: "Run perftools"
+      working-directory: ".\\perftools\\source"
+      run: |
+         cmake --build .\build --config Release --target run -j 4
 
   macos:
     strategy:
       fail-fast: false
       matrix:
-        openssl-branch:
-          - "openssl-3.0"
-          - "openssl-3.2"
-          - "openssl-3.3"
-          - "openssl-3.4"
-          - "openssl-3.5"
-          - "master"
+        release: [
+          {
+            openssl-branch: "openssl-3.0",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.2",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.3",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.4",
+            cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.5",
+            cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "master",
+            cmakeopts: '',
+          }
+        ]
     runs-on: "macos-latest"
     steps:
     - name: "Checkout openssl"
       uses: "actions/checkout@v5"
       with:
         repository: "openssl/openssl"
-        ref: ${{ matrix.openssl-branch }}
+        ref: ${{ matrix.release.openssl-branch }}
         fetch-depth: 1
         path: "openssl"
     - name: "Config openssl build"
@@ -273,8 +364,12 @@ jobs:
     - name: "Config perftools build"
       working-directory: "./perftools/source"
       run: |
-        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl"
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: "./perftools/source"
       run: |
          cmake --build build --config Release
+    - name: "Run perftools"
+      working-directory: "./perftools/source"
+      run: |
+         cmake --build build --config Release --target run -j 4
