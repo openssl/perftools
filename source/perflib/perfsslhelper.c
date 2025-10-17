@@ -61,6 +61,7 @@ static int perflib_use_certificate(SSL_CTX *serverctx, SSL_CTX *clientctx,
     return 0;
 }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
                                      const SSL_METHOD *cm, int min_proto_version,
                                      int max_proto_version, SSL_CTX **sctx, SSL_CTX **cctx,
@@ -90,6 +91,7 @@ int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
  err:
     return 0;
 }
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm,
                                 const SSL_METHOD *cm, int min_proto_version,
