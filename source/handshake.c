@@ -27,6 +27,7 @@
 
 int err = 0;
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 typedef enum {
   INIT_LIB_CTX,
   INIT_LIB_AND_SSL_CTX,
@@ -38,11 +39,13 @@ struct ctxs {
     SSL_CTX *cctx;
 };
 
+static struct ctxs **ctx_pool = NULL;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
 static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
 static char *cert = NULL;
 static char *privkey = NULL;
-static struct ctxs **ctx_pool = NULL;
 
 size_t *counts;
 
@@ -52,9 +55,11 @@ static long pool_size = 16;
 
 typedef enum {
     TC_SSL_CTX,
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     TC_OSSL_LIB_CTX_PER_THREAD,
     TC_OSSL_LIB_CTX_POOL,
     TC_SSL_CTX_POOL,
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 } test_case_t;
 OSSL_TIME max_time;
 static test_case_t test_case = TC_SSL_CTX;
@@ -104,6 +109,8 @@ static void do_handshake(size_t num)
     if (!ret)
         err = 1;
 }
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 
 static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
 {
@@ -315,17 +322,21 @@ static int test_ossl_lib_ctx_pool(size_t threadcount, OSSL_TIME *duration)
     free_ctx_pool();
 
     return ret;
- }
+}
+
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
 void usage(const char *progname)
 {
     printf("Usage: %s [options] certsdir threadcount\n", progname);
     printf("-t - terse output\n");
     printf("-s - disable context sharing\n");
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     printf("-p - use ossl_lib_ctx per thread\n");
     printf("-P - use ossl_lib_ctx pool\n");
     printf("-l - use ssl ctx pool\n");
     printf("-o - set ossl_lib_ctx pool size\n");
+#endif
     printf("-S [n] - use secure memory\n");
 }
 
@@ -342,7 +353,13 @@ int main(int argc, char * const argv[])
     int p_flag = 0, P_flag = 0, l_flag = 0;
     char *endptr = NULL;
 
-    while ((opt = getopt(argc, argv, "tspPo:lS:")) != -1) {
+    while ((opt = getopt(argc, argv,
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+                         "tspPo:lS:"
+#else
+                         "tsS:"
+#endif
+                         )) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -350,6 +367,7 @@ int main(int argc, char * const argv[])
         case 's':
             share_ctx = 0;
             break;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
         case 'p':
             p_flag = 1;
             test_case = TC_OSSL_LIB_CTX_PER_THREAD;
@@ -381,6 +399,7 @@ int main(int argc, char * const argv[])
             l_flag = 1;
             test_case = TC_SSL_CTX_POOL;
             break;
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
         case 'S': {
             char *end = NULL;
             int sec_mem_size;
@@ -408,12 +427,14 @@ int main(int argc, char * const argv[])
         }
     }
 
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     if ((p_flag + P_flag + l_flag) > 1) {
         fprintf(stderr, "Error: -p, -P, and -l are mutually exclusive."
               " Choose only one.\n\n");
         usage(basename(argv[0]));
         return EXIT_FAILURE;
     }
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 
     if (argv[optind] == NULL) {
         printf("certsdir is missing\n");
@@ -461,6 +482,7 @@ int main(int argc, char * const argv[])
         }
         break;
     }
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     case TC_OSSL_LIB_CTX_PER_THREAD: {
         if (!perflib_run_multi_thread_test(do_handshake_ossl_lib_ctx_per_thread,
                                            threadcount, &duration)) {
@@ -477,6 +499,7 @@ int main(int argc, char * const argv[])
         }
         break;
     }
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
     default:
         fprintf(stderr, "Invalid test case\n");
         goto err;

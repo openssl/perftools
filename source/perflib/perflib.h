@@ -48,10 +48,12 @@ int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm, const SSL_METHOD *cm,
                                 int min_proto_version, int max_proto_version,
                                 SSL_CTX **sctx, SSL_CTX **cctx, char *certfile,
                                 char *privkeyfile);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
 int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
                                      const SSL_METHOD *cm, int min_proto_version,
                                      int max_proto_version, SSL_CTX **sctx, SSL_CTX **cctx,
                                      char *certfile, char *privkeyfile);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 int perflib_create_ssl_objects(SSL_CTX *serverctx, SSL_CTX *clientctx,
                                SSL **sssl, SSL **cssl, BIO *s_to_c_fbio,
                                BIO *c_to_s_fbio);
