@@ -87,6 +87,10 @@
 #
 #       ./build/randbytes 10
 #
+# If build is prepared with OPENSSL_ROOT_DIR, using -DOPENSSL_ROOT_DIR=...
+# argument, then cmake generates a run target. The run target serves as a
+# unit test which runs all commands. Use 'cmake --build build -t run' command
+# to run it.
 #
 # 32-bit builds
 # =============
@@ -268,74 +272,76 @@ set(run_terse "" "-t"
 set(run_threads 1 4
     CACHE STRING "List of thread counts")
 
-add_custom_target(run
-                  COMMENT "Run perf tests"
-                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+if(OPENSSL_ROOT_DIR)
+    add_custom_target(run
+                      COMMENT "Run perf tests"
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
-foreach(test IN LISTS run_tests)
-    set(cmds "${test}")
+    foreach(test IN LISTS run_tests)
+        set(cmds "${test}")
 
-    # test-specific options
-    foreach(opt_name IN LISTS run_opts)
-        set(opt "${${opt_name}}")
-        list(GET opt 0 test_name)
-        list(GET opt 1 test_opt)
-        list(REMOVE_AT opt 0 1)
+        # test-specific options
+        foreach(opt_name IN LISTS run_opts)
+            set(opt "${${opt_name}}")
+            list(GET opt 0 test_name)
+            list(GET opt 1 test_opt)
+            list(REMOVE_AT opt 0 1)
 
-        if(test IN_LIST test_name)
+            if(test IN_LIST test_name)
+                set(new_cmds)
+                foreach(cmd IN LISTS cmds)
+                    foreach(val IN LISTS opt)
+                        list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
+                    endforeach()
+                endforeach()
+                set(cmds ${new_cmds})
+            endif()
+        endforeach()
+
+        # terse
+        set(new_cmds)
+        foreach(cmd IN LISTS cmds)
+            foreach(val IN LISTS run_terse)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
+        endforeach()
+        set(cmds ${new_cmds})
+
+        # certdir
+        if(test IN_LIST run_certdir_tests)
             set(new_cmds)
             foreach(cmd IN LISTS cmds)
-                foreach(val IN LISTS opt)
-                    list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
-                endforeach()
+                list(APPEND new_cmds "${cmd} ${run_certdir}")
             endforeach()
             set(cmds ${new_cmds})
         endif()
-    endforeach()
 
-    # terse
-    set(new_cmds)
-    foreach(cmd IN LISTS cmds)
-        foreach(val IN LISTS run_terse)
-            list(APPEND new_cmds "${cmd} ${val}")
-        endforeach()
-    endforeach()
-    set(cmds ${new_cmds})
-
-    # certdir
-    if(test IN_LIST run_certdir_tests)
+        # threads
         set(new_cmds)
         foreach(cmd IN LISTS cmds)
-            list(APPEND new_cmds "${cmd} ${run_certdir}")
+            foreach(val IN LISTS run_threads)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
         endforeach()
         set(cmds ${new_cmds})
-    endif()
 
-    # threads
-    set(new_cmds)
-    foreach(cmd IN LISTS cmds)
-        foreach(val IN LISTS run_threads)
-            list(APPEND new_cmds "${cmd} ${val}")
+        foreach(cmd IN LISTS cmds)
+            string(REGEX REPLACE "  *" ";" cmd "${cmd}")
+            string(REGEX REPLACE "[^0-9A-Za-z]" "-" cmd_target_name "${cmd}")
+            # A hack for lesser OSes that cannot normally distinguish lower-
+            # and uppercase letters.
+            if (WIN32 OR APPLE)
+                string(REGEX REPLACE "[A-Z]" "\\0_" cmd_target_name
+                       "${cmd_target_name}")
+            endif()
+            string(REPLACE ";" " " cmd_desc "${cmd}")
+            add_custom_target("run-${cmd_target_name}"
+                              COMMAND ${cmd}
+                              DEPENDS "${test}"
+                              COMMENT "Run ${cmd_desc}"
+                              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                              USES_TERMINAL)
+            add_dependencies(run "run-${cmd_target_name}")
         endforeach()
     endforeach()
-    set(cmds ${new_cmds})
-
-    foreach(cmd IN LISTS cmds)
-        string(REGEX REPLACE "  *" ";" cmd "${cmd}")
-        string(REGEX REPLACE "[^0-9A-Za-z]" "-" cmd_target_name "${cmd}")
-        # A hack for lesser OSes that cannot normally distinguish lower-
-        # and uppercase letters.
-        if (WIN32 OR APPLE)
-            string(REGEX REPLACE "[A-Z]" "\\0_" cmd_target_name
-                   "${cmd_target_name}")
-        endif()
-        string(REPLACE ";" " " cmd_desc "${cmd}")
-        add_custom_target("run-${cmd_target_name}"
-                          COMMAND ${cmd}
-                          DEPENDS "${test}"
-                          COMMENT "Run ${cmd_desc}"
-                          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-                          USES_TERMINAL)
-        add_dependencies(run "run-${cmd_target_name}")
-    endforeach()
-endforeach()
+endif()
