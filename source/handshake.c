@@ -338,6 +338,7 @@ void usage(const char *progname)
     printf("-o - set ossl_lib_ctx pool size\n");
 #endif
     printf("-S [n] - use secure memory\n");
+    printf("-V - print version information and exit\n");
 }
 
 int main(int argc, char * const argv[])
@@ -355,9 +356,9 @@ int main(int argc, char * const argv[])
 
     while ((opt = getopt(argc, argv,
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
-                         "tspPo:lS:"
+                         "tspPo:lS:V"
 #else
-                         "tsS:"
+                         "tsS:V"
 #endif
                          )) != -1) {
         switch (opt) {
@@ -421,6 +422,9 @@ int main(int argc, char * const argv[])
             }
             break;
         }
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
             usage(basename(argv[0]));
             return EXIT_FAILURE;

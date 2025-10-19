@@ -7,6 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
+#include <stdio.h>
 #include <string.h>
 #include <openssl/crypto.h>
 #include <openssl/bio.h>
@@ -30,4 +31,14 @@ char *perflib_mk_file_path(const char *dir, const char *file)
     }
 
     return full_file;
+}
+
+void perflib_print_version(const char * const progname)
+{
+    fprintf(stderr,
+            "%s version information:\n"
+            "  OpenSSL library: %s (%s)\n",
+            progname,
+            OpenSSL_version(OPENSSL_VERSION),
+            OpenSSL_version(OPENSSL_BUILT_ON));
 }

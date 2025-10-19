@@ -3104,7 +3104,7 @@ client_thread(void)
 static void usage(const char *progname)
 {
     fprintf(stderr, "%s -p portnum -c connections -b bidi_stream_count "
-            "-u uni_stream_count -s base_size "
+            "-u uni_stream_count -s base_size [-V]"
             "path/to/cert path/to/certkey\n"
             "\t-p port number to use (<1, 65535>), default 8000\n"
             "\t-c number of connections to establish, default 10\n"
@@ -3112,6 +3112,7 @@ static void usage(const char *progname)
             "\t-u number of unidirectional streams to use, default 10\n"
             "\t-s data size to request, default 64\n"
             "\t-w request body size, default 64\n"
+            "\t-V print version information and exit\n"
             "program creates server and client thread.\n"
             "client establishes `c` connections to server\n"
             "Each connection carries `b` `and `u` streams to request data\n"
@@ -3144,7 +3145,7 @@ main(int argc, char *argv[])
 #ifdef _WIN32
     progname = argv[0];
 #endif
-    while ((ch = getopt(argc, argv, "p:c:b:u:s:w:t")) != -1) {
+    while ((ch = getopt(argc, argv, "p:c:b:u:s:w:tV")) != -1) {
         switch (ch) {
         case 'p':
             portstr = optarg;
@@ -3167,6 +3168,9 @@ main(int argc, char *argv[])
         case 't':
             terse = 1;
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
             usage(argv[0]);
         }
