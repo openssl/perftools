@@ -326,6 +326,17 @@ if(OPENSSL_ROOT_DIR)
         set(cmds ${new_cmds})
 
         foreach(cmd IN LISTS cmds)
+            #
+            # in order to execute the command on window, we need
+            # to add OPENSSL_ROOT_DIR to PATH variable so runtime
+            # linker can find .dll. Adjusting PATH on windows requires
+            # us to generate .bat file with two commands:
+            #    set PATH=%PATH%;c:\...\OPENSSL_ROOT_DIR
+            #    cppmmand_to_exec with_options
+            #
+            # raw_cmd variable keep command to execute
+            #
+            set(raw_cmd "${cmd}")
             string(REGEX REPLACE "  *" ";" cmd "${cmd}")
             string(REGEX REPLACE "[^0-9A-Za-z]" "-" cmd_target_name "${cmd}")
             # A hack for lesser OSes that cannot normally distinguish lower-
@@ -335,12 +346,27 @@ if(OPENSSL_ROOT_DIR)
                        "${cmd_target_name}")
             endif()
             string(REPLACE ";" " " cmd_desc "${cmd}")
-            add_custom_target("run-${cmd_target_name}"
-                              COMMAND ${cmd}
-                              DEPENDS "${test}"
-                              COMMENT "Run ${cmd_desc}"
-                              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-                              USES_TERMINAL)
+            if(WIN32)
+                #
+                # generate .bat file and target to execute it.
+                #
+                file(GENERATE OUTPUT "${cmd_target_name}.bat"
+                     CONTENT "set PATH=%PATH%;${OPENSSL_ROOT_DIR}\n${raw_cmd}"
+                     NEWLINE_STYLE WIN32)
+                add_custom_target("run-${cmd_target_name}"
+                                  COMMAND "${cmd_target_name}.bat"
+                                  DEPENDS "${test}"
+                                  COMMENT "Run ${cmd_desc}"
+                                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                                  USES_TERMINAL)
+            else()
+                add_custom_target("run-${cmd_target_name}"
+                                  COMMAND ${cmd}
+                                  DEPENDS "${test}"
+                                  COMMENT "Run ${cmd_desc}"
+                                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                                  USES_TERMINAL)
+            endif()
             add_dependencies(run "run-${cmd_target_name}")
         endforeach()
     endforeach()
