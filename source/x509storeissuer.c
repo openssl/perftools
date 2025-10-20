@@ -79,6 +79,23 @@ usage(char * const argv[])
             basename(argv[0]));
 }
 
+static long long
+parse_int(const char * const s, long long min, long long max,
+          const char * const what)
+{
+    char *endptr = NULL;
+    long long ret;
+
+    ret = strtoll(s, &endptr, 0);
+    if (endptr == NULL || *endptr != '\0')
+        errx(EXIT_FAILURE, "failed to parse %s as a number: \"%s\"", what, s);
+    if (ret < min || ret > max)
+        errx(EXIT_FAILURE, "provided value of %s is out of the expected"
+                           " %lld..%lld range: %lld", what, min, max, ret);
+
+    return ret;
+}
+
 int main(int argc, char *argv[])
 {
     int i;
@@ -117,9 +134,7 @@ int main(int argc, char *argv[])
     if (argv[optind] == NULL)
         errx(EXIT_FAILURE, "threadcount is missing");
 
-    threadcount = atoi(argv[optind]);
-    if (threadcount < 1)
-        errx(EXIT_FAILURE, "threadcount must be > 0");
+    threadcount = parse_int(argv[optind], 1, INT_MAX, "threadcount");
 
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store))
