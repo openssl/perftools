@@ -309,7 +309,7 @@ jobs:
     - uses: actions/upload-artifact@v4
       with:
         name: cmake-artifact
-        path: \.build
+        path: .
     - name: "Run perftools"
       working-directory: ".\\perftools\\source"
       run: |
