@@ -132,6 +132,13 @@ add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 
 if(WIN32)
     target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c perflib/err.c)
+    #
+    # windows release build on github workflow places places .exe files under
+    # build\Release. This tweak hopes to place or .exe files under \build
+    # for both build types. It did not happen on local Win11 installation.
+    # 
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
