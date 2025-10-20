@@ -41,7 +41,7 @@ static void do_x509storeissuer(size_t num)
     OSSL_TIME time;
 
     if (ctx == NULL || !X509_STORE_CTX_init(ctx, store, x509, NULL)) {
-        printf("Failed to initialise X509_STORE_CTX\n");
+        warnx("Failed to initialise X509_STORE_CTX");
         error = 1;
         goto err;
     }
@@ -55,7 +55,7 @@ static void do_x509storeissuer(size_t num)
          * against an empty store.
          */
         if (X509_STORE_CTX_get1_issuer(&issuer, ctx, x509) != 0) {
-            printf("Unexpected result from X509_STORE_CTX_get1_issuer\n");
+            warnx("Unexpected result from X509_STORE_CTX_get1_issuer");
             error = 1;
             X509_free(issuer);
             goto err;
@@ -105,63 +105,48 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (argv[optind] == NULL) {
-        printf("certsdir is missing\n");
-        goto err;
-    }
+    if (argv[optind] == NULL)
+        errx(EXIT_FAILURE, "certsdir is missing");
+
     cert = perflib_mk_file_path(argv[optind], "servercert.pem");
-    if (cert == NULL) {
-        printf("Failed to allocate cert\n");
-        goto err;
-    }
+    if (cert == NULL)
+        errx(EXIT_FAILURE, "Failed to allocate cert path");
+
     optind++;
 
-    if (argv[optind] == NULL) {
-        printf("threadcount is missing\n");
-        goto err;
-    }
+    if (argv[optind] == NULL)
+        errx(EXIT_FAILURE, "threadcount is missing");
+
     threadcount = atoi(argv[optind]);
-    if (threadcount < 1) {
-        printf("threadcount must be > 0\n");
-        goto err;
-    }
+    if (threadcount < 1)
+        errx(EXIT_FAILURE, "threadcount must be > 0");
 
     store = X509_STORE_new();
-    if (store == NULL || !X509_STORE_set_default_paths(store)) {
-        printf("Failed to create X509_STORE\n");
-        goto err;
-    }
+    if (store == NULL || !X509_STORE_set_default_paths(store))
+        errx(EXIT_FAILURE, "Failed to create X509_STORE");
 
     bio = BIO_new_file(cert, "rb");
-    if (bio == NULL) {
-        printf("Unable to load certificate\n");
-        goto err;
-    }
+    if (bio == NULL)
+        errx(EXIT_FAILURE, "Unable to load certificate\n");
+
     x509 = PEM_read_bio_X509(bio, NULL, NULL, NULL);
-    if (x509 == NULL) {
-        printf("Failed to read certificate\n");
-        goto err;
-    }
+    if (x509 == NULL)
+        errx(EXIT_FAILURE, "Failed to read certificate");
+
     BIO_free(bio);
     bio = NULL;
 
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
-    if (counts == NULL) {
-        printf("Failed to create counts array\n");
-        goto err;
-    }
+    if (counts == NULL)
+        errx(EXIT_FAILURE, "Failed to create counts array");
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
-    if (!perflib_run_multi_thread_test(do_x509storeissuer, threadcount, &duration)) {
-        printf("Failed to run the test\n");
-        goto err;
-    }
+    if (!perflib_run_multi_thread_test(do_x509storeissuer, threadcount, &duration))
+        errx(EXIT_FAILURE, "Failed to run the test");
 
-    if (error) {
-        printf("Error during test\n");
-        goto err;
-    }
+    if (error)
+        errx(EXIT_FAILURE, "Error during test");
 
     for (i = 0; i < threadcount; i++)
         total_count += counts[i];
@@ -176,7 +161,6 @@ int main(int argc, char *argv[])
 
     ret = EXIT_SUCCESS;
 
- err:
     X509_STORE_free(store);
     X509_free(x509);
     BIO_free(bio);
