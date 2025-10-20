@@ -27,6 +27,16 @@
 #define RUN_TIME 5
 #define NONCE_CFG "file:servercert.pem"
 
+enum verbosity {
+    VERBOSITY_TERSE,
+    VERBOSITY_DEFAULT,
+    VERBOSITY_VERBOSE,
+    VERBOSITY_DEBUG_STATS,
+    VERBOSITY_DEBUG,
+
+    VERBOSITY_MAX__
+};
+
 enum nonce_type {
     NONCE_PATH,
 };
@@ -39,6 +49,7 @@ struct nonce_cfg {
 };
 
 static int error = 0;
+static int verbosity = VERBOSITY_DEFAULT;
 static X509_STORE *store = NULL;
 static X509 *x509_nonce = NULL;
 
@@ -169,8 +180,9 @@ static void
 usage(char * const argv[])
 {
     fprintf(stderr,
-            "Usage: %s [-t] [-n nonce_type:type_args] certsdir threadcount\n"
+            "Usage: %s [-t] [-v] [-n nonce_type:type_args] certsdir threadcount\n"
             "\t-t\tTerse output\n"
+            "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
             "\t-n\tNonce configuration, supported options:\n"
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
@@ -220,7 +232,6 @@ int main(int argc, char *argv[])
     OSSL_TIME duration;
     size_t total_count = 0;
     double avcalltime;
-    int terse = 0;
     char *cert = NULL;
     int ret = EXIT_FAILURE;
     BIO *bio = NULL;
@@ -230,10 +241,18 @@ int main(int argc, char *argv[])
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tn:")) != -1) {
+    while ((opt = getopt(argc, argv, "tvn:")) != -1) {
         switch (opt) {
-        case 't':
-            terse = 1;
+        case 't': /* terse */
+            verbosity = VERBOSITY_TERSE;
+            break;
+        case 'v': /* verbose */
+            if (verbosity < VERBOSITY_VERBOSE) {
+                verbosity = VERBOSITY_VERBOSE;
+            } else {
+                if (verbosity < VERBOSITY_MAX__ - 1)
+                    verbosity++;
+            }
             break;
         case 'n': /* nonce */
             parse_nonce_cfg(optarg, &nonce_cfg);
@@ -286,11 +305,14 @@ int main(int argc, char *argv[])
 
     avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
-    if (terse)
+    switch (verbosity) {
+    case VERBOSITY_TERSE:
         printf("%lf\n", avcalltime);
-    else
+        break;
+    default:
         printf("Average time per X509_STORE_CTX_get1_issuer() call: %lfus\n",
                avcalltime);
+    }
 
     ret = EXIT_SUCCESS;
 
