@@ -135,8 +135,8 @@ if(WIN32)
     #
     # windows release build on github workflow places places .exe files under
     # build\Release. This tweak hopes to place or .exe files under \build
-    # for both build types. It did not happen on local Win11 installation.
-    # 
+    # for both build types. It did not happen on local Win11 installation
+    #
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 endif()

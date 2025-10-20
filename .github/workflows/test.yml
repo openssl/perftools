@@ -306,10 +306,6 @@ jobs:
       working-directory: ".\\perftools\\source"
       run: |
          cmake --build .\build --config Release
-    - uses: actions/upload-artifact@v4
-      with:
-        name: "cmake-${{ matrix.release.openssl-branch }}"
-        path: .\perftools\source\build\*
     - name: "Run perftools"
       working-directory: ".\\perftools\\source"
       run: |
