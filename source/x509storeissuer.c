@@ -68,6 +68,15 @@ static void do_x509storeissuer(size_t num)
     X509_STORE_CTX_free(ctx);
 }
 
+static void
+usage(char * const argv[])
+{
+    fprintf(stderr,
+            "Usage: %s [-t] certsdir threadcount\n"
+            "-t - terse output\n",
+            basename(argv[0]));
+}
+
 int main(int argc, char *argv[])
 {
     int i;
@@ -86,8 +95,7 @@ int main(int argc, char *argv[])
             terse = 1;
             break;
         default:
-            printf("Usage: %s [-t] certsdir threadcount\n", basename(argv[0]));
-            printf("-t - terse output\n");
+            usage(argv);
             return EXIT_FAILURE;
         }
     }
