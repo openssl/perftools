@@ -141,7 +141,8 @@ make_nonce(struct nonce_cfg *cfg)
     }
 }
 
-static void do_x509storeissuer(size_t num)
+static void
+do_x509storeissuer(size_t num)
 {
     X509_STORE_CTX *ctx = X509_STORE_CTX_new();
     X509 *issuer = NULL;
@@ -227,7 +228,8 @@ parse_int(const char * const s, long long min, long long max,
     return ret;
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
     int i;
     OSSL_TIME duration;
