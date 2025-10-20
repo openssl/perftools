@@ -68,6 +68,16 @@ static void do_x509storeissuer(size_t num)
     X509_STORE_CTX_free(ctx);
 }
 
+static void
+usage(char * const argv[])
+{
+    fprintf(stderr,
+            "Usage: %s [-t] [-V] certsdir threadcount\n"
+            "-t - terse output\n"
+            "-V - print version information and exit\n",
+            basename(argv[0]));
+}
+
 int main(int argc, char *argv[])
 {
     int i;
@@ -89,9 +99,7 @@ int main(int argc, char *argv[])
             perflib_print_version(basename(argv[0]));
             return EXIT_SUCCESS;
         default:
-            printf("Usage: %s [-t] [-V] certsdir threadcount\n", basename(argv[0]));
-            printf("-t - terse output\n");
-            printf("-V - print version information and exit\n");
+            usage(argv);
             return EXIT_FAILURE;
         }
     }
