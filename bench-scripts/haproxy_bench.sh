@@ -24,16 +24,16 @@ HOST=${BENCH_HOST:-'127.0.0.1'}
 HAPROXY_VERSION='v3.2.0'
 
 function install_haproxy {
-	typeset SSL_LIB=$1
-	typeset VERSION=${HAPROXY_VERSION:-v3.2.0}
+    typeset SSL_LIB=$1
+    typeset VERSION=${HAPROXY_VERSION:-v3.2.0}
     typeset HAPROXY_REPO="https://github.com/haproxy/haproxy.git"
     typeset BASENAME='haproxy'
     typeset DIRNAME="${BASENAME}-${VERSION}"
     typeset CERTDIR="${INSTALL_ROOT}/${SSL_LIB}/conf/certs"
 
-	if [[ -z "${SSL_LIB}" ]] ; then
+    if [[ -z "${SSL_LIB}" ]] ; then
         SSL_LIB="openssl-master"
-	fi
+    fi
 
     if [[ -f "${INSTALL_ROOT}/${SSL_LIB}/sbin/haproxy" ]] ; then
         echo "haproxy already installed; skipping.."
@@ -44,6 +44,7 @@ function install_haproxy {
         git clone "${HAPROXY_REPO}" -b ${VERSION} --depth 1 . || exit 1
         
         # haproxy does not have a configure script; only a big makefile
+        make clean
         make ${MAKE_OPTS} \
              TARGET=generic \
              USE_OPENSSL=1 \

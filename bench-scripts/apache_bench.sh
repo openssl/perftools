@@ -922,6 +922,7 @@ function run_test {
 }
 
 function setup_tests {
+	typeset i=0
 	install_openssl master
 	install_siege openssl-master
 	install_apache openssl-master
@@ -1008,6 +1009,7 @@ function setup_tests {
 function run_tests {
 	typeset SAVE_RESULT_DIR="${RESULT_DIR}"
 	typeset HAPROXY_OPTIONS=('no' 'client' 'server' 'both')
+	typeset i=""
 
 	for i in event worker pre-fork ; do
 		mkdir -p ${RESULT_DIR}/$i || exit 1

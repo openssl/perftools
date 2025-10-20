@@ -92,6 +92,7 @@ function cleanup {
 
 function clean_build {
 	typeset SAVE_DIR=`pwd`
+	typeset i=""
 	cd "${WORKSPACE_ROOT}"
 	for i in * ; do
 		if [[ -d $i ]] ; then
@@ -309,6 +310,7 @@ function plot_results {
 
 function generate_download_files {
 	typeset HTDOCS=$1
+	typeset i=""
 
 	mkdir -p ${HTDOCS} || exit 1
 
