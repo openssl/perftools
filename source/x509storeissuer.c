@@ -25,7 +25,18 @@
 
 #define RUN_TIME 5
 
+enum verbosity {
+    VERBOSITY_TERSE,
+    VERBOSITY_DEFAULT,
+    VERBOSITY_VERBOSE,
+    VERBOSITY_DEBUG_STATS,
+    VERBOSITY_DEBUG,
+
+    VERBOSITY_MAX__
+};
+
 static int error = 0;
+static int verbosity = VERBOSITY_DEFAULT;
 static X509_STORE *store = NULL;
 static X509 *x509 = NULL;
 
@@ -73,10 +84,11 @@ static void
 usage(char * const argv[])
 {
     fprintf(stderr,
-            "Usage: %s [-t] [-V] certsdir threadcount\n"
-            "-t - terse output\n"
-            "-V - print version information and exit\n",
-            basename(argv[0]));
+            "Usage: %s [-t] [-v] [-V] certsdir threadcount\n"
+            "\t-t\tterse output\n"
+            "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
+            "\t-V\tprint version information and exit\n"
+            , basename(argv[0]));
 }
 
 static long long
@@ -102,16 +114,23 @@ int main(int argc, char *argv[])
     OSSL_TIME duration;
     size_t total_count = 0;
     double avcalltime;
-    int terse = 0;
     char *cert = NULL;
     int ret = EXIT_FAILURE;
     BIO *bio = NULL;
     int opt;
 
-    while ((opt = getopt(argc, argv, "tV")) != -1) {
+    while ((opt = getopt(argc, argv, "tvV")) != -1) {
         switch (opt) {
-        case 't':
-            terse = 1;
+        case 't': /* terse */
+            verbosity = VERBOSITY_TERSE;
+            break;
+        case 'v': /* verbose */
+            if (verbosity < VERBOSITY_VERBOSE) {
+                verbosity = VERBOSITY_VERBOSE;
+            } else {
+                if (verbosity < VERBOSITY_MAX__ - 1)
+                    verbosity++;
+            }
             break;
         case 'V':
             perflib_print_version(basename(argv[0]));
@@ -168,11 +187,14 @@ int main(int argc, char *argv[])
 
     avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
 
-    if (terse)
+    switch (verbosity) {
+    case VERBOSITY_TERSE:
         printf("%lf\n", avcalltime);
-    else
+        break;
+    default:
         printf("Average time per X509_STORE_CTX_get1_issuer() call: %lfus\n",
                avcalltime);
+    }
 
     ret = EXIT_SUCCESS;
 
