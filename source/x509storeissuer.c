@@ -184,7 +184,7 @@ usage(char * const argv[])
 {
     fprintf(stderr,
             "Usage: %s [-t] [-v] [-T time] [-n nonce_type:type_args]"
-            " [-V] certsdir threadcount\n"
+            " [-V] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
             "\t-T\tTimeout for the test run in seconds,\n"
@@ -305,12 +305,12 @@ main(int argc, char *argv[])
      * load_nonce_from_path can use it later.
      */
     nonce_cfg.dirs = argv + dirs_start;
-    nonce_cfg.num_dirs = 1;
+    nonce_cfg.num_dirs = argc - 1 - dirs_start;
 
-    if (argv[optind] == NULL)
+    if (optind >= argc)
         errx(EXIT_FAILURE, "threadcount is missing");
 
-    threadcount = parse_int(argv[optind], 1, INT_MAX, "threadcount");
+    threadcount = parse_int(argv[argc - 1], 1, INT_MAX, "threadcount");
 
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store))
