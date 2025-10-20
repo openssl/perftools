@@ -172,7 +172,7 @@ function unconf_siege_haproxy_cert {
     # clear the siege config
     sed -i '/#haproxy/{N;d;}' "${SIEGE_CONF}" || exit 1
 }
- 
+
 function kill_haproxy {
     pkill -TERM -f haproxy
 }
