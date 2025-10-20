@@ -27,6 +27,8 @@
 #define RUN_TIME 5
 #define NONCE_CFG "file:servercert.pem"
 
+static size_t timeout_us = RUN_TIME * 1000000;
+
 enum verbosity {
     VERBOSITY_TERSE,
     VERBOSITY_DEFAULT,
@@ -181,15 +183,36 @@ static void
 usage(char * const argv[])
 {
     fprintf(stderr,
-            "Usage: %s [-t] [-v] [-n nonce_type:type_args]"
+            "Usage: %s [-t] [-v] [-T time] [-n nonce_type:type_args]"
             " [-V] certsdir threadcount\n"
             "\t-t\tTerse output\n"
+            "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
+            "\t-T\tTimeout for the test run in seconds,\n"
+            "\t\tcan be fractional.  Default: "
+            OPENSSL_MSTR(RUN_TIME) "\n"
             "\t-n\tNonce configuration, supported options:\n"
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
             "\t\tDefault: " NONCE_CFG "\n"
             "\t-V\tprint version information and exit\n"
             , basename(argv[0]));
+}
+
+static size_t
+parse_timeout(const char * const optarg)
+{
+    char *endptr = NULL;
+    double timeout_s;
+
+    timeout_s = strtod(optarg, &endptr);
+
+    if (endptr == NULL || *endptr != '\0' || timeout_s < 0)
+        errx(EXIT_FAILURE, "incorrect timeout value: \"%s\"", optarg);
+
+    if (timeout_s > SIZE_MAX / 1000000)
+        errx(EXIT_FAILURE, "timeout is too large: %f", timeout_s);
+
+    return (size_t)(timeout_s * 1e6);
 }
 
 /**
@@ -244,7 +267,7 @@ main(int argc, char *argv[])
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvn:V")) != -1) {
+    while ((opt = getopt(argc, argv, "tvT:n:V")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -256,6 +279,9 @@ main(int argc, char *argv[])
                 if (verbosity < VERBOSITY_MAX__ - 1)
                     verbosity++;
             }
+            break;
+        case 'T': /* timeout */
+            timeout_us = parse_timeout(optarg);
             break;
         case 'n': /* nonce */
             parse_nonce_cfg(optarg, &nonce_cfg);
@@ -298,7 +324,7 @@ main(int argc, char *argv[])
     if (x509_nonce == NULL)
         errx(EXIT_FAILURE, "Unable to create the nonce X509 object");
 
-    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
+    max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
 
     if (!perflib_run_multi_thread_test(do_x509storeissuer, threadcount, &duration))
         errx(EXIT_FAILURE, "Failed to run the test");
@@ -309,7 +335,7 @@ main(int argc, char *argv[])
     for (i = 0; i < threadcount; i++)
         total_count += counts[i];
 
-    avcalltime = (double)RUN_TIME * 1e6 * threadcount / total_count;
+    avcalltime = (double)timeout_us * threadcount / total_count;
 
     switch (verbosity) {
     case VERBOSITY_TERSE:
