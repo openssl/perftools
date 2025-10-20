@@ -306,14 +306,14 @@ jobs:
       working-directory: ".\\perftools\\source"
       run: |
          cmake --build .\build --config Release
-    - name: "Run perftools"
-      working-directory: ".\\perftools\\source"
-      run: |
-         cmake --build .\build --config Release --target run -j 4
     - uses: actions/upload-artifact@v4
       with:
         name: cmake-artifact
         path: \.build
+    - name: "Run perftools"
+      working-directory: ".\\perftools\\source"
+      run: |
+         cmake --build .\build --config Release --target run -j 4
 
   macos:
     strategy:
