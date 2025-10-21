@@ -7,11 +7,14 @@
  * https://www.openssl.org/source/license.html
  */
 
+#include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #ifndef _WIN32
+# include <dirent.h>
 # include <libgen.h>
 # include <unistd.h>
 #else
@@ -144,6 +147,148 @@ make_nonce(struct nonce_cfg *cfg)
     }
 }
 
+static size_t
+read_cert(const char * const dir, const char * const name, X509_STORE * const store)
+{
+    X509 *x509 = NULL;
+    char *path = NULL;
+    size_t ret = 0;
+
+    path = perflib_mk_file_path(dir, name);
+    if (path == NULL) {
+        warn("Failed to allocate cert name in directory \"%s\" for file \"%s\"",
+             dir, name);
+        goto out;
+    }
+
+    x509 = load_cert_from_file(path);
+    if (x509 == NULL) {
+        goto out;
+    }
+
+    if (!X509_STORE_add_cert(store, x509)) {
+        warnx("Failed to add a certificate from \"%s\" to the store\n", path);
+        goto out;
+    }
+
+    if (verbosity >= VERBOSITY_DEBUG)
+        fprintf(stderr, "Successfully added a certificate from \"%s\""
+                " to the store\n", path);
+
+    ret = 1;
+
+ out:
+    X509_free(x509);
+    OPENSSL_free(path);
+
+    return ret;
+}
+
+#if defined(_WIN32)
+static size_t
+read_certsdir(char * const dir, X509_STORE * const store)
+{
+    const size_t dir_len = strlen(dir);
+    const size_t glob_len = dir_len + sizeof("\\*");
+    size_t cnt = 0;
+    char *search_glob = NULL;
+    HANDLE find_handle = INVALID_HANDLE_VALUE;
+    WIN32_FIND_DATA find_data;
+    DWORD last_err;
+
+    search_glob = OPENSSL_malloc(glob_len);
+    if (search_glob == NULL) {
+        warnx("Error allocating a search glob for \"%s\"", dir);
+        return 0;
+    }
+
+    if (snprintf(search_glob, glob_len, "%s\\*", dir) != glob_len - 1) {
+        warnx("Error generating a search glob for \"%s\"", dir);
+        goto out;
+    }
+
+    find_handle = FindFirstFileA(search_glob, &find_data);
+    if (find_handle == INVALID_HANDLE_VALUE) {
+        warnx("Error in FindFirstFile(): %#lx", GetLastError());
+        goto out;
+    }
+
+    do {
+        if (find_data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+            if (verbosity >= VERBOSITY_DEBUG)
+                warnx("\"%s\\%s\" is a directory file, skipping",
+                      dir, find_data.cFileName);
+            continue;
+        }
+
+        cnt += read_cert(dir, find_data.cFileName, store);
+
+    } while (FindNextFileA(find_handle, &find_data) != 0);
+
+    last_err = GetLastError();
+    if (last_err != ERROR_NO_MORE_FILES)
+        warnx("Error in FindNextFile(): %#lx", last_err);
+
+ out:
+    if (find_handle != INVALID_HANDLE_VALUE)
+        FindClose(find_handle);
+    OPENSSL_free(search_glob);
+
+    return cnt;
+}
+#else /* !defined(_WIN32) */
+static size_t
+read_certsdir(char * const dir, X509_STORE * const store)
+{
+    struct dirent *e;
+    DIR *d = opendir(dir);
+    size_t cnt = 0;
+
+    if (d == NULL) {
+        warn("Could not open \"%s\"", dir);
+
+        return 0;
+    }
+
+    while (1) {
+        errno = 0;
+        e = readdir(d);
+
+        if (e == NULL) {
+            if (errno != 0)
+                warn("An error occurred while reading directory \"%s\"", dir);
+
+            break;
+        }
+
+        if (e->d_type != DT_REG && e->d_type != DT_UNKNOWN) {
+            if (verbosity >= VERBOSITY_DEBUG)
+                warnx("\"%s/%s\" is not a regular file, skipping",
+                      dir, e->d_name);
+            continue;
+        }
+
+        cnt += read_cert(dir, e->d_name, store);
+    }
+
+    closedir(d);
+
+    return cnt;
+}
+#endif /* defined(_WIN32) */
+
+static size_t
+read_certsdirs(char * const * const dirs, const int dir_cnt,
+               X509_STORE * const store)
+{
+    size_t cnt = 0;
+
+    for (int i = 0; i < dir_cnt; i++)
+        cnt += read_certsdir(dirs[i], store);
+
+    return cnt;
+}
+
 static void
 do_x509storeissuer(size_t num)
 {
@@ -256,11 +401,10 @@ main(int argc, char *argv[])
     size_t total_count = 0;
     size_t total_found = 0;
     double avcalltime;
-    char *cert = NULL;
     int ret = EXIT_FAILURE;
-    BIO *bio = NULL;
     int opt;
     int dirs_start;
+    size_t num_certs = 0;
     struct nonce_cfg nonce_cfg;
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
@@ -314,6 +458,12 @@ main(int argc, char *argv[])
     if (store == NULL || !X509_STORE_set_default_paths(store))
         errx(EXIT_FAILURE, "Failed to create X509_STORE");
 
+    num_certs += read_certsdirs(argv + dirs_start, argc - dirs_start - 1,
+                                store);
+
+    if (verbosity >= VERBOSITY_DEBUG_STATS)
+        fprintf(stderr, "Added %zu certificates to the store\n", num_certs);
+
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL)
         errx(EXIT_FAILURE, "Failed to create counts array");
@@ -360,8 +510,6 @@ main(int argc, char *argv[])
 
     X509_free(x509_nonce);
     X509_STORE_free(store);
-    BIO_free(bio);
-    OPENSSL_free(cert);
     OPENSSL_free(founds);
     OPENSSL_free(counts);
     return ret;
