@@ -29,6 +29,7 @@
 
 #define RUN_TIME 5
 #define NONCE_CFG "file:servercert.pem"
+#define CTX_SHARE_THREADS 1
 
 static size_t timeout_us = RUN_TIME * 1000000;
 
@@ -52,6 +53,10 @@ struct nonce_cfg {
     char **dirs;
     size_t num_dirs;
 };
+
+struct thread_data {
+    X509_STORE_CTX *ctx;
+} *thread_data;
 
 static int error = 0;
 static int verbosity = VERBOSITY_DEFAULT;
@@ -292,20 +297,15 @@ read_certsdirs(char * const * const dirs, const int dir_cnt,
 static void
 do_x509storeissuer(size_t num)
 {
+    struct thread_data *td = &thread_data[num];
     X509_STORE_CTX *ctx = X509_STORE_CTX_new();
     X509 *issuer = NULL;
     OSSL_TIME time;
     size_t count = 0;
     size_t found = 0;
 
-    if (ctx == NULL || !X509_STORE_CTX_init(ctx, store, x509_nonce, NULL)) {
-        warnx("Failed to initialise X509_STORE_CTX");
-        error = 1;
-        goto err;
-    }
-
     do {
-        if (X509_STORE_CTX_get1_issuer(&issuer, ctx, x509_nonce) != 0) {
+        if (X509_STORE_CTX_get1_issuer(&issuer, td->ctx, x509_nonce) != 0) {
             found++;
             X509_free(issuer);
         }
@@ -326,7 +326,7 @@ usage(char * const argv[])
 {
     fprintf(stderr,
             "Usage: %s [-t] [-v] [-T time] [-n nonce_type:type_args]"
-            " [-V] certsdir [certsdir...] threadcount\n"
+            " [-C threads] [-V] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
             "\t-T\tTimeout for the test run in seconds,\n"
@@ -336,6 +336,9 @@ usage(char * const argv[])
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
             "\t\tDefault: " NONCE_CFG "\n"
+            "\t-C\tNumber of threads that share the same X.509\n"
+            "\t\tstore context object.  Default: "
+            OPENSSL_MSTR(CTX_SHARE_THREADS) "\n"
             "\t-V\tprint version information and exit\n"
             , basename(argv[0]));
 }
@@ -398,6 +401,7 @@ main(int argc, char *argv[])
 {
     int i;
     OSSL_TIME duration;
+    size_t ctx_share_cnt = CTX_SHARE_THREADS;
     size_t total_count = 0;
     size_t total_found = 0;
     double avcalltime;
@@ -409,7 +413,7 @@ main(int argc, char *argv[])
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvT:n:V")) != -1) {
+    while ((opt = getopt(argc, argv, "tvT:n:C:V")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -427,6 +431,10 @@ main(int argc, char *argv[])
             break;
         case 'n': /* nonce */
             parse_nonce_cfg(optarg, &nonce_cfg);
+            break;
+        case 'C': /* how many threads share X509_STORE_CTX */
+            ctx_share_cnt = parse_int(optarg, 1, INT_MAX,
+                                      "X509_STORE_CTX share degree");
             break;
         case 'V':
             perflib_print_version(basename(argv[0]));
@@ -454,6 +462,10 @@ main(int argc, char *argv[])
 
     threadcount = parse_int(argv[argc - 1], 1, INT_MAX, "threadcount");
 
+    thread_data = OPENSSL_zalloc(threadcount * sizeof(*thread_data));
+    if (thread_data == NULL)
+        errx(EXIT_FAILURE, "Failed to create thread_data array");
+
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store))
         errx(EXIT_FAILURE, "Failed to create X509_STORE");
@@ -475,6 +487,19 @@ main(int argc, char *argv[])
     x509_nonce = make_nonce(&nonce_cfg);
     if (x509_nonce == NULL)
         errx(EXIT_FAILURE, "Unable to create the nonce X509 object");
+
+    for (size_t i = 0; i < threadcount; i++) {
+        if (i % ctx_share_cnt) {
+            thread_data[i].ctx = thread_data[i - i % ctx_share_cnt].ctx;
+        } else {
+            thread_data[i].ctx = X509_STORE_CTX_new();
+            if (thread_data[i].ctx == NULL
+                || !X509_STORE_CTX_init(thread_data[i].ctx, store, x509_nonce,
+                                        NULL))
+                errx(EXIT_FAILURE, "Failed to initialise X509_STORE_CTX"
+                     " for thread %zu", i);
+        }
+    }
 
     max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
 
@@ -512,5 +537,10 @@ main(int argc, char *argv[])
     X509_STORE_free(store);
     OPENSSL_free(founds);
     OPENSSL_free(counts);
+    if (thread_data != NULL) {
+        for (size_t i = 0; i < threadcount; i += ctx_share_cnt)
+            X509_STORE_CTX_free(thread_data[i].ctx);
+    }
+    OPENSSL_free(thread_data);
     return ret;
 }
