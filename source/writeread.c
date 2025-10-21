@@ -169,7 +169,7 @@ int main(int argc, char * const argv[])
         goto err;
     }
 
-    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    counts = OPENSSL_zalloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
         fprintf(stderr, "Failed to create counts array\n");
         goto err;
