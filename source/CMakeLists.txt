@@ -184,3 +184,6 @@ target_link_libraries(evp_setpeer PRIVATE perf)
 
 add_executable(writeread writeread.c)
 target_link_libraries(writeread PRIVATE perf)
+
+add_executable(evp_hash evp_hash.c)
+target_link_libraries(evp_hash PRIVATE perf)
