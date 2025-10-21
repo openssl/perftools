@@ -195,3 +195,27 @@ The test program supports options as follows:
 -p - port number to use
 -t - terse output
 ```
+
+## evp_hash
+
+Tool that computes hashes using the specified algorithm.
+Runs for 5 seconds and prints the average execution time per hash.
+Prints out the average time per hash computation.
+Three modes of operation:
+- deprecated: Use deprecated, legacy API's to do hash (e.g. SHA1_Init)
+- evp_isolated: Use EVP API and don't allow shared data between threads
+- evp_shared (default): Use EVP API and allow shared data between threads
+
+```
+Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count
+-h - print this help output
+-t - terse output
+-o operation - mode of operation. One of [deprecated, evp_isolated, evp_shared] (default: evp_shared)
+-u update-times - times to update digest. 1 for one-shot (default: 1)
+-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512] (default: SHA1)
+thread-count - number of threads
+```
+
+```sh
+evp_hash -u 10 -a SHA512 -o evp_isolated 15
+```
