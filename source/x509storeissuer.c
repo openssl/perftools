@@ -149,14 +149,13 @@ do_x509storeissuer(size_t num)
     X509_STORE_CTX *ctx = X509_STORE_CTX_new();
     X509 *issuer = NULL;
     OSSL_TIME time = ossl_time_now();
+    size_t count = 0;
 
     if (ctx == NULL || !X509_STORE_CTX_init(ctx, store, x509_nonce, NULL)) {
         warnx("Failed to initialise X509_STORE_CTX");
         error = 1;
         goto err;
     }
-
-    counts[num] = 0;
 
     do {
         /*
@@ -171,13 +170,15 @@ do_x509storeissuer(size_t num)
             goto err;
         }
         issuer = NULL;
-        counts[num]++;
+        count++;
         if ((count & 0x3f) == 0)
             time = ossl_time_now();
     } while (time.t < max_time.t);
 
  err:
     X509_STORE_CTX_free(ctx);
+
+    counts[num] = count;
 }
 
 static void
