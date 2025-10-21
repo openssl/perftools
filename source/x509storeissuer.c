@@ -58,6 +58,7 @@ static X509 *x509_nonce = NULL;
 static int threadcount;
 
 size_t *counts;
+size_t *founds;
 OSSL_TIME max_time;
 
 static X509 *
@@ -150,6 +151,7 @@ do_x509storeissuer(size_t num)
     X509 *issuer = NULL;
     OSSL_TIME time;
     size_t count = 0;
+    size_t found = 0;
 
     if (ctx == NULL || !X509_STORE_CTX_init(ctx, store, x509_nonce, NULL)) {
         warnx("Failed to initialise X509_STORE_CTX");
@@ -158,16 +160,9 @@ do_x509storeissuer(size_t num)
     }
 
     do {
-        /*
-         * We actually expect this to fail. We've not configured any
-         * certificates inside our store. We're just testing calling this
-         * against an empty store.
-         */
         if (X509_STORE_CTX_get1_issuer(&issuer, ctx, x509_nonce) != 0) {
-            warnx("Unexpected result from X509_STORE_CTX_get1_issuer");
-            error = 1;
+            found++;
             X509_free(issuer);
-            goto err;
         }
         issuer = NULL;
         count++;
@@ -178,6 +173,7 @@ do_x509storeissuer(size_t num)
     X509_STORE_CTX_free(ctx);
 
     counts[num] = count;
+    founds[num] = found;
 }
 
 static void
@@ -258,6 +254,7 @@ main(int argc, char *argv[])
     int i;
     OSSL_TIME duration;
     size_t total_count = 0;
+    size_t total_found = 0;
     double avcalltime;
     char *cert = NULL;
     int ret = EXIT_FAILURE;
@@ -321,6 +318,10 @@ main(int argc, char *argv[])
     if (counts == NULL)
         errx(EXIT_FAILURE, "Failed to create counts array");
 
+    founds = OPENSSL_malloc(sizeof(size_t) * threadcount);
+    if (founds == NULL)
+        errx(EXIT_FAILURE, "Failed to create founds array");
+
     x509_nonce = make_nonce(&nonce_cfg);
     if (x509_nonce == NULL)
         errx(EXIT_FAILURE, "Unable to create the nonce X509 object");
@@ -333,8 +334,10 @@ main(int argc, char *argv[])
     if (error)
         errx(EXIT_FAILURE, "Error during test");
 
-    for (i = 0; i < threadcount; i++)
+    for (i = 0; i < threadcount; i++) {
         total_count += counts[i];
+        total_found += founds[i];
+    }
 
     avcalltime = (double)timeout_us * threadcount / total_count;
 
@@ -345,6 +348,12 @@ main(int argc, char *argv[])
     default:
         printf("Average time per X509_STORE_CTX_get1_issuer() call: %lfus\n",
                avcalltime);
+        if (verbosity >= VERBOSITY_VERBOSE) {
+            printf("Successful X509_STORE_CTX_get1_issuer() calls: %zu of %zu"
+                   " (%lf%%)\n",
+                   total_found, total_count,
+                   (double)total_found / total_count * 100.0);
+        }
     }
 
     ret = EXIT_SUCCESS;
@@ -353,6 +362,7 @@ main(int argc, char *argv[])
     X509_STORE_free(store);
     BIO_free(bio);
     OPENSSL_free(cert);
+    OPENSSL_free(founds);
     OPENSSL_free(counts);
     return ret;
 }
