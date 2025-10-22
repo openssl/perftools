@@ -322,6 +322,27 @@ do_x509storeissuer(size_t num)
 }
 
 static void
+report_store_size(X509_STORE * const store, const char * const suffix,
+                  int verbosity)
+{
+    if (verbosity >= VERBOSITY_DEBUG_STATS) {
+        STACK_OF(X509_OBJECT) *sk =
+#if OPENSSL_VERSION_NUMBER >= 0x30300000L
+            X509_STORE_get1_objects(store);
+#else
+            X509_STORE_get0_objects(store);
+#endif
+
+        fprintf(stderr, "Number of certificates in the store %s: %d\n",
+                suffix, sk_X509_OBJECT_num(sk));
+
+#if OPENSSL_VERSION_NUMBER >= 0x30300000L
+        sk_X509_OBJECT_pop_free(sk, X509_OBJECT_free);
+#endif
+    }
+}
+
+static void
 usage(char * const argv[])
 {
     fprintf(stderr,
@@ -483,6 +504,8 @@ main(int argc, char *argv[])
     founds = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (founds == NULL)
         errx(EXIT_FAILURE, "Failed to create founds array");
+
+    report_store_size(store, "before the test run", verbosity);
 
     x509_nonce = make_nonce(&nonce_cfg);
     if (x509_nonce == NULL)
