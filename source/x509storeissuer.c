@@ -24,10 +24,16 @@
 # include "perflib/basename.h"
 #endif	/* _WIN32 */
 #include <openssl/bio.h>
+#include <openssl/core_names.h>
+#include <openssl/evp.h>
 #include <openssl/x509.h>
 #include "perflib/err.h"
 #include "perflib/perflib.h"
 
+#define NUM_CERTS 1024
+#define NUM_LOAD_CERTS 128
+#define NUM_KEYS 16
+#define KEY_ALGO "rsa:2048"
 #define RUN_TIME 5
 #define QUANTILES 5
 #define NONCE_CFG "file:servercert.pem"
@@ -93,6 +99,363 @@ OSSL_TIME max_time;
 
 #define OSSL_MIN(p, q) ((p) < (q) ? (p) : (q))
 #define OSSL_MAX(p, q) ((p) > (q) ? (p) : (q))
+
+static EVP_PKEY_CTX *
+make_pkey_ctx(const char *algstr, char **alg_storage)
+{
+    EVP_PKEY_CTX *ctx = NULL;
+    const char *alg;
+    const char *p = strchr(algstr, ':');
+
+    alg = p ? *alg_storage = OPENSSL_strndup(algstr, p - algstr) : algstr;
+    if (alg == NULL) {
+        warnx("Error getting algorithm name from \"%s\"", algstr);
+        goto err;
+    }
+
+    ctx = EVP_PKEY_CTX_new_from_name(NULL, alg, NULL);
+    if (ctx == NULL) {
+        warnx("Error allocating keygen context");
+        goto err;
+    }
+
+    if (EVP_PKEY_keygen_init(ctx) <= 0) {
+        warnx("Error initialising keygen contextx");
+        goto err;
+    }
+
+    /* The bits part */
+    if (p && p[1] >= '0' && p[1] <= '9') {
+        char *endptr = NULL;
+        long bits = strtol(p + 1, &endptr, 0);
+        if (!endptr || (*endptr != '\0' && *endptr != ':')) {
+            warnx("Error while parsing bits from \"%s\"", p + 1);
+            goto err;
+        }
+        p = endptr;
+
+        if (bits > 0) {
+            OSSL_PARAM params[] = { OSSL_PARAM_END, OSSL_PARAM_END };
+            size_t val = bits;
+
+            params[0] = OSSL_PARAM_construct_size_t(OSSL_PKEY_PARAM_BITS, &val);
+
+            if (EVP_PKEY_CTX_set_params(ctx, params) <= 0) {
+                warnx("Error setting bits value of %zu to algorithm \"%s\"",
+                      val, alg);
+                goto err;
+            }
+        }
+    }
+
+    /* param=value pairs */
+    while (p && p[0] == ':' && p[1] != '\0') {
+        const char *param_str = p + 1;
+        char *param;
+        char *val;
+        const char *eq;
+        int ret;
+
+        eq = strchr(param_str, '=');
+        p = strchr(param_str, ':');
+
+        if (eq == NULL || (p != NULL && eq > p)) {
+            warnx("Error while parsing a param=value pair from \"%s\"", param_str);
+            goto err;
+        }
+
+        param = OPENSSL_strndup(param_str, eq - param_str);
+        if (param == NULL) {
+            warnx("Error allocating param name string\n");
+            goto err;
+        }
+
+        if (p)
+            val = OPENSSL_strndup(eq + 1, p - eq - 1);
+        else
+            val = OPENSSL_strdup(eq + 1);
+        if (val == NULL) {
+            warnx("Error allocating param value string");
+            OPENSSL_free(param);
+            goto err;
+        }
+
+        if ((ret = EVP_PKEY_CTX_ctrl_str(ctx, param, val)) <= 0) {
+            warnx("Error setting parameter \"%s\" to value \"%s\" for algorithm"
+                  " \"%s\", got %d\n", param, val, alg, ret);
+            OPENSSL_free(val);
+            OPENSSL_free(param);
+            goto err;
+        }
+
+        OPENSSL_free(val);
+        OPENSSL_free(param);
+    }
+
+    return ctx;
+
+err:
+    EVP_PKEY_CTX_free(ctx);
+
+    return NULL;
+}
+
+static EVP_PKEY *
+gen_key(EVP_PKEY_CTX *ctx)
+{
+    EVP_PKEY *res = NULL;
+
+    if (EVP_PKEY_keygen(ctx, &res) <= 0) {
+        warnx("Error generating key");
+
+        return NULL;
+    }
+
+    return res;
+}
+
+static EVP_PKEY *
+get_pubkey(EVP_PKEY *pkey)
+{
+    BIO *bio = NULL;
+    EVP_PKEY *pubkey = NULL;
+
+    bio = BIO_new(BIO_s_mem());
+    if (!bio) {
+        warnx("Error creating memory BIO");
+        goto err;
+    }
+
+    if (!PEM_write_bio_PUBKEY(bio, pkey)) {
+        warnx("Error writing public key to BIO");
+        goto err;
+    }
+
+    if (BIO_seek(bio, 0) < 0) {
+        warnx("Error resetting BIO cursor");
+        goto err;
+    }
+
+    pubkey = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
+    if (pubkey == NULL) {
+        warnx("Error reading pubkey from BIO");
+        goto err;
+    }
+
+    BIO_free(bio);
+
+    return pubkey;
+
+err:
+    EVP_PKEY_free(pubkey);
+    BIO_free(bio);
+
+    return NULL;
+}
+
+/**
+ * A wrapper for populating keys and pubkeys arrays with generated keys.
+ *
+ * @param[in] num_gen_keys Number of keys to generate.
+ * @param[in] key_ctx      Key context, created with make_pkey_ctx().
+ * @param[in,out] keys     Array of num_gen_keys private keys, populated
+ *                         by the function, elements should be freed
+ *                         with EVP_PKEY_free() after use.
+ * @param[in,out] pubkeys  Array of num_gen_keys public keys, populated
+ *                         by the function, elements should be freed
+ *                         with EVP_PKEY_free() after use.
+ * @return                 true on success, false on failure.
+ */
+static bool
+gen_keys(size_t num_gen_keys, EVP_PKEY_CTX *key_ctx,
+         EVP_PKEY **keys, EVP_PKEY **pubkeys)
+{
+    OSSL_TIME last = ossl_time_now();
+
+    for (size_t i = 0; i < num_gen_keys; i++) {
+        if (verbosity >= VERBOSITY_DEBUG_STATS) {
+            OSSL_TIME cur = ossl_time_now();
+
+            if (cur.t - last.t > OSSL_TIME_SECOND) {
+                fprintf(stderr, "Generating key %zu out of %zu...\n",
+                        i + 1, num_gen_keys);
+                last.t = cur.t;
+            }
+        }
+        keys[i] = gen_key(key_ctx);
+        if (keys[i] == NULL) {
+            warnx("Generation of private key %zu of %zu failed",
+                  i + 1, num_gen_keys);
+            return false;
+        }
+
+        pubkeys[i] = get_pubkey(keys[i]);
+        if (pubkeys[i] == NULL) {
+            warnx("Generation of public key %zu of %zu failed",
+                  i + 1, num_gen_keys);
+            return false;
+        }
+    }
+
+    if (verbosity >= VERBOSITY_DEBUG_STATS)
+        fprintf(stderr, "Generated %zu keys\n", num_gen_keys);
+
+    return true;
+}
+
+static const unsigned char *
+gen_name(void)
+{
+    static const char chars[] = "0123456789ABCDEFGHIJKLMNOPQRSTUV"
+                                "WXYZabcdefghijklmnopqrstuvwxyz  ";
+    static unsigned char out[64];
+    size_t len;
+
+    len = rand() % (sizeof(out) - 2) + 1;
+
+    for (size_t i = 0; i < len; i++)
+        out[i] = chars[rand() % (sizeof(chars) - 1)];
+
+    out[len] = '\0';
+
+    return out;
+}
+
+static X509 *
+gen_cert(EVP_PKEY * const pkey, EVP_PKEY * const pubkey,
+         const unsigned char * const sn, const unsigned char * const in)
+{
+    X509 *cert = NULL;
+    X509_NAME *issuer = NULL;
+    X509_NAME *subject = NULL;
+    EVP_MD_CTX *mctx = NULL;
+    const unsigned char *in_str;
+    const unsigned char *sn_str;
+    int error = 1;
+
+    cert = X509_new();
+    if (!cert) {
+        warnx("Error creating X509 certificate object");
+        goto out;
+    }
+
+    issuer = X509_NAME_new();
+    if (!issuer) {
+        warnx("Error creating X509 issuer name object");
+        goto out;
+    }
+
+    in_str = in ? in : gen_name();
+    if (!X509_NAME_add_entry_by_txt(issuer, "CN", MBSTRING_ASC,
+                                    in_str, -1, -1, 0)) {
+        warnx("Error setting X509 issuer name \"%s\"", (const char *)in_str);
+        goto out;
+    }
+
+    if (!X509_set_issuer_name(cert, issuer)) {
+        warnx("Error setting X509 certificate issuer name:");
+        X509_NAME_print_ex_fp(stderr, issuer, 2, 0);
+        goto out;
+    }
+
+    subject = X509_NAME_new();
+    if (!subject) {
+        warnx("Error creating X509 subject name object");
+        goto out;
+    }
+
+    sn_str = sn ? sn : gen_name();
+    if (!X509_NAME_add_entry_by_txt(subject, "CN", MBSTRING_ASC,
+                                    sn_str, -1, -1, 0)) {
+        warnx("Error setting X509 subject name \"%s\"", (const char *)sn_str);
+        goto out;
+    }
+
+    if (!X509_set_subject_name(cert, subject)) {
+        warnx("Error setting X509 certificate subject name");
+        goto out;
+    }
+
+    if (!X509_set_pubkey(cert, pubkey)) {
+        warnx("Error setting public key for X509 certificate");
+        goto out;
+    }
+
+    mctx = EVP_MD_CTX_new();
+    if (!mctx) {
+        warnx("Error allocating digest context");
+        goto out;
+    }
+
+    if (!EVP_DigestSignInit_ex(mctx, NULL, NULL, NULL, NULL, pkey, NULL)) {
+        warnx("Error initialising digest context");
+        goto out;
+    }
+
+    if (!X509_sign_ctx(cert, mctx)) {
+        warnx("Error signing certificate");
+        goto out;
+    }
+
+    error = 0;
+
+out:
+    EVP_MD_CTX_free(mctx);
+    X509_NAME_free(subject);
+    X509_NAME_free(issuer);
+
+    if (error) {
+        X509_free(cert);
+        cert = NULL;
+    }
+
+    return cert;
+}
+
+/**
+ * A wrapper for populating gen_certs array with generated certificates.
+ *
+ * @param[in] num_keys  Number of keys available.
+ * @param[in] keys      Array of num_keys private keys for use.
+ * @param[in] pubkeys   Array of num_keys public keys for use.
+ * @param[in] num_certs Number of certificates to generate.
+ * @param[in,out] certs A pointer to array of at least num_certs elements
+ *                      in size to populate with generated certificates.
+ *                      The certificates are supposed to be freed by the caller
+ *                      with X509_free() after use.
+ * @return              true on success, false on failure.
+ */
+static bool
+gen_certificates(const size_t num_keys, EVP_PKEY * const * const keys,
+                 EVP_PKEY * const * const pubkeys,
+                 const size_t num_certs, X509 ** const certs)
+{
+    OSSL_TIME last = ossl_time_now();
+
+    for (size_t i = 0; i < num_certs; i++) {
+        if (verbosity >= VERBOSITY_DEBUG_STATS) {
+            OSSL_TIME cur = ossl_time_now();
+
+            if (cur.t - last.t > OSSL_TIME_SECOND) {
+                fprintf(stderr, "Generating certificate %zu out of"
+                                " %zu...\n", i + 1, num_certs);
+                last.t = cur.t;
+            }
+        }
+        certs[i] = gen_cert(keys[i % num_keys], pubkeys[i % num_keys],
+                            NULL, NULL);
+        if (certs[i] == NULL) {
+            warnx("Generation of certificate %zu of %zu failed",
+                  i + 1, num_certs);
+            return false;
+        }
+    }
+
+    if (verbosity >= VERBOSITY_DEBUG_STATS)
+        fprintf(stderr, "Generated %zu certificates\n", num_certs);
+
+    return true;
+}
 
 static X509 *
 load_cert_from_file(const char *path)
@@ -511,7 +874,9 @@ static void
 usage(char * const argv[])
 {
     fprintf(stderr,
-            "Usage: %s [-t] [-v] [-q N] [-T time] [-n nonce_type:type_args] "
+            "Usage: %s [-t] [-v] [-q N] [-T time] [-G num] [-g num] "
+            "[-k num_keys] [-K keyalg[:bits][:param=value...]] "
+            "[-n nonce_type:type_args] "
             "[-C threads] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
@@ -521,6 +886,15 @@ usage(char * const argv[])
             "\t-T\tTimeout for the test run in seconds,\n"
             "\t\tcan be fractional.  Default: "
             OPENSSL_MSTR(RUN_TIME) "\n"
+            "\t-G\tNumber of generated certificates.  Default: "
+            OPENSSL_MSTR(NUM_CERTS) "\n"
+            "\t-g\tNumber of initially loaded generated certificates.\n"
+            "\t\tDefault: " OPENSSL_MSTR(NUM_LOAD_CERTS) "\n"
+            "\t-k\tNumber of different keys to be used\n"
+            "\t\tfor the generated certificates.  Default: "
+            OPENSSL_MSTR(NUM_KEYS) "\n"
+            "\t-K\tAlgorithm and key size of the generated keys.\n"
+            "\t\tDefault: " KEY_ALGO "\n"
             "\t-n\tNonce configuration, supported options:\n"
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
@@ -590,15 +964,25 @@ main(int argc, char *argv[])
     int i;
     OSSL_TIME duration;
     size_t ctx_share_cnt = CTX_SHARE_THREADS;
+    char *alg_name_storage = NULL;
     int ret = EXIT_FAILURE;
+    size_t num_gen_keys = NUM_KEYS;
+    const char *gen_key_algo = KEY_ALGO;
+    EVP_PKEY_CTX *key_ctx = NULL;
+    EVP_PKEY **keys = NULL;
+    EVP_PKEY **pubkeys = NULL;
+    X509 **gen_certs = NULL;
     int opt;
     int dirs_start;
+    size_t num_gen_certs = NUM_CERTS;
+    size_t num_gen_load_certs = NUM_LOAD_CERTS;
     size_t num_certs = 0;
+    size_t num_store_gen_certs = 0;
     struct nonce_cfg nonce_cfg;
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvq:T:n:C:")) != -1) {
+    while ((opt = getopt(argc, argv, "tvq:T:G:g:k:K:n:C:")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -618,6 +1002,23 @@ main(int argc, char *argv[])
         case 'T': /* timeout */
             timeout_us = parse_timeout(optarg);
             break;
+        case 'G': /* number of generated certs */
+            num_gen_certs = parse_int(optarg, 0, INT_MAX,
+                                      "number of initially loaded generated"
+                                      " certificates");
+            break;
+        case 'g': /* number of initially loaded generated certs */
+            num_gen_load_certs = parse_int(optarg, 0, INT_MAX,
+                                           "number of initially loaded"
+                                           " generated certificates");
+            break;
+        case 'k': /* number of generated keys */
+            num_gen_keys = parse_int(optarg, 0, INT_MAX,
+                                     "number of generated keys");
+            break;
+        case 'K': /* key type */
+            gen_key_algo = optarg;
+            break;
         case 'n': /* nonce */
             parse_nonce_cfg(optarg, &nonce_cfg);
             break;
@@ -633,6 +1034,13 @@ main(int argc, char *argv[])
 
     if (verbosity < VERBOSITY_VERBOSE)
         quantiles = 1;
+
+    if (num_gen_certs > 0 && num_gen_keys == 0)
+        errx(EXIT_FAILURE,
+             "Cannot generate certificates without generating keys");
+
+    if (num_gen_certs < num_gen_load_certs)
+        errx(EXIT_FAILURE, "Cannot load more certificates than generate");
 
     if (argv[optind] == NULL)
         errx(EXIT_FAILURE, "certsdir is missing");
@@ -663,15 +1071,60 @@ main(int argc, char *argv[])
                                " %zu", i);
     }
 
+    if (num_gen_keys > 0) {
+        key_ctx = make_pkey_ctx(gen_key_algo, &alg_name_storage);
+        if (key_ctx == NULL)
+            errx(EXIT_FAILURE, "Error creating key context");
+
+        keys = OPENSSL_zalloc(num_gen_keys * sizeof(*keys));
+        if (keys == NULL)
+            errx(EXIT_FAILURE, "Error allocating generated keys array");
+
+        pubkeys = OPENSSL_zalloc(num_gen_keys * sizeof(*pubkeys));
+        if (pubkeys == NULL)
+            errx(EXIT_FAILURE, "Error allocating public keys array");
+
+        if (!gen_keys(num_gen_keys, key_ctx, keys, pubkeys))
+            errx(EXIT_FAILURE, "Error occurred during key generation");
+    }
+
+    if (num_gen_certs > 0) {
+        gen_certs = OPENSSL_zalloc(num_gen_certs * sizeof(*gen_certs));
+        if (gen_certs == NULL)
+            errx(EXIT_FAILURE, "Error allocating generated certificates array");
+
+        if (!gen_certificates(num_gen_keys, keys, pubkeys,
+                              num_gen_certs, gen_certs))
+            errx(EXIT_FAILURE, "Error occurred during certificate generation");
+    }
+
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store))
         errx(EXIT_FAILURE, "Failed to create X509_STORE");
+
+    num_store_gen_certs = 0;
+    for (size_t i = 0; i < num_gen_load_certs; i++) {
+        if (!X509_STORE_add_cert(store, gen_certs[i])) {
+            warnx("Failed to add generated certificate %zu to the store\n", i);
+        } else {
+            if (verbosity >= VERBOSITY_DEBUG)
+                fprintf(stderr, "Successfully added generated certificate"
+                                " %zu to the store\n", i);
+            num_certs++;
+            num_store_gen_certs++;
+        }
+    }
+
+    if (verbosity >= VERBOSITY_DEBUG_STATS)
+        fprintf(stderr, "Added %zu generated certificates to the store\n",
+                num_store_gen_certs);
 
     num_certs += read_certsdirs(argv + dirs_start, argc - dirs_start - 1,
                                 store);
 
     if (verbosity >= VERBOSITY_DEBUG_STATS)
-        fprintf(stderr, "Added %zu certificates to the store\n", num_certs);
+        fprintf(stderr, "Added %zu certificates to the store, %zu total\n",
+                num_certs - num_store_gen_certs, num_certs);
 
     report_store_size(store, "before the test run", verbosity);
 
@@ -707,6 +1160,23 @@ main(int argc, char *argv[])
  err:
     X509_free(x509_nonce);
     X509_STORE_free(store);
+    if (gen_certs) {
+        for (size_t i = 0; i < num_gen_certs; i++)
+            X509_free(gen_certs[i]);
+    }
+    OPENSSL_free(gen_certs);
+    if (pubkeys) {
+        for (size_t i = 0; i < num_gen_keys; i++)
+            EVP_PKEY_free(pubkeys[i]);
+    }
+    OPENSSL_free(pubkeys);
+    if (keys) {
+        for (size_t i = 0; i < num_gen_keys; i++)
+            EVP_PKEY_free(keys[i]);
+    }
+    OPENSSL_free(keys);
+    EVP_PKEY_CTX_free(key_ctx);
+    OPENSSL_free(alg_name_storage);
     if (thread_data != NULL) {
         for (size_t i = 0; i < threadcount; i++) {
             if (!(i % ctx_share_cnt))
