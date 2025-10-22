@@ -34,6 +34,8 @@
 #define NUM_LOAD_CERTS 128
 #define NUM_KEYS 16
 #define KEY_ALGO "rsa:2048"
+#define W_PROBABILITY 50
+#define MAX_WRITERS 0
 #define RUN_TIME 5
 #define QUANTILES 5
 #define NONCE_CFG "file:servercert.pem"
@@ -41,6 +43,8 @@
 
 static size_t timeout_us = RUN_TIME * 1000000;
 static size_t quantiles = QUANTILES;
+static size_t max_writers = MAX_WRITERS;
+static size_t w_probability = W_PROBABILITY * 65536 / 100;
 
 enum verbosity {
     VERBOSITY_TERSE,
@@ -52,6 +56,11 @@ enum verbosity {
     VERBOSITY_MAX__
 };
 
+static enum mode {
+    MODE_R,
+    MODE_RW, /* "MODE_W" is just MODE_RW with 100% write probability */
+} mode = MODE_R;
+
 enum nonce_type {
     NONCE_GENERATED,
     NONCE_PATH,
@@ -61,6 +70,7 @@ struct call_times {
     uint64_t duration;
     uint64_t total_count;
     uint64_t total_found;
+    uint64_t total_added;
     uint64_t min_count;
     uint64_t max_count;
     double avg;
@@ -84,8 +94,11 @@ struct thread_data {
     struct {
         uint64_t count;
         uint64_t found;
+        uint64_t added_certs;
         OSSL_TIME end_time;
     } *q_data;
+    size_t cert_count;
+    X509 **certs;
     X509_STORE_CTX *ctx;
 } *thread_data;
 
@@ -718,6 +731,7 @@ do_x509storeissuer(size_t num)
     OSSL_TIME q_end;
     size_t q = 0;
     size_t count = 0;
+    size_t add = 0;
     size_t found = 0;
 
     td->start_time = ossl_time_now();
@@ -725,17 +739,30 @@ do_x509storeissuer(size_t num)
     q_end.t = duration.t / quantiles + td->start_time.t;
 
     do {
-        if (X509_STORE_CTX_get1_issuer(&issuer, td->ctx, x509_nonce) != 0) {
-            found++;
-            X509_free(issuer);
+        if (td->cert_count > 0 && (rand() % 65536 < w_probability)) {
+            size_t cert_id = add % td->cert_count;
+
+            if (!X509_STORE_add_cert(store, td->certs[cert_id])) {
+                warnx("thread %zu: Failed to add generated certificate %zu"
+                      " to the store", num, cert_id);
+            } else {
+                add++;
+            }
+        } else {
+            if (X509_STORE_CTX_get1_issuer(&issuer, td->ctx, x509_nonce) != 0) {
+                found++;
+                X509_free(issuer);
+            }
+            issuer = NULL;
         }
-        issuer = NULL;
+
         count++;
         if ((count & 0x3f) == 0) {
             time = ossl_time_now();
             if (time.t >= q_end.t) {
                 td->q_data[q].count = count;
                 td->q_data[q].found = found;
+                td->q_data[q].added_certs = add;
                 td->q_data[q].end_time = time;
                 q_end.t = (duration.t * (++q + 1)) / quantiles + td->start_time.t;
             }
@@ -744,6 +771,7 @@ do_x509storeissuer(size_t num)
 
     td->q_data[quantiles - 1].count = count;
     td->q_data[quantiles - 1].found = found;
+    td->q_data[quantiles - 1].added_certs = add;
     td->q_data[quantiles - 1].end_time = time;
 }
 
@@ -790,10 +818,13 @@ get_calltimes(struct call_times *times, int verbosity)
                 (q ? thread_data[i].q_data[q - 1].count : 0);
             uint64_t found = thread_data[i].q_data[q].found -
                 (q ? thread_data[i].q_data[q - 1].found : 0);
+            uint64_t add = thread_data[i].q_data[q].added_certs -
+                (q ? thread_data[i].q_data[q - 1].added_certs : 0);
 
             times[q].duration += thread_data[i].q_data[q].end_time.t - start_t;
             times[q].total_count += count;
             times[q].total_found += found;
+            times[q].total_added += add;
         }
     }
 
@@ -801,6 +832,7 @@ get_calltimes(struct call_times *times, int verbosity)
         times[quantiles].duration += times[q].duration;
         times[quantiles].total_count += times[q].total_count;
         times[quantiles].total_found += times[q].total_found;
+        times[quantiles].total_added += times[q].total_added;
     }
 
     for (size_t q = (quantiles == 1); q <= quantiles; q++)
@@ -885,14 +917,18 @@ report_result(int verbosity)
             printf(": avg: %9.3lf us, median: %9.3lf us"
                    ", min: %9.3lf us @thread %3zu, max: %9.3lf us @thread %3zu"
                    ", stddev: %9.3lf us (%8.4lf%%)"
-                   ", hits %9zu of %9zu (%8.4lf%%)\n",
+                   ", hits %9zu of %9zu (%8.4lf%%)"
+                   ", added certs: %zu\n",
                    times[i].avg, times[i].median,
                    times[i].min, times[i].min_idx,
                    times[i].max, times[i].max_idx,
                    times[i].stddev,
                    100.0 * times[i].stddev / times[i].avg,
-                   times[i].total_found, times[i].total_count,
-                   100.0 * times[i].total_found / (times[i].total_count));
+                   times[i].total_found,
+                   (times[i].total_count - times[i].total_added),
+                   100.0 * times[i].total_found
+                           / (times[i].total_count - times[i].total_added),
+                   times[i].total_added);
         }
         break;
     }
@@ -904,8 +940,8 @@ usage(char * const argv[])
     fprintf(stderr,
             "Usage: %s [-t] [-v] [-q N] [-T time] [-G num] [-g num] "
             "[-k num_keys] [-K keyalg[:bits][:param=value...]] "
-            "[-n nonce_type:type_args] "
-            "[-C threads] certsdir [certsdir...] threadcount\n"
+            "[-n nonce_type:type_args] [-m mode] [-w writer_threads] "
+            "[-W percentage] [-C threads] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
             "\t-q\tGather information about temporal N-quantiles.\n"
@@ -928,6 +964,13 @@ usage(char * const argv[])
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
             "\t\tDefault: " NONCE_CFG "\n"
+            "\t-m\tTest mode, can be one of r, rw.  Default: r\n"
+            "\t-w\tMaximum number of threads that attempt addition\n"
+            "\t\tof the new certificates to the store in rw mode,\n"
+            "\t\t0 is unlimited.  Default: " OPENSSL_MSTR(MAX_WRITERS) "\n"
+            "\t-W\tProbability of a certificate being written\n"
+            "\t\tto the store, instead of being queried,\n"
+            "\t\tin percents.  Default: " OPENSSL_MSTR(W_PROBABILITY) "\n"
             "\t-C\tNumber of threads that share the same X.509\n"
             "\t\tstore context object.  Default: "
             OPENSSL_MSTR(CTX_SHARE_THREADS) "\n"
@@ -951,8 +994,23 @@ parse_timeout(const char * const optarg)
     return (size_t)(timeout_s * 1e6);
 }
 
+static double
+parse_probability(const char * const optarg)
+{
+    char *endptr = NULL;
+    double prob;
+
+    prob = strtod(optarg, &endptr);
+
+    if (endptr == NULL || *endptr != '\0' || prob < 0 || prob > 100)
+        errx(EXIT_FAILURE, "incorrect probability value: \"%s\"", optarg);
+
+    return prob;
+}
+
 /**
  * Parse nonce configuration string. Currently supported formats:
+ *  * "gen" - generate a nonce certificate
  *  * "file:PATH" - where PATH is either a relative path (that will be then
  *                  checked against the list of directories provided),
  *                  or an absolute one.
@@ -1014,7 +1072,7 @@ main(int argc, char *argv[])
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvq:T:G:g:k:K:n:C:")) != -1) {
+    while ((opt = getopt(argc, argv, "tvq:T:G:g:k:K:m:n:w:W:C:")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -1051,8 +1109,23 @@ main(int argc, char *argv[])
         case 'K': /* key type */
             gen_key_algo = optarg;
             break;
+        case 'm': /* mode */
+            if (strcasecmp(optarg, "r") == 0) {
+                mode = MODE_R;
+            } else if (strcasecmp(optarg, "rw") == 0) {
+                mode = MODE_RW;
+            } else {
+                errx(EXIT_FAILURE, "Unknown mode: \"%s\"", optarg);
+            }
+            break;
         case 'n': /* nonce */
             parse_nonce_cfg(optarg, &nonce_cfg);
+            break;
+        case 'w': /* maximum writers */
+            max_writers = parse_int(optarg, 0, INT_MAX,
+                                    "maximum number of writers");
+        case 'W': /* percent of writes */
+            w_probability = (size_t) (parse_probability(optarg) * 65536 / 100);
             break;
         case 'C': /* how many threads share X509_STORE_CTX */
             ctx_share_cnt = parse_int(optarg, 1, INT_MAX,
@@ -1073,6 +1146,11 @@ main(int argc, char *argv[])
 
     if (num_gen_certs < num_gen_load_certs)
         errx(EXIT_FAILURE, "Cannot load more certificates than generate");
+
+    if (num_gen_certs == num_gen_load_certs && mode == MODE_RW)
+        errx(EXIT_FAILURE, "No generated certificates to use after"
+                           " the initially loaded ones, please increase"
+                           " -G to be more than -g");
 
     if (argv[optind] == NULL)
         errx(EXIT_FAILURE, "certsdir is missing");
@@ -1177,6 +1255,23 @@ main(int argc, char *argv[])
         }
     }
 
+    if (mode == MODE_RW) {
+        size_t writers = max_writers ? OSSL_MIN(max_writers, threadcount)
+                                     : threadcount;
+        size_t cnt = num_gen_certs - num_gen_load_certs;
+
+        /*
+         * Point each writer thread at the part of the generated certs
+         * array it uses for store population.
+         */
+        for (size_t i = 0; i < writers; i++) {
+            size_t offs = (cnt * i) / writers;
+
+            thread_data[i].certs = gen_certs + num_gen_load_certs + offs;
+            thread_data[i].cert_count = OSSL_MAX(cnt / writers, 1);
+        }
+    }
+
     max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
 
     if (!perflib_run_multi_thread_test(do_x509storeissuer, threadcount, &duration))
@@ -1184,6 +1279,9 @@ main(int argc, char *argv[])
 
     if (error)
         errx(EXIT_FAILURE, "Error during test");
+
+    if (mode == MODE_RW)
+        report_store_size(store, "after the test run", verbosity);
 
     report_result(verbosity);
 
