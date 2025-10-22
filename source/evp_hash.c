@@ -19,9 +19,7 @@
 #include <stdio.h>
 #ifndef _WIN32
 # include <unistd.h>
-# include <libgen.h>
 #else
-# include <windows.h>
 # include "perflib/getopt.h"
 #endif	/* _WIN32 */
 
@@ -132,19 +130,19 @@ int hash_sha512_deprecated()
 }
 
 
-int hash_evp(EVP_MD_CTX *mctx, const EVP_MD *evp_md)
+int hash_evp(EVP_MD_CTX *mctx)
 {
     int i;
     unsigned char md[EVP_MAX_MD_SIZE];
 
-    if (!EVP_DigestInit(mctx, evp_md))
+    if (!EVP_DigestInit_ex(mctx, NULL, NULL))
         return 0;
 
     for (i = 0; i < update_times; i++)
         if (!EVP_DigestUpdate(mctx, data, sizeof(data)))
             return 0;
 
-    return EVP_DigestFinal(mctx, md, NULL);
+    return EVP_DigestFinal_ex(mctx, md, NULL);
 }
 
 void do_hash_deprecated(size_t num)
@@ -167,13 +165,13 @@ void do_hash_evp(size_t num)
     OSSL_TIME time;
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
 
-    if (mctx == NULL) {
+    if (mctx == NULL || !EVP_DigestInit_ex(mctx, evp_md, NULL)) {
         err = 1;
         return;
     }
 
     do {
-        if (!hash_evp(mctx, evp_md)) {
+        if (!hash_evp(mctx)) {
             err = 1;
             goto err;
         }
