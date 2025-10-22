@@ -151,6 +151,12 @@ if(WIN32)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 endif()
 
+if(WIN32)
+    set(libm_dep)
+else()
+    set(libm_dep PUBLIC m)
+endif()
+
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 
@@ -188,17 +194,13 @@ add_executable(rsasign rsasign.c)
 target_link_libraries(rsasign PRIVATE perf)
 
 add_executable(x509storeissuer x509storeissuer.c)
-target_link_libraries(x509storeissuer PRIVATE perf)
+target_link_libraries(x509storeissuer ${libm_dep} PRIVATE perf)
 
 add_executable(rwlocks rwlocks.c)
 target_link_libraries(rwlocks PRIVATE perf)
 
 add_executable(pkeyread pkeyread.c)
-if(WIN32)
-    target_link_libraries(pkeyread PRIVATE perf)
-else()
-    target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
-endif()
+target_link_libraries(pkeyread ${libm_dep} PRIVATE perf)
 
 add_executable(evp_setpeer evp_setpeer.c)
 target_link_libraries(evp_setpeer PRIVATE perf)

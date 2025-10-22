@@ -8,6 +8,8 @@
  */
 
 #include <errno.h>
+#include <inttypes.h>
+#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,10 +30,12 @@
 #include "perflib/perflib.h"
 
 #define RUN_TIME 5
+#define QUANTILES 5
 #define NONCE_CFG "file:servercert.pem"
 #define CTX_SHARE_THREADS 1
 
 static size_t timeout_us = RUN_TIME * 1000000;
+static size_t quantiles = QUANTILES;
 
 enum verbosity {
     VERBOSITY_TERSE,
@@ -47,6 +51,21 @@ enum nonce_type {
     NONCE_PATH,
 };
 
+struct call_times {
+    uint64_t duration;
+    uint64_t total_count;
+    uint64_t total_found;
+    uint64_t min_count;
+    uint64_t max_count;
+    double avg;
+    double min;
+    double max;
+    double stddev;
+    double median;
+    size_t min_idx;
+    size_t max_idx;
+};
+
 struct nonce_cfg {
     enum nonce_type type;
     const char *path;
@@ -55,6 +74,12 @@ struct nonce_cfg {
 };
 
 struct thread_data {
+    OSSL_TIME start_time;
+    struct {
+        uint64_t count;
+        uint64_t found;
+        OSSL_TIME end_time;
+    } *q_data;
     X509_STORE_CTX *ctx;
 } *thread_data;
 
@@ -65,9 +90,10 @@ static X509 *x509_nonce = NULL;
 
 static int threadcount;
 
-size_t *counts;
-size_t *founds;
 OSSL_TIME max_time;
+
+#define OSSL_MIN(p, q) ((p) < (q) ? (p) : (q))
+#define OSSL_MAX(p, q) ((p) > (q) ? (p) : (q))
 
 static X509 *
 load_cert_from_file(const char *path)
@@ -298,11 +324,17 @@ static void
 do_x509storeissuer(size_t num)
 {
     struct thread_data *td = &thread_data[num];
-    X509_STORE_CTX *ctx = X509_STORE_CTX_new();
     X509 *issuer = NULL;
     OSSL_TIME time;
+    OSSL_TIME duration;
+    OSSL_TIME q_end;
+    size_t q = 0;
     size_t count = 0;
     size_t found = 0;
+
+    td->start_time = ossl_time_now();
+    duration.t = max_time.t - td->start_time.t;
+    q_end.t = duration.t / quantiles + td->start_time.t;
 
     do {
         if (X509_STORE_CTX_get1_issuer(&issuer, td->ctx, x509_nonce) != 0) {
@@ -312,13 +344,17 @@ do_x509storeissuer(size_t num)
         issuer = NULL;
         count++;
         time = ossl_time_now();
+        if (time.t >= q_end.t) {
+            td->q_data[q].count = count;
+            td->q_data[q].found = found;
+            td->q_data[q].end_time = time;
+            q_end.t = (duration.t * (++q + 1)) / quantiles + td->start_time.t;
+        }
     } while (time.t < max_time.t);
 
- err:
-    X509_STORE_CTX_free(ctx);
-
-    counts[num] = count;
-    founds[num] = found;
+    td->q_data[quantiles - 1].count = count;
+    td->q_data[quantiles - 1].found = found;
+    td->q_data[quantiles - 1].end_time = time;
 }
 
 static void
@@ -342,14 +378,149 @@ report_store_size(X509_STORE * const store, const char * const suffix,
     }
 }
 
+static int
+cmp_double(const void *a_ptr, const void *b_ptr)
+{
+    const double * const a = a_ptr;
+    const double * const b = b_ptr;
+
+    return *a - *b < 0 ? -1 : *a - *b > 0 ? 1 : 0;
+}
+
+static void
+get_calltimes(struct call_times *times, int verbosity)
+{
+    double *thread_times;
+
+    for (size_t q = 0; q < quantiles; q++) {
+        for (size_t i = 0; i < threadcount; i++) {
+            uint64_t start_t = q ? thread_data[i].q_data[q - 1].end_time.t
+                                 : thread_data[i].start_time.t;
+            uint64_t count = thread_data[i].q_data[q].count -
+                (q ? thread_data[i].q_data[q - 1].count : 0);
+            uint64_t found = thread_data[i].q_data[q].found -
+                (q ? thread_data[i].q_data[q - 1].found : 0);
+
+            times[q].duration += thread_data[i].q_data[q].end_time.t - start_t;
+            times[q].total_count += count;
+            times[q].total_found += found;
+        }
+    }
+
+    for (size_t q = 0; q < quantiles; q++) {
+        times[quantiles].duration += times[q].duration;
+        times[quantiles].total_count += times[q].total_count;
+        times[quantiles].total_found += times[q].total_found;
+    }
+
+    for (size_t q = (quantiles == 1); q <= quantiles; q++)
+        times[q].avg = (double) times[q].duration / OSSL_TIME_US / times[q].total_count;
+
+    if (verbosity >= VERBOSITY_VERBOSE) {
+        thread_times = OPENSSL_zalloc(threadcount * sizeof(*thread_times));
+
+        for (size_t q = (quantiles == 1); q <= quantiles; q++) {
+            double variance = 0;
+
+            for (size_t i = 0; i < threadcount; i++) {
+                uint64_t start_t = q && q != quantiles
+                    ? thread_data[i].q_data[q - 1].end_time.t
+                    : thread_data[i].start_time.t;
+                uint64_t duration =
+                    thread_data[i].q_data[OSSL_MIN(q, quantiles - 1)].end_time.t
+                    - start_t;
+                uint64_t count =
+                    thread_data[i].q_data[OSSL_MIN(q, quantiles - 1)].count -
+                    (q && q != quantiles ? thread_data[i].q_data[q - 1].count
+                                         : 0);
+                thread_times[i] = (double) duration / OSSL_TIME_US / count;
+            }
+
+            times[q].min = times[q].max = thread_times[0];
+            times[q].min_idx = times[q].max_idx = 0;
+
+            for (size_t i = 0; i < threadcount; i++) {
+                if (thread_times[i] < times[q].min) {
+                    times[q].min = thread_times[i];
+                    times[q].min_idx = i;
+                }
+
+                if (thread_times[i] > times[q].max) {
+                    times[q].max = thread_times[i];
+                    times[q].max_idx = i;
+                }
+            }
+
+            qsort(thread_times, threadcount, sizeof(thread_times[0]), cmp_double);
+            times[q].median = thread_times[threadcount / 2];
+
+            for (size_t i = 0; i < threadcount; i++) {
+                double dev = thread_times[i] - times[q].avg;
+
+                variance += dev * dev;
+            }
+
+            times[q].stddev = sqrt(variance / threadcount);
+        }
+
+        OPENSSL_free(thread_times);
+    }
+}
+
+static void
+report_result(int verbosity)
+{
+    struct call_times *times;
+
+    times = OPENSSL_zalloc(sizeof(*times) * (quantiles + 1));
+
+    get_calltimes(times, verbosity);
+
+    switch (verbosity) {
+    case VERBOSITY_TERSE:
+        printf("%lf\n", times[1].avg);
+        break;
+    case VERBOSITY_DEFAULT:
+        printf("Average time per call: %lfus\n", times[1].avg);
+        break;
+    case VERBOSITY_VERBOSE:
+    default:
+        /* if quantiles == 1, we only need to print total runtime info */
+        for (size_t i = (quantiles == 1); i <= quantiles; i++) {
+            if (i < quantiles)
+                printf("Part %8zu", i + 1);
+            else
+                printf("Total runtime");
+
+            printf(": avg: %9.3lf us, median: %9.3lf us"
+                   ", min: %9.3lf us @thread %3zu, max: %9.3lf us @thread %3zu"
+                   ", stddev: %9.3lf us (%8.4lf%%)"
+                   ", hits %9" PRIu64 " of %9" PRIu64 " (%8.4lf%%)\n",
+                   times[i].avg, times[i].median,
+                   times[i].min, times[i].min_idx,
+                   times[i].max, times[i].max_idx,
+                   times[i].stddev,
+                   100.0 * times[i].stddev / times[i].avg,
+                   times[i].total_found, times[i].total_count,
+                   100.0 * times[i].total_found / (times[i].total_count));
+        }
+        break;
+    }
+
+    OPENSSL_free(times);
+}
+
 static void
 usage(char * const argv[])
 {
     fprintf(stderr,
-            "Usage: %s [-t] [-v] [-T time] [-n nonce_type:type_args]"
+            "Usage: %s [-t] [-v] [-q N] [-T time] [-n nonce_type:type_args]"
             " [-C threads] [-V] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
+            "\t-q\tGather information about temporal N-quantiles.\n"
+            "\t\tDone only when the output is verbose.  Default: "
+            OPENSSL_MSTR(QUANTILES) "\n"
             "\t-T\tTimeout for the test run in seconds,\n"
             "\t\tcan be fractional.  Default: "
             OPENSSL_MSTR(RUN_TIME) "\n"
@@ -420,12 +591,8 @@ parse_int(const char * const s, long long min, long long max,
 int
 main(int argc, char *argv[])
 {
-    int i;
     OSSL_TIME duration;
     size_t ctx_share_cnt = CTX_SHARE_THREADS;
-    size_t total_count = 0;
-    size_t total_found = 0;
-    double avcalltime;
     int ret = EXIT_FAILURE;
     int opt;
     int dirs_start;
@@ -434,7 +601,7 @@ main(int argc, char *argv[])
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvT:n:C:V")) != -1) {
+    while ((opt = getopt(argc, argv, "tvq:T:n:C:V")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -446,6 +613,10 @@ main(int argc, char *argv[])
                 if (verbosity < VERBOSITY_MAX__ - 1)
                     verbosity++;
             }
+            break;
+        case 'q': /* quantiles */
+            quantiles = parse_int(optarg, 1, INT_MAX,
+                                  "number of quantiles");
             break;
         case 'T': /* timeout */
             timeout_us = parse_timeout(optarg);
@@ -465,6 +636,9 @@ main(int argc, char *argv[])
             return EXIT_FAILURE;
         }
     }
+
+    if (verbosity < VERBOSITY_VERBOSE)
+        quantiles = 1;
 
     if (argv[optind] == NULL)
         errx(EXIT_FAILURE, "certsdir is missing");
@@ -487,6 +661,14 @@ main(int argc, char *argv[])
     if (thread_data == NULL)
         errx(EXIT_FAILURE, "Failed to create thread_data array");
 
+    for (size_t i = 0; i < threadcount; i++) {
+        thread_data[i].q_data = OPENSSL_zalloc(quantiles *
+                                               sizeof(*(thread_data[i].q_data)));
+        if (thread_data[i].q_data == NULL)
+            errx(EXIT_FAILURE, "Failed to create quantiles array for thread"
+                               " %zu", i);
+    }
+
     store = X509_STORE_new();
     if (store == NULL || !X509_STORE_set_default_paths(store))
         errx(EXIT_FAILURE, "Failed to create X509_STORE");
@@ -496,14 +678,6 @@ main(int argc, char *argv[])
 
     if (verbosity >= VERBOSITY_DEBUG_STATS)
         fprintf(stderr, "Added %zu certificates to the store\n", num_certs);
-
-    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
-    if (counts == NULL)
-        errx(EXIT_FAILURE, "Failed to create counts array");
-
-    founds = OPENSSL_malloc(sizeof(size_t) * threadcount);
-    if (founds == NULL)
-        errx(EXIT_FAILURE, "Failed to create founds array");
 
     report_store_size(store, "before the test run", verbosity);
 
@@ -532,37 +706,18 @@ main(int argc, char *argv[])
     if (error)
         errx(EXIT_FAILURE, "Error during test");
 
-    for (i = 0; i < threadcount; i++) {
-        total_count += counts[i];
-        total_found += founds[i];
-    }
-
-    avcalltime = (double)timeout_us * threadcount / total_count;
-
-    switch (verbosity) {
-    case VERBOSITY_TERSE:
-        printf("%lf\n", avcalltime);
-        break;
-    default:
-        printf("Average time per X509_STORE_CTX_get1_issuer() call: %lfus\n",
-               avcalltime);
-        if (verbosity >= VERBOSITY_VERBOSE) {
-            printf("Successful X509_STORE_CTX_get1_issuer() calls: %zu of %zu"
-                   " (%lf%%)\n",
-                   total_found, total_count,
-                   (double)total_found / total_count * 100.0);
-        }
-    }
+    report_result(verbosity);
 
     ret = EXIT_SUCCESS;
 
     X509_free(x509_nonce);
     X509_STORE_free(store);
-    OPENSSL_free(founds);
-    OPENSSL_free(counts);
     if (thread_data != NULL) {
-        for (size_t i = 0; i < threadcount; i += ctx_share_cnt)
-            X509_STORE_CTX_free(thread_data[i].ctx);
+        for (size_t i = 0; i < threadcount; i++) {
+            if (!(i % ctx_share_cnt))
+                X509_STORE_CTX_free(thread_data[i].ctx);
+            OPENSSL_free(thread_data[i].q_data);
+        }
     }
     OPENSSL_free(thread_data);
     return ret;
