@@ -30,11 +30,11 @@
 #define RUN_TIME 5
 #define DATA_SIZE 1500
 
-size_t *counts = NULL;
-OSSL_TIME max_time;
-int err = 0;
 static int threadcount;
-size_t num_calls;
+static OSSL_TIME max_time;
+
+size_t *counts = NULL;
+int err = 0;
 
 typedef enum {
     SHA1_ALG = 0,
@@ -57,13 +57,12 @@ int hash_sha1_deprecated()
 
     if (!SHA1_Init(&sha_ctx))
         return 0;
+
     for (i = 0; i < update_times; i++)
         if (!SHA1_Update(&sha_ctx, data, sizeof(data)))
             return 0;
-    if (!SHA1_Final(md, &sha_ctx))
-        return 0;
 
-    return 1;
+    return SHA1_Final(md, &sha_ctx);
 }
 
 int hash_sha224_deprecated()
@@ -74,13 +73,12 @@ int hash_sha224_deprecated()
 
     if (!SHA224_Init(&sha256_ctx))
         return 0;
+
     for (i = 0; i < update_times; i++)
         if (!SHA224_Update(&sha256_ctx, data, sizeof(data)))
             return 0;
-    if (!SHA224_Final(md, &sha256_ctx))
-        return 0;
 
-    return 1;
+    return SHA224_Final(md, &sha256_ctx);
 }
 
 int hash_sha256_deprecated()
@@ -91,13 +89,12 @@ int hash_sha256_deprecated()
 
     if (!SHA256_Init(&sha256_ctx))
         return 0;
+
     for (i = 0; i < update_times; i++)
         if (!SHA256_Update(&sha256_ctx, data, sizeof(data)))
             return 0;
-    if (!SHA256_Final(md, &sha256_ctx))
-        return 0;
 
-    return 1;
+    return SHA256_Final(md, &sha256_ctx);
 }
 
 int hash_sha384_deprecated()
@@ -108,13 +105,12 @@ int hash_sha384_deprecated()
 
     if (!SHA384_Init(&sha512_ctx))
         return 0;
+
     for (i = 0; i < update_times; i++)
         if (!SHA384_Update(&sha512_ctx, data, sizeof(data)))
             return 0;
-    if (!SHA384_Final(md, &sha512_ctx))
-        return 0;
 
-    return 1;
+    return SHA384_Final(md, &sha512_ctx);
 }
 
 int hash_sha512_deprecated()
@@ -125,13 +121,12 @@ int hash_sha512_deprecated()
 
     if (!SHA512_Init(&sha512_ctx))
         return 0;
+
     for (i = 0; i < update_times; i++)
         if (!SHA512_Update(&sha512_ctx, data, sizeof(data)))
             return 0;
-    if (!SHA512_Final(md, &sha512_ctx))
-        return 0;
 
-    return 1;
+    return SHA512_Final(md, &sha512_ctx);
 }
 
 
@@ -147,10 +142,7 @@ int hash_evp(EVP_MD_CTX *mctx, const EVP_MD *evp_md)
         if (!EVP_DigestUpdate(mctx, data, sizeof(data)))
             return 0;
 
-    if (!EVP_DigestFinal(mctx, md, NULL))
-        return 0;
-
-    return 1;
+    return EVP_DigestFinal(mctx, md, NULL);
 }
 
 void do_hash_deprecated(size_t num)
@@ -192,12 +184,12 @@ err:
 
 void print_help()
 {
-    printf("Usage: evp_hash [-h] [-x] [-t] update-times algorithm thread-count\n");
+    printf("Usage: evp_hash [-h] [-x] [-t] [-u update-times] [-a algorithm] thread-count\n");
     printf("-h - print this help output\n");
     printf("-x - use deprecated API instead of EVP API\n");
     printf("-t - terse output\n");
-    printf("update-times - times to update digest. 1 for one-shot\n");
-    printf("algorithm - one of: [SHA1, SHA224, SHA256, SHA384, SHA512]\n");
+    printf("-u update-times - times to update digest. 1 for one-shot. By default, do one-shot\n");
+    printf("-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512]. By default, use SHA1\n");
     printf("thread-count - number of threads\n");
 }
 
@@ -206,16 +198,40 @@ int main(int argc, char *argv[])
     OSSL_TIME duration;
     size_t total_count = 0;
     double av;
-    int terse = 0, deprecated_api = 0, hash_algorithm = -1;
+    int terse = 0, deprecated_api = 0, hash_algorithm = SHA1_ALG;
     int j, opt, rc = EXIT_FAILURE;
 
-    while ((opt = getopt(argc, argv, "htx")) != -1) {
+    while ((opt = getopt(argc, argv, "htxu:a:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
             break;
         case 'x':
             deprecated_api = 1;
+            break;
+        case 'u':
+            update_times = atoi(optarg);
+            if (update_times <= 0) {
+                fprintf(stderr, "update-times must be a positive integer\n");
+                goto out;
+            }
+            break;
+        case 'a':
+            if (strcmp(optarg, "SHA1") == 0) {
+                hash_algorithm = SHA1_ALG;
+            } else if (strcmp(optarg, "SHA224") == 0) {
+                hash_algorithm = SHA224_ALG;
+            } else if (strcmp(optarg, "SHA256") == 0) {
+                hash_algorithm = SHA256_ALG;
+            } else if (strcmp(optarg, "SHA384") == 0) {
+                hash_algorithm = SHA384_ALG;
+            } else if (strcmp(optarg, "SHA512") == 0) {
+                hash_algorithm = SHA512_ALG;
+            } else {
+                fprintf(stderr, "algorithm is one of: [SHA1, SHA224, SHA256, SHA384, SHA512]\n");
+                print_help();
+                goto out;
+            }
             break;
         case 'h':
         default:
@@ -224,38 +240,13 @@ int main(int argc, char *argv[])
         }
     }
 
-    if (argv[optind] == NULL
-        || argv[optind+1] == NULL
-        || argv[optind+2] == NULL
-        || argv[optind+3] != NULL) {
+    if (argc - optind != 1) {
         fprintf(stderr, "Incorrect number of arguments\n");
         print_help();
         goto out;
     }
 
-    update_times = atoi(argv[optind]);
-    if (update_times <= 0) {
-        fprintf(stderr, "update-times must be a positive integer\n");
-        goto out;
-    }
-
-    if (strcmp(argv[optind+1], "SHA1") == 0) {
-        hash_algorithm = SHA1_ALG;
-    } else if (strcmp(argv[optind+1], "SHA224") == 0) {
-        hash_algorithm = SHA224_ALG;
-    } else if (strcmp(argv[optind+1], "SHA256") == 0) {
-        hash_algorithm = SHA256_ALG;
-    } else if (strcmp(argv[optind+1], "SHA384") == 0) {
-        hash_algorithm = SHA384_ALG;
-    } else if (strcmp(argv[optind+1], "SHA512") == 0) {
-        hash_algorithm = SHA512_ALG;
-    } else {
-        fprintf(stderr, "algorithm is one of: [SHA1, SHA224, SHA256, SHA384, SHA512]\n");
-        print_help();
-        goto out;
-    }
-
-    threadcount = atoi(argv[optind+2]);
+    threadcount = atoi(argv[optind]);
     if (threadcount < 1) {
         fprintf(stderr, "thread-count must be a positive integer\n");
         print_help();
@@ -265,13 +256,13 @@ int main(int argc, char *argv[])
     if (!RAND_bytes((unsigned char *)data, sizeof(data)))
         goto out;
 
-    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
-
     counts = OPENSSL_zalloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
         fprintf(stderr, "Failed to create counts array\n");
         goto out;
     }
+
+    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     if (deprecated_api) {
         switch (hash_algorithm) {
