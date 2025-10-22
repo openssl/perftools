@@ -13,6 +13,8 @@
  * Prints out the average time per hash computation.
  */
 
+#define OPENSSL_SUPPRESS_DEPRECATED
+
 #include <stdlib.h>
 #include <stdio.h>
 #ifndef _WIN32
@@ -165,8 +167,10 @@ void do_hash_evp(size_t num)
     OSSL_TIME time;
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
 
-    if (mctx == NULL)
+    if (mctx == NULL) {
+        err = 1;
         return;
+    }
 
     do {
         if (!hash_evp(mctx, evp_md)) {
@@ -188,8 +192,8 @@ void print_help()
     printf("-h - print this help output\n");
     printf("-x - use deprecated API instead of EVP API\n");
     printf("-t - terse output\n");
-    printf("-u update-times - times to update digest. 1 for one-shot. By default, do one-shot\n");
-    printf("-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512]. By default, use SHA1\n");
+    printf("-u update-times - times to update digest. 1 for one-shot (default: 1)\n");
+    printf("-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512] (default: SHA1)\n");
     printf("thread-count - number of threads\n");
 }
 
