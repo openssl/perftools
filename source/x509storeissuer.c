@@ -53,6 +53,7 @@ enum verbosity {
 };
 
 enum nonce_type {
+    NONCE_GENERATED,
     NONCE_PATH,
 };
 
@@ -458,6 +459,31 @@ gen_certificates(const size_t num_keys, EVP_PKEY * const * const keys,
 }
 
 static X509 *
+gen_nonce(struct nonce_cfg *cfg)
+{
+    X509 *x509_nonce = X509_new();
+    X509_NAME *x509_name_nonce = NULL;
+
+    if (!x509_nonce)
+        errx(EXIT_FAILURE, "Error creating X509 nonce object");
+
+    x509_name_nonce = X509_NAME_new();
+    if (!x509_name_nonce)
+        errx(EXIT_FAILURE, "Error creating X509 name nonce object");
+
+    if (!X509_NAME_add_entry_by_txt(x509_name_nonce, "CN", MBSTRING_ASC,
+                                    (unsigned char *) "Test NC CA", -1, -1, 0))
+        errx(EXIT_FAILURE, "Error setting X509 name nonce");
+
+    if (!X509_set_issuer_name(x509_nonce, x509_name_nonce))
+        errx(EXIT_FAILURE, "Error setting X509 nonce name");
+
+    X509_NAME_free(x509_name_nonce);
+
+    return x509_nonce;
+}
+
+static X509 *
 load_cert_from_file(const char *path)
 {
     BIO *bio = BIO_new_file(path, "rb");
@@ -533,6 +559,8 @@ static X509 *
 make_nonce(struct nonce_cfg *cfg)
 {
     switch (cfg->type) {
+    case NONCE_GENERATED:
+        return gen_nonce(cfg);
     case NONCE_PATH:
         return load_nonce_from_path(cfg);
     default:
@@ -896,6 +924,7 @@ usage(char * const argv[])
             "\t-K\tAlgorithm and key size of the generated keys.\n"
             "\t\tDefault: " KEY_ALGO "\n"
             "\t-n\tNonce configuration, supported options:\n"
+            "\t\t\tgen - generated\n"
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
             "\t\tDefault: " NONCE_CFG "\n"
@@ -931,9 +960,12 @@ parse_timeout(const char * const optarg)
 static void
 parse_nonce_cfg(const char * const optarg, struct nonce_cfg *cfg)
 {
+    static const char gen[] = "gen";
     static const char file_pfx[] = "file:";
 
-    if (strncmp(optarg, file_pfx, sizeof(file_pfx) - 1) == 0) {
+    if (strncmp(optarg, gen, sizeof(gen)) == 0) {
+        cfg->type = NONCE_GENERATED;
+    } else if (strncmp(optarg, file_pfx, sizeof(file_pfx) - 1) == 0) {
         cfg->type = NONCE_PATH;
         cfg->path = optarg + sizeof(file_pfx) - 1;
     } else {
