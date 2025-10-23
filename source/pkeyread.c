@@ -50,7 +50,7 @@ size_t num_calls;
 size_t *counts;
 OSSL_TIME max_time;
 
-int err = 0;
+int error = 0;
 
 static int threadcount;
 
@@ -69,7 +69,7 @@ static void do_pemread(size_t num)
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -80,7 +80,7 @@ static void do_pemread(size_t num)
     if (pem == NULL) {
         fprintf(stderr, "%s Cannot create mem BIO [%s PEM]\n",
                 __func__, sample_names[sample_id]);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -93,14 +93,14 @@ static void do_pemread(size_t num)
         if (key == NULL) {
             fprintf(stderr, "Failed to create key [%s PEM]\n",
                     sample_names[sample_id]);
-            err = 1;
+            error = 1;
             goto end;
         }
         EVP_PKEY_free(key);
         if (BIO_reset(pem) == 0) {
             fprintf(stderr, "Failed to reset BIO [%s PEM]\n",
                     sample_names[sample_id]);
-            err = 1;
+            error = 1;
             goto end;
         }
 
@@ -130,7 +130,7 @@ static void do_derread(size_t num)
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -144,7 +144,7 @@ static void do_derread(size_t num)
         if (pkey == NULL) {
             fprintf(stderr, "%s pkey is NULL [%s DER]\n",
                     __func__, sample_names[sample_id]);
-            err = 1;
+            error = 1;
             goto error;
         }
 error:
@@ -238,7 +238,7 @@ static void report_result(int key_id, int format_id, int verbosity)
 {
     struct call_times times = { 0 };
 
-    if (err) {
+    if (error) {
         fprintf(stderr, "Error during test of %s in %s format\n",
                 sample_names[key_id], format_names[format_id]);
         exit(EXIT_FAILURE);
@@ -275,7 +275,8 @@ static void usage(char * const argv[])
     fprintf(stderr, "%s -k key_name -f format_name [-t] [-v] [-T time] threadcount\n"
         "\t-t  terse output\n"
         "\t-v  verbose output, includes min, max, stddev, and median times\n"
-        "\t-T  timeout for each test run in seconds, can be fractional"
+        "\t-T  timeout for each test run in seconds, can be fractional\n"
+        "\t-b  Set CPU affinity for the threads (in round robin fashion)\n"
         "\twhere key_name is one of these: ", argv[0]);
     fprintf(stderr, "%s", *key_name);
     do {
@@ -303,6 +304,7 @@ int main(int argc, char * const argv[])
     int key_id, key_id_min, key_id_max, k;
     int format_id, format_id_min, format_id_max, f;
     int verbosity = VERBOSITY_DEFAULT;
+    int bind_threads = 0;
     char *key = NULL;
     char *key_format = NULL;
     void (*do_f[2])(size_t) = {
@@ -313,7 +315,7 @@ int main(int argc, char * const argv[])
     key_id = SAMPLE_INVALID;
     format_id = FORMAT_INVALID;
 
-    while ((ch = getopt(argc, argv, "T:k:f:tv")) != -1) {
+    while ((ch = getopt(argc, argv, "T:k:f:tvb")) != -1) {
         switch (ch) {
         case 'T': {
             double timeout_s;
@@ -341,6 +343,9 @@ int main(int argc, char * const argv[])
             break;
         case 'v':
             verbosity = VERBOSITY_VERBOSE;
+            break;
+        case 'b':
+            bind_threads = 1;
             break;
         }
     }
@@ -396,7 +401,7 @@ int main(int argc, char * const argv[])
 
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
-        printf("Failed to create counts array\n");
+        fprintf(stderr, "Failed to create counts array\n");
         return EXIT_FAILURE;
     }
 
@@ -419,8 +424,10 @@ int main(int argc, char * const argv[])
         for (f = format_id_min; f < format_id_max; f++) {
             sample_id = k;
             max_time = ossl_time_add(ossl_time_now(), ossl_us2time(timeout_us));
-            if (!perflib_run_multi_thread_test(do_f[f], threadcount, &duration)) {
-                fprintf(stderr, "Failed to run the test %s in %s format]\n",
+            if (!perflib_run_multi_thread_test_ex(do_f[f], threadcount,
+                &duration, bind_threads ? perflib_roundrobin_affinity : NULL,
+                NULL)) {
+                fprintf(stderr, "Failed to run the test %s in %s format\n",
                         sample_names[k], format_names[f]);
                 OPENSSL_free(counts);
                 return EXIT_FAILURE;

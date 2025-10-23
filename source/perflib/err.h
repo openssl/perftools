@@ -11,13 +11,49 @@
 # define OSSL_PERFLIB_ERR_H
 # pragma once
 
-#include <stdarg.h>
+# include <stdio.h>
+
+# if !defined(_WIN32)
+
+#  include <err.h>
+
+# else /* _WIN32 */
+
+#  include <stdarg.h>
 
 extern const char *progname;
 
 extern void vwarnx(const char *, va_list);
+extern void vwarn(const char *, va_list);
+
 extern void errx(int, const char *, ...);
+extern void err(int, const char *, ...);
+
 extern void warnx(const char *, ...);
+extern void warn(const char *, ...);
+
+# endif /* !_WIN32 */
+
+# define WARN(...) \
+    do { \
+        fprintf(stderr, "%s:%d(%s): ", __FILE__, __LINE__, __FUNCTION__); \
+        warn(__VA_ARGS__); \
+    } while (0)
+# define WARNX(...) \
+    do { \
+        fprintf(stderr, "%s:%d(%s): ", __FILE__, __LINE__, __FUNCTION__); \
+        warnx(__VA_ARGS__); \
+    } while (0)
+# define ERR(...) \
+    do { \
+        fprintf(stderr, "%s:%d(%s): ", __FILE__, __LINE__, __FUNCTION__); \
+        err(__VA_ARGS__); \
+    } while (0)
+# define ERRX(...) \
+    do { \
+        fprintf(stderr, "%s:%d(%s): ", __FILE__, __LINE__, __FUNCTION__); \
+        errx(__VA_ARGS__); \
+    } while (0)
 
 #endif
 

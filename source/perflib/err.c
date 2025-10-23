@@ -7,19 +7,50 @@
  * https://www.openssl.org/source/license.html
  */
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <openssl/e_os2.h>
+
 const char *progname;
+
+static ossl_inline void *
+get_progname(void)
+{
+    if (progname != NULL)
+        return progname;
+
+#if defined(__GLIBC__)
+    if (program_invocation_name && program_invocation_name[0])
+        return program_invocation_name;
+#endif
+
+    return NULL;
+}
 
 void
 vwarnx(const char *fmt, va_list ap)
 {
-    if (progname != NULL)
-        fprintf(stderr, "%s: ", progname);
+    if (get_progname() != NULL)
+        fprintf(stderr, "%s: ", get_progname());
     vfprintf(stderr, fmt, ap);
     putc('\n', stderr);
+}
+
+void
+vwarn(const char *fmt, va_list ap)
+{
+    int saved_errno = errno;
+
+    if (get_progname() != NULL)
+        fprintf(stderr, "%s: ", get_progname());
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, ": ");
+
+    errno = saved_errno;
+    perror(NULL);
 }
 
 void
@@ -34,11 +65,32 @@ errx(int status, const char *fmt, ...)
 }
 
 void
+err(int status, const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vwarn(fmt, ap);
+    va_end(ap);
+    exit(status);
+}
+
+void
 warnx(const char *fmt, ...)
 {
     va_list ap;
 
     va_start(ap, fmt);
     vwarnx(fmt, ap);
+    va_end(ap);
+}
+
+void
+warn(const char *fmt, ...)
+{
+    va_list ap;
+
+    va_start(ap, fmt);
+    vwarn(fmt, ap);
     va_end(ap);
 }
