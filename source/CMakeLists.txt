@@ -87,6 +87,10 @@
 #
 #       ./build/randbytes 10
 #
+# If build is prepared with OPENSSL_ROOT_DIR, using -DOPENSSL_ROOT_DIR=...
+# argument, then cmake generates a run target. The run target serves as a
+# unit test which runs all commands. Use 'cmake --build build -t run' command
+# to run it.
 #
 # 32-bit builds
 # =============
@@ -128,6 +132,13 @@ add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 
 if(WIN32)
     target_sources(perf PRIVATE perflib/getopt.c perflib/basename.c perflib/err.c)
+    #
+    # windows release build on github workflow places places .exe files under
+    # build\Release. This tweak hopes to place or .exe files under \build
+    # for both build types. It did not happen on local Win11 installation
+    #
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG "${OUTPUT_DIRECTORY}")
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
@@ -184,3 +195,186 @@ target_link_libraries(evp_setpeer PRIVATE perf)
 
 add_executable(writeread writeread.c)
 target_link_libraries(writeread PRIVATE perf)
+
+## Running tests
+# Options
+set(run_tests evp_fetch
+              evp_setpeer
+              handshake
+              newrawkey
+              pkeyread
+              providerdoall
+              randbytes
+              rsasign
+              rwlocks
+              sslnew
+              #ssl_poll_perf
+              writeread
+              x509storeissuer
+              CACHE STRING "List of tests to run")
+
+# Per-test options, the format: test option values
+set(run_evp_fetch_pqs
+    evp_fetch "" "" "-q"
+    CACHE STRING "Post-quantum option for evp_fetch")
+set(run_evp_setpeer_keys
+    evp_setpeer "-k" dh ec256 ec521 x25519 all
+    CACHE STRING "Key types for evp_setpeer")
+set(run_newrawkey_algos
+    newrawkey "-a" x25519 ml-kem-512 ml-kem-768 ml-kem-1024
+    CACHE STRING "Algorithms for newrawkey")
+set(run_pkeyread_keys
+    pkeyread "-k" dh dhx dsa ec rsa x25519 all
+    CACHE STRING "Key types for pkeyread")
+set(run_pkeyread_fmts
+    pkeyread "-f" pem der all
+    CACHE STRING "Key formats for pkeyread")
+set(run_handshake_pools
+    handshake "" "-p" "-P" "-l"
+    CACHE STRING "Pool types for handshake")
+set(run_handshake_ctx_sharing
+    handshake "" "" "-s"
+    CACHE STRING "Context sharing option for handshake")
+set(run_handshake_pool_size
+    handshake "" "" "-o 4" "-o 256"
+    CACHE STRING "Pool size for handshake")
+set(run_handshake_secure_memory
+    handshake "" "-S 1048576"
+    CACHE STRING "Secure memory usage for handshake")
+set(run_writeread_ctx_sharing
+    writeread "" "" "-s"
+    CACHE STRING "Context sharing for writeread")
+set(run_writeread_dtls
+    writeread "" "" "-d"
+    CACHE STRING "DTLS mode for writeread")
+set(run_writeread_buffers
+    writeread "" "" "-b 256" "-b 4096"
+    CACHE STRING "Buffer size for writeread")
+
+# The list of per-tet options
+set(run_opts run_evp_fetch_pqs
+             run_evp_setpeer_keys
+             run_newrawkey_algos
+             run_pkeyread_keys
+             run_pkeyread_fmts
+             run_handshake_pools
+             run_handshake_ctx_sharing
+             run_handshake_pool_size
+             run_handshake_secure_memory
+             run_writeread_ctx_sharing
+             run_writeread_dtls
+             run_writeread_buffers
+             CACHE STRING "List of per-text options")
+
+# Used across multiple tests
+set(run_certdir_tests handshake writeread x509storeissuer
+    CACHE STRING "List of tests that require certdir parameter")
+file(TO_NATIVE_PATH "${OPENSSL_ROOT_DIR}/test/certs/" run_certdir_def_path)
+set(run_certdir "${run_certdir_def_path}"
+    CACHE PATH "Path to certificates directory for tests that need it")
+
+# Common options
+set(run_terse "" "-t"
+    CACHE STRING "List of terse output options")
+set(run_threads 1 4
+    CACHE STRING "List of thread counts")
+
+if(OPENSSL_ROOT_DIR)
+    add_custom_target(run
+                      COMMENT "Run perf tests"
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+
+    foreach(test IN LISTS run_tests)
+        set(cmds "${test}")
+
+        # test-specific options
+        foreach(opt_name IN LISTS run_opts)
+            set(opt "${${opt_name}}")
+            list(GET opt 0 test_name)
+            list(GET opt 1 test_opt)
+            list(REMOVE_AT opt 0 1)
+
+            if(test IN_LIST test_name)
+                set(new_cmds)
+                foreach(cmd IN LISTS cmds)
+                    foreach(val IN LISTS opt)
+                        list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
+                    endforeach()
+                endforeach()
+                set(cmds ${new_cmds})
+            endif()
+        endforeach()
+
+        # terse
+        set(new_cmds)
+        foreach(cmd IN LISTS cmds)
+            foreach(val IN LISTS run_terse)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
+        endforeach()
+        set(cmds ${new_cmds})
+
+        # certdir
+        if(test IN_LIST run_certdir_tests)
+            set(new_cmds)
+            foreach(cmd IN LISTS cmds)
+                list(APPEND new_cmds "${cmd} ${run_certdir}")
+            endforeach()
+            set(cmds ${new_cmds})
+        endif()
+
+        # threads
+        set(new_cmds)
+        foreach(cmd IN LISTS cmds)
+            foreach(val IN LISTS run_threads)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
+        endforeach()
+        set(cmds ${new_cmds})
+
+        foreach(cmd IN LISTS cmds)
+            #
+            # in order to execute the command on window, we need
+            # to add OPENSSL_ROOT_DIR to PATH variable so runtime
+            # linker can find .dll. Adjusting PATH on windows requires
+            # us to generate .bat file with two commands:
+            #    set PATH=%PATH%;c:\...\OPENSSL_ROOT_DIR
+            #    cppmmand_to_exec with_options
+            #
+            # raw_cmd variable keep command to execute
+            #
+            set(raw_cmd "${cmd}")
+            string(REGEX REPLACE "  *" ";" cmd "${cmd}")
+            string(REGEX REPLACE "[^0-9A-Za-z]" "-" cmd_target_name "${cmd}")
+            # A hack for lesser OSes that cannot normally distinguish lower-
+            # and uppercase letters.
+            if (WIN32 OR APPLE)
+                string(REGEX REPLACE "[A-Z]" "\\0_" cmd_target_name
+                       "${cmd_target_name}")
+            endif()
+            string(REPLACE ";" " " cmd_desc "${cmd}")
+            if(WIN32)
+                #
+                # generate .bat file and target to execute it.
+                #
+                file(GENERATE OUTPUT "${cmd_target_name}.bat"
+                     CONTENT "set PATH=%PATH%;${OPENSSL_ROOT_DIR}\n${raw_cmd}"
+                     NEWLINE_STYLE WIN32)
+                add_custom_target("run-${cmd_target_name}"
+                                  COMMAND "${cmd_target_name}.bat"
+                                  DEPENDS "${test}"
+                                  COMMENT "Run ${cmd_desc}"
+                                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                                  USES_TERMINAL)
+            else()
+                add_custom_target("run-${cmd_target_name}"
+                                  COMMAND ${cmd}
+                                  DEPENDS "${test}"
+                                  COMMENT "Run ${cmd_desc}"
+                                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                                  USES_TERMINAL)
+            endif()
+            add_dependencies(run "run-${cmd_target_name}")
+        endforeach()
+    endforeach()
+endif()
