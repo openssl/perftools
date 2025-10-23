@@ -73,7 +73,16 @@ struct nonce_cfg {
     size_t num_dirs;
 };
 
-struct thread_data {
+/* Cache line size is either 32 or 64 bytes on most arches of interest */
+#if defined(__GNUC__) || defined(__clang__)
+# define ALIGN64       __attribute((aligned(64)))
+#elif defined(_MSC_VER)
+# define ALIGN64       __declspec(align(64))
+#else
+# define ALIGN64
+#endif
+
+ALIGN64 struct thread_data {
     OSSL_TIME start_time;
     struct {
         uint64_t count;
