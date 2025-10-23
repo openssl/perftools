@@ -33,7 +33,6 @@
 #ifdef _WIN32 /* Windows */
 # include <winsock2.h>
 #else /* Linux/Unix */
-# include <err.h>
 # include <sys/socket.h>
 # include <sys/select.h>
 # include <netinet/in.h>
@@ -54,9 +53,10 @@
 #else
 # include <windows.h>
 # include "perflib/basename.h"
-# include "perflib/err.h"
 # include "perflib/getopt.h"
 #endif /* _WIN32 */
+
+#include "perflib/err.h"
 
 /*
  * The code here is based on QUIC poll server found in demos/quic/poll-server

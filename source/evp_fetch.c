@@ -61,7 +61,7 @@
 size_t *counts;
 OSSL_TIME max_time;
 
-int err = 0;
+int error = 0;
 int pq = 0;
 
 static int threadcount;
@@ -194,7 +194,7 @@ void do_fetch(size_t num)
             fetch_alg = exclusive_fetch_alg;
         }
 
-        if (err == 1)
+        if (error == 1)
             return;
 
         switch (j) {
@@ -203,7 +203,7 @@ void do_fetch(size_t num)
                                       fetch_entries[j].propq);
             if (md == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_MD_free(md);
@@ -214,7 +214,7 @@ void do_fetch(size_t num)
                                                fetch_entries[j].propq);
             if (cph == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_CIPHER_free(cph);
@@ -225,7 +225,7 @@ void do_fetch(size_t num)
                                          fetch_entries[j].propq);
             if (kdf == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_KDF_free(kdf);
@@ -236,7 +236,7 @@ void do_fetch(size_t num)
                                          fetch_entries[j].propq);
             if (mac == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_MAC_free(mac);
@@ -247,7 +247,7 @@ void do_fetch(size_t num)
                                            fetch_entries[j].propq);
             if (rnd == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_RAND_free(rnd);
@@ -258,7 +258,7 @@ void do_fetch(size_t num)
                                          fetch_entries[j].propq);
             if (kem == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_KEM_free(kem);
@@ -269,14 +269,14 @@ void do_fetch(size_t num)
                                                      fetch_entries[j].propq);
             if (sig == NULL) {
                 fprintf(stderr, "Failed to fetch %s\n", fetch_alg);
-                err = 1;
+                error = 1;
                 return;
             }
             EVP_SIGNATURE_free(sig);
             break;
         }
         default:
-            err = 1;
+            error = 1;
             return;
         }
         counts[num]++;
@@ -372,7 +372,7 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto out;
     }
