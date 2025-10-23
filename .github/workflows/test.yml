@@ -13,24 +13,31 @@ jobs:
           {
             openssl-branch: "openssl-3.0",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-tests',
           }, {
             openssl-branch: "openssl-3.2",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.3",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.4",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.5",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.6",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "master",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }
         ]
     runs-on: "ubuntu-latest"
@@ -50,7 +57,7 @@ jobs:
     - name: "Config openssl build"
       working-directory: "./openssl"
       run: |
-        ./config --prefix="$PWD/dist"
+        ./config ${{ matrix.release.configopts }} --prefix="$PWD/dist"
     - name: "Build openssl"
       working-directory: "./openssl"
       run: |
@@ -84,24 +91,31 @@ jobs:
           {
             openssl-branch: "openssl-3.0",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.0',
+            configopts: 'no-tests',
           }, {
             openssl-branch: "openssl-3.2",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.2',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.3",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.3',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.4",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D OPENSSL_VERSION=3.4',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.5",
             cmakeopts: '-D OPENSSL_VERSION=3.5',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.6",
             cmakeopts: '-D OPENSSL_VERSION=3.6',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "master",
             cmakeopts: '-D OPENSSL_VERSION=4.0',
+            configopts: 'no-apps no-tests',
           }
         ]
     runs-on: "ubuntu-latest"
@@ -123,7 +137,7 @@ jobs:
     - name: "Config openssl build"
       working-directory: "./openssl"
       run: |
-        ./config --prefix="$PWD/dist"
+        ./config ${{ matrix.release.configopts }} --prefix="$PWD/dist"
     - name: "Build openssl"
       working-directory: "./openssl"
       run: |
@@ -157,24 +171,31 @@ jobs:
           {
             openssl-branch: "openssl-3.0",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-tests',
           }, {
             openssl-branch: "openssl-3.2",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.3",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.4",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.5",
             cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.6",
             cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "master",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }
         ]
     runs-on: "ubuntu-latest"
@@ -202,7 +223,7 @@ jobs:
         shutdown_vm: false
         run: |
           cd openssl
-          ./config --prefix="$PWD/dist"
+          ./config ${{ matrix.release.configopts }} --prefix="$PWD/dist"
     - name: "Build openssl"
       uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
       with:
@@ -261,24 +282,31 @@ jobs:
           {
             openssl-branch: "openssl-3.0",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-tests',
           }, {
             openssl-branch: "openssl-3.2",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.3",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.4",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.5",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.6",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "master",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }
         ]
     runs-on: "windows-latest"
@@ -299,7 +327,7 @@ jobs:
       shell: cmd
       run: |
         call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
-        perl Configure no-makedepend
+        perl Configure no-makedepend ${{ matrix.release.configopts }}
     - name: "Build openssl"
       working-directory: ".\\openssl"
       shell: cmd
@@ -331,24 +359,31 @@ jobs:
           {
             openssl-branch: "openssl-3.0",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-tests',
           }, {
             openssl-branch: "openssl-3.2",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.3",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.4",
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.5",
             cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "openssl-3.6",
             cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+            configopts: 'no-apps no-tests',
           }, {
             openssl-branch: "master",
             cmakeopts: '',
+            configopts: 'no-apps no-tests',
           }
         ]
     runs-on: "macos-latest"
@@ -363,7 +398,7 @@ jobs:
     - name: "Config openssl build"
       working-directory: "./openssl"
       run: |
-        ./config --prefix="$PWD/dist"
+        ./config ${{ matrix.release.configopts }} --prefix="$PWD/dist"
     - name: "Build openssl"
       working-directory: "./openssl"
       run: |
