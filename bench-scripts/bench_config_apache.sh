@@ -53,17 +53,14 @@ set -x
 #
 
 INSTALL_ROOT=${BENCH_INSTALL_ROOT:-"/tmp/bench.binaries"}
-RESULT_DIR=${BENCH_RESULTS:-"${INSTALL_ROOT}/results"}
 WORKSPACE_ROOT=${BENCH_WORKSPACE_ROOT:-"/tmp/bench.workspace"}
 MAKE_OPTS=${BENCH_MAKE_OPTS}
 HTTPS_PORT=${BENCH_HTTPS_PORT:-'4430'}
 HTTP_PORT=${BENCH_HTTP_PORT:-'8080'}
 CERT_SUBJ=${BENCH_CERT_SUBJ:-'/CN=localhost'}
 CERT_ALT_SUBJ=${BENCH_CERT_ALT_SUBJ:-'subjectAltName=DNS:localhost,IP:127.0.0.1'}
-TEST_TIME=${BENCH_TEST_TIME:-'5M'}
 HOST=${BENCH_HOST:-'127.0.0.1'}
 APACHE_VERSION='2.4.65'
-HAPROXY='no'
 
 . ./common_util.sh
 . ./bench_config_haproxy.sh
