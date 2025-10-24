@@ -37,6 +37,12 @@ size_t *counts = NULL;
 int err = 0;
 
 typedef enum {
+    DEPRECATED = 0,
+    EVP_ISOLATED,
+    EVP_SHARED,
+} operation_type;
+
+typedef enum {
     SHA1_ALG = 0,
     SHA224_ALG,
     SHA256_ALG,
@@ -47,9 +53,11 @@ typedef enum {
 static unsigned char data[DATA_SIZE];
 static int update_times = 1;
 static const EVP_MD *evp_md = NULL;
-static int (*hash_func_deprecated)(void);
+static int (*hash_func_isolated)(void);
 
-int hash_sha1_deprecated()
+/* These functions are not allowed to take any parameters */
+
+static int hash_deprecated_sha1()
 {
     int i;
     SHA_CTX sha_ctx;
@@ -65,7 +73,7 @@ int hash_sha1_deprecated()
     return SHA1_Final(md, &sha_ctx);
 }
 
-int hash_sha224_deprecated()
+static int hash_deprecated_sha224()
 {
     int i;
     SHA256_CTX sha256_ctx;
@@ -81,7 +89,7 @@ int hash_sha224_deprecated()
     return SHA224_Final(md, &sha256_ctx);
 }
 
-int hash_sha256_deprecated()
+static int hash_deprecated_sha256()
 {
     int i;
     SHA256_CTX sha256_ctx;
@@ -97,7 +105,7 @@ int hash_sha256_deprecated()
     return SHA256_Final(md, &sha256_ctx);
 }
 
-int hash_sha384_deprecated()
+static int hash_deprecated_sha384()
 {
     int i;
     SHA512_CTX sha512_ctx;
@@ -113,7 +121,7 @@ int hash_sha384_deprecated()
     return SHA384_Final(md, &sha512_ctx);
 }
 
-int hash_sha512_deprecated()
+static int hash_deprecated_sha512()
 {
     int i;
     SHA512_CTX sha512_ctx;
@@ -129,8 +137,73 @@ int hash_sha512_deprecated()
     return SHA512_Final(md, &sha512_ctx);
 }
 
+static int hash_evp(const EVP_MD *evp_md)
+{
+    int i, ret = 0;
+    unsigned char md[EVP_MAX_MD_SIZE];
+    EVP_MD_CTX *mctx = EVP_MD_CTX_new();
 
-int hash_evp(EVP_MD_CTX *mctx)
+    if (mctx == NULL || !EVP_DigestInit_ex(mctx, evp_md, NULL))
+        goto err;
+
+    for (i = 0; i < update_times; i++)
+        if (!EVP_DigestUpdate(mctx, data, sizeof(data)))
+            goto err;
+
+    if (!EVP_DigestFinal_ex(mctx, md, NULL))
+        goto err;
+
+    ret = 1;
+err:
+    EVP_MD_CTX_free(mctx);
+    return ret;
+}
+
+static int hash_evp_sha1()
+{
+    return hash_evp(EVP_sha1());
+}
+
+static int hash_evp_sha224()
+{
+    return hash_evp(EVP_sha224());
+}
+
+static int hash_evp_sha256()
+{
+    return hash_evp(EVP_sha256());
+}
+
+static int hash_evp_sha384()
+{
+    return hash_evp(EVP_sha384());
+}
+
+static int hash_evp_sha512()
+{
+    return hash_evp(EVP_sha512());
+}
+
+static void do_hash_isolated(size_t num)
+{
+    OSSL_TIME time;
+
+    do {
+        if (!hash_func_isolated()) {
+            err = 1;
+            return;
+        }
+
+        counts[num]++;
+        time = ossl_time_now();
+    } while (time.t < max_time.t);
+}
+
+/*
+ * These functions can access global state, so they can do some initial setup.
+ */
+
+static int hash_evp_shared(EVP_MD_CTX *mctx)
 {
     int i;
     unsigned char md[EVP_MAX_MD_SIZE];
@@ -145,22 +218,7 @@ int hash_evp(EVP_MD_CTX *mctx)
     return EVP_DigestFinal_ex(mctx, md, NULL);
 }
 
-void do_hash_deprecated(size_t num)
-{
-    OSSL_TIME time;
-
-    do {
-        if (!hash_func_deprecated()) {
-            err = 1;
-            return;
-        }
-
-        counts[num]++;
-        time = ossl_time_now();
-    } while (time.t < max_time.t);
-}
-
-void do_hash_evp(size_t num)
+static void do_hash_evp_shared(size_t num)
 {
     OSSL_TIME time;
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
@@ -171,7 +229,7 @@ void do_hash_evp(size_t num)
     }
 
     do {
-        if (!hash_evp(mctx)) {
+        if (!hash_evp_shared(mctx)) {
             err = 1;
             goto err;
         }
@@ -184,12 +242,14 @@ err:
     EVP_MD_CTX_free(mctx);
 }
 
-void print_help()
+/* Main */
+
+static void print_help()
 {
-    printf("Usage: evp_hash [-h] [-x] [-t] [-u update-times] [-a algorithm] thread-count\n");
+    printf("Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count\n");
     printf("-h - print this help output\n");
-    printf("-x - use deprecated API instead of EVP API\n");
     printf("-t - terse output\n");
+    printf("-o operation - mode of operation. One of [deprecated, evp_isolated, evp_shared] (default: evp_shared)\n");
     printf("-u update-times - times to update digest. 1 for one-shot (default: 1)\n");
     printf("-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512] (default: SHA1)\n");
     printf("thread-count - number of threads\n");
@@ -200,16 +260,26 @@ int main(int argc, char *argv[])
     OSSL_TIME duration;
     size_t total_count = 0;
     double av;
-    int terse = 0, deprecated_api = 0, hash_algorithm = SHA1_ALG;
+    int terse = 0, operation = EVP_SHARED, hash_algorithm = SHA1_ALG;
     int j, opt, rc = EXIT_FAILURE;
 
-    while ((opt = getopt(argc, argv, "htxu:a:")) != -1) {
+    while ((opt = getopt(argc, argv, "hto:u:a:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
             break;
-        case 'x':
-            deprecated_api = 1;
+        case 'o':
+            if (strcmp(optarg, "deprecated") == 0) {
+                operation = DEPRECATED;
+            } else if (strcmp(optarg, "evp_isolated") == 0) {
+                operation = EVP_ISOLATED;
+            } else if (strcmp(optarg, "evp_shared") == 0) {
+                operation = EVP_SHARED;
+            } else {
+                fprintf(stderr, "operation is one of [deprecated, evp_isolated, evp_shared]\n");
+                print_help();
+                goto out;
+            }
             break;
         case 'u':
             update_times = atoi(optarg);
@@ -266,29 +336,54 @@ int main(int argc, char *argv[])
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
-    if (deprecated_api) {
+    switch (operation) {
+    case DEPRECATED:
         switch (hash_algorithm) {
         case SHA1_ALG:
-            hash_func_deprecated = hash_sha1_deprecated;
+            hash_func_isolated = hash_deprecated_sha1;
             break;
         case SHA224_ALG:
-            hash_func_deprecated = hash_sha224_deprecated;
+            hash_func_isolated = hash_deprecated_sha224;
             break;
         case SHA256_ALG:
-            hash_func_deprecated = hash_sha256_deprecated;
+            hash_func_isolated = hash_deprecated_sha256;
             break;
         case SHA384_ALG:
-            hash_func_deprecated = hash_sha384_deprecated;
+            hash_func_isolated = hash_deprecated_sha384;
             break;
         case SHA512_ALG:
-            hash_func_deprecated = hash_sha512_deprecated;
+            hash_func_isolated = hash_deprecated_sha512;
             break;
         default:
             err = 1;
             goto out;
         }
-        err = !perflib_run_multi_thread_test(do_hash_deprecated, threadcount, &duration) || err;
-    } else {
+        err = !perflib_run_multi_thread_test(do_hash_isolated, threadcount, &duration) || err;
+        break;
+    case EVP_ISOLATED:
+        switch (hash_algorithm) {
+        case SHA1_ALG:
+            hash_func_isolated = hash_evp_sha1;
+            break;
+        case SHA224_ALG:
+            hash_func_isolated = hash_evp_sha224;
+            break;
+        case SHA256_ALG:
+            hash_func_isolated = hash_evp_sha256;
+            break;
+        case SHA384_ALG:
+            hash_func_isolated = hash_evp_sha384;
+            break;
+        case SHA512_ALG:
+            hash_func_isolated = hash_evp_sha512;
+            break;
+        default:
+            err = 1;
+            goto out;
+        }
+        err = !perflib_run_multi_thread_test(do_hash_isolated, threadcount, &duration) || err;
+        break;
+    case EVP_SHARED:
         switch (hash_algorithm) {
         case SHA1_ALG:
             evp_md = EVP_sha1();
@@ -310,7 +405,8 @@ int main(int argc, char *argv[])
             goto out;
         }
 
-        err = !perflib_run_multi_thread_test(do_hash_evp, threadcount, &duration) || err;
+        err = !perflib_run_multi_thread_test(do_hash_evp_shared, threadcount, &duration) || err;
+        break;
     }
 
     if (err) {
