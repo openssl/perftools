@@ -11,9 +11,7 @@
 set -x
 
 INSTALL_ROOT=${BENCH_INSTALL_ROOT:-"/tmp/bench.binaries"}
-RESULT_DIR=${BENCH_RESULTS:-"${INSTALL_ROOT}/results"}
 WORKSPACE_ROOT=${BENCH_WORKSPACE_ROOT:-"/tmp/bench.workspace"}
-MAKE_OPTS=${BENCH_MAKE_OPTS}
 HAPROXY_NOSSL_PORT='42128'
 HAPROXY_C2P_PORT='42132'
 HAPROXY_P2S_PORT='42134'
@@ -23,6 +21,10 @@ CERT_ALT_SUBJ=${BENCH_CERT_ALT_SUBJ:-'subjectAltName=DNS:localhost,IP:127.0.0.1'
 HOST=${BENCH_HOST:-'127.0.0.1'}
 HAPROXY_VERSION='v3.2.0'
 
+#
+# Starts haproxy based on the configuration that was done beforehand calling
+# install_haproxy.
+#
 function run_haproxy {
     typeset SSL_LIB=$1
     if [[ -z "${SSL_LIB}" ]] ; then
@@ -37,6 +39,10 @@ function run_haproxy {
     fi
 }
 
+#
+# Configures the client (siege) to run with haproxy modes server and both.
+# Those modes require the client to have the haproxy certificates.
+#
 function conf_siege_haproxy_cert {
     typeset SSL_LIB=$1
     if [[ -z "${SSL_LIB}" ]] ; then
@@ -55,6 +61,9 @@ function conf_siege_haproxy_cert {
 	echo "ssl-key = ${OPENSSL_DIR}/conf/certs/client_key.pem" >> "${SIEGE_CONF}"
 }
 
+#
+# Clears the haproxy certificates from the siege client config.
+#
 function unconf_siege_haproxy_cert {
     typeset SIEGE_CONF="${INSTALL_ROOT}/openssl-master/etc/siegerc"
 
