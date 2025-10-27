@@ -202,10 +202,9 @@ function run_test {
 
 function run_tests {
 	run_test nossl
-	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
+	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 master ; do
 		run_test openssl-${i}
 	done
-	run_test openssl-master
 	run_test OpenSSL_1_1_1-stable
 	run_test libressl-4.1.0
 	#

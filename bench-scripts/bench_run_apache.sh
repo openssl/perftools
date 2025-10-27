@@ -66,10 +66,18 @@ HAPROXY='no'
 . ./common_util.sh
 . ./bench_run_haproxy.sh
 
-function enable_mpm_event {
-	typeset SSL_LIB=$1
+function enable_mpm {
+	typeset MODE=$1
+	typeset SSL_LIB=$2
 	if [[ -z "${SSL_LIB}" ]] ; then
 		SSL_LIB='openssl-master'
+	fi
+	if [[ -z "${MODE}" ]] || { [[ "${MODE}" != 'event' ]] &&
+	   [[ "${MODE}" != 'worker' ]] && [[ "${MODE}" != 'prefork' ]] ; } ; then
+		echo "enable_mpm: MODE needs to be set as the second argument."
+	    	echo "given argument: ${MODE}"
+	    	echo "enable_mpm: options are: event, worker, and prefork."
+	    	exit 1
 	fi
 	typeset CONF_FILE="${INSTALL_ROOT}/${SSL_LIB}/conf/httpd.conf"
 
@@ -81,55 +89,10 @@ function enable_mpm_event {
 	    "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
 
 	#
-	# enable event mpm module
+	# enable MODE mpm module
 	#
 	cp "${CONF_FILE}" "${CONF_FILE}".wrk
-	sed -e 's/\(^#\)\(LoadModule mpm_event_module .*$\)/\2/g' \
-	    "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
-}
-
-function enable_mpm_worker {
-	typeset SSL_LIB=$1
-	if [[ -z "${SSL_LIB}" ]] ; then
-		SSL_LIB='openssl-master'
-	fi
-	typeset CONF_FILE="${INSTALL_ROOT}/${SSL_LIB}/conf/httpd.conf"
-
-	#
-	# comment out currently loaded mpm module
-	#
-	cp "${CONF_FILE}" "${CONF_FILE}".wrk
-	sed -e 's/\(^LoadModule mpm_.*$\)/#\1/g' \
-	    "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
-
-	#
-	# enable worker mpm module
-	#
-	cp "${CONF_FILE}" "${CONF_FILE}".wrk
-	sed -e 's/\(^#\)\(LoadModule mpm_worker_module .*$\)/\2/g' \
-	    "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
-}
-
-function enable_mpm_prefork {
-	typeset SSL_LIB=$1
-	if [[ -z "${SSL_LIB}" ]] ; then
-		SSL_LIB='openssl-master'
-	fi
-	typeset CONF_FILE="${INSTALL_ROOT}/${SSL_LIB}/conf/httpd.conf"
-
-	#
-	# comment out currently loaded mpm module
-	#
-	cp "${CONF_FILE}" "${CONF_FILE}".wrk
-	sed -e 's/\(^LoadModule mpm_.*$\)/#\1/g' \
-	    "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
-
-	#
-	# enable pre-fork mpm module
-	#
-	cp "${CONF_FILE}" "${CONF_FILE}".wrk
-	sed -e 's/\(^#\)\(LoadModule mpm_prefork_module .*$\)/\2/g' \
-	    "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
+	sed -e "s/\(^#\)\(LoadModule mpm_${MODE}_module .*$\)/\2/g" "${CONF_FILE}".wrk > "${CONF_FILE}" || exit 1
 }
 
 function run_test {
@@ -246,112 +209,37 @@ function run_test {
 function run_tests {
 	typeset SAVE_RESULT_DIR="${RESULT_DIR}"
 	typeset HAPROXY_OPTIONS=('no' 'client' 'server' 'both')
+	typeset mode=""
 	typeset i=""
 
-	for i in event worker pre-fork ; do
-		mkdir -p ${RESULT_DIR}/$i || exit 1
-	done
+	for mode in event worker prefork ; do
+		mkdir -p ${SAVE_RESULT_DIR}/${mode} || exit 1
 
-	enable_mpm_event
-	RESULT_DIR="${SAVE_RESULT_DIR}/event"
-	run_test nossl
-	run_haproxy
-	run_test nossl 'no-ssl'
-	kill_haproxy
-	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
-		enable_mpm_event openssl-${i}
-		run_haproxy openssl-${i}
-		for OPTION in ${HAPROXY_OPTIONS[@]}
-		do
-			run_test openssl-${i} ${OPTION}
-		done
+		enable_mpm ${mode}
+		RESULT_DIR="${SAVE_RESULT_DIR}/${mode}"
+		run_test nossl
+		run_haproxy
+		run_test nossl 'no-ssl'
 		kill_haproxy
-	done
-	enable_mpm_event openssl-master
-	run_haproxy openssl-master
-	for OPTION in ${HAPROXY_OPTIONS[@]}
-	do
-		run_test openssl-master ${OPTION}
-	done
-	kill_haproxy
-	enable_mpm_event OpenSSL_1_1_1-stable
-	run_test OpenSSL_1_1_1-stable
-	enable_mpm_event libressl-4.1.0
-	run_test libressl-4.1.0
-	#enable_mpm_event wolfssl-5.8.2
-	#run_test wolfssl-5.8.2
-	enable_mpm_event boringssl
-	run_test boringssl
-	enable_mpm_event aws-lc
-	run_test aws-lc
-
-	enable_mpm_worker
-	RESULT_DIR="${SAVE_RESULT_DIR}/worker"
-	run_test nossl
-	run_haproxy
-	run_test nossl 'no-ssl'
-	kill_haproxy
-	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
-		enable_mpm_worker openssl-${i}
-		run_test openssl-${i}
-		run_haproxy openssl-${i}
-		for OPTION in ${HAPROXY_OPTIONS[@]}
-		do
-			run_test openssl-${i} ${OPTION}
+		for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 master ; do
+		    enable_mpm ${mode} openssl-${i}
+		    run_haproxy openssl-${i}
+		    for OPTION in ${HAPROXY_OPTIONS[@]} ; do
+				run_test openssl-${i} ${OPTION}
+		    done
+		    kill_haproxy
 		done
-		kill_haproxy
+		enable_mpm ${mode} OpenSSL_1_1_1-stable
+		run_test OpenSSL_1_1_1-stable
+		enable_mpm ${mode} libressl-4.1.0
+		run_test libressl-4.1.0
+		#enable_mpm ${mode} wolfssl-5.8.2
+		#run_test wolfssl-5.8.2
+		enable_mpm ${mode} boringssl
+		run_test boringssl
+		enable_mpm ${mode} aws-lc
+		run_test aws-lc
 	done
-	enable_mpm_worker openssl-master
-	run_haproxy openssl-master
-	for OPTION in ${HAPROXY_OPTIONS[@]}
-	do
-		run_test openssl-master ${OPTION}
-	done
-	kill_haproxy
-	enable_mpm_worker OpenSSL_1_1_1-stable
-	run_test OpenSSL_1_1_1-stable
-	enable_mpm_worker libressl-4.1.0
-	run_test libressl-4.1.0
-	#enable_mpm_worker wolfssl-5.8.2
-	#run_test wolfssl-5.8.2
-	enable_mpm_worker boringssl
-	run_test boringssl
-	enable_mpm_worker aws-lc
-	run_test aws-lc
-
-	enable_mpm_prefork
-	RESULT_DIR="${SAVE_RESULT_DIR}/pre-fork"
-	run_test nossl
-	run_haproxy
-	run_test nossl 'no-ssl'
-	kill_haproxy
-	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
-		enable_mpm_prefork openssl-${i}
-		run_test openssl-${i}
-		run_haproxy openssl-${i}
-		for OPTION in ${HAPROXY_OPTIONS[@]}
-		do
-			run_test openssl-${i} ${OPTION}
-		done
-		kill_haproxy
-	done
-	enable_mpm_prefork openssl-master
-	run_haproxy openssl-master
-	for OPTION in ${HAPROXY_OPTIONS[@]}
-	do
-		run_test openssl-master ${OPTION}
-	done
-	kill_haproxy
-	enable_mpm_prefork OpenSSL_1_1_1-stable
-	run_test OpenSSL_1_1_1-stable
-	enable_mpm_prefork libressl-4.1.0
-	run_test libressl-4.1.0
-	#enable_mpm_prefork wolfssl-5.8.2
-	#run_test wolfssl-5.8.2
-	enable_mpm_prefork boringssl
-	run_test boringssl
-	enable_mpm_prefork aws-lc
-	run_test aws-lc
 
 	RESULT_DIR=${SAVE_RESULT_DIR}
 }
@@ -359,8 +247,8 @@ function run_tests {
 check_env
 run_tests
 SAVE_RESULT_DIR=${RESULT_DIR}
-for i in event worker pre-fork ; do
-	RESULT_DIR=${SAVE_RESULT_DIR}/$i
+for mode in event worker prefork ; do
+	RESULT_DIR=${SAVE_RESULT_DIR}/${mode}
 	plot_results
 done
 RESULT_DIR=${SAVE_RESULT_DIR}
