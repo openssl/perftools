@@ -29,6 +29,13 @@
 #if OPENSSL_VERSION_MAJOR > 3 || \
     (OPENSSL_VERSION_MAJOR == 3 && OPENSSL_VERSION_MINOR >= 5)
 # define OPENSSL_DO_PQ
+# define PQ_GETOPT "q"
+# define PQ_USAGE_OPT " [-q]"
+# define PQ_USAGE_DESC "-q - include post-quantum algorithms\n"
+#else
+# define PQ_GETOPT ""
+# define PQ_USAGE_OPT ""
+# define PQ_USAGE_DESC ""
 #endif
 
 #define RUN_TIME 5
@@ -287,15 +294,10 @@ void do_fetch(size_t num)
 static void
 usage(const char *progname)
 {
-#ifdef OPENSSL_DO_PQ
-    printf("Usage: %s [-t] [-q] threadcount\n", progname);
-#else
-    printf("Usage: %s [-t] threadcount\n", progname);
-#endif
-    printf("-t - terse output\n");
-#ifdef OPENSSL_DO_PQ
-    printf("-q - include post-quantum algorithms\n");
-#endif
+    printf("Usage: %s [-t]" PQ_USAGE_OPT " threadcount\n"
+           "-t - terse output\n"
+           PQ_USAGE_DESC,
+           progname);
 }
 
 int main(int argc, char *argv[])
@@ -310,11 +312,7 @@ int main(int argc, char *argv[])
     char *fetch_type = getenv("EVP_FETCH_TYPE");
     int opt;
 
-#ifdef OPENSSL_DO_PQ
-    while ((opt = getopt(argc, argv, "tq")) != -1) {
-#else
-    while ((opt = getopt(argc, argv, "t")) != -1) {
-#endif
+    while ((opt = getopt(argc, argv, "t" PQ_GETOPT)) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
