@@ -284,6 +284,20 @@ void do_fetch(size_t num)
     } while (time.t < max_time.t);
 }
 
+static void
+usage(const char *progname)
+{
+#ifdef OPENSSL_DO_PQ
+    printf("Usage: %s [-t] [-q] threadcount\n", progname);
+#else
+    printf("Usage: %s [-t] threadcount\n", progname);
+#endif
+    printf("-t - terse output\n");
+#ifdef OPENSSL_DO_PQ
+    printf("-q - include post-quantum algorithms\n");
+#endif
+}
+
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
@@ -311,15 +325,7 @@ int main(int argc, char *argv[])
             break;
 #endif
         default:
-#ifdef OPENSSL_DO_PQ
-            printf("Usage: %s [-t] [-q] threadcount\n", basename(argv[0]));
-#else
-            printf("Usage: %s [-t] threadcount\n", basename(argv[0]));
-#endif
-            printf("-t - terse output\n");
-#ifdef OPENSSL_DO_PQ
-            printf("-q - include post-quantum algorithms\n");
-#endif
+            usage(basename(argv[0]));
             return EXIT_FAILURE;
         }
     }
