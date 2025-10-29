@@ -113,7 +113,7 @@ struct fetch_data_entry {
  * The post quantum algorithms must be the last entries in the
  * list, so we can easily skip them if we don't want them.
  */
-static struct fetch_data_entry fetch_entries[] = {
+static const struct fetch_data_entry fetch_entries[] = {
     {FETCH_MD, OSSL_DIGEST_NAME_SHA2_224, NULL},
     {FETCH_MD, OSSL_DIGEST_NAME_SHA2_256, NULL},
     {FETCH_MD, OSSL_DIGEST_NAME_SHA3_224, NULL},
