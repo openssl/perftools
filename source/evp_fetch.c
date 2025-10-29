@@ -29,6 +29,13 @@
 #if OPENSSL_VERSION_MAJOR > 3 || \
     (OPENSSL_VERSION_MAJOR == 3 && OPENSSL_VERSION_MINOR >= 5)
 # define OPENSSL_DO_PQ
+# define PQ_GETOPT "q"
+# define PQ_USAGE_OPT " [-q]"
+# define PQ_USAGE_DESC "-q - include post-quantum algorithms\n"
+#else
+# define PQ_GETOPT ""
+# define PQ_USAGE_OPT ""
+# define PQ_USAGE_DESC ""
 #endif
 
 #define RUN_TIME 5
@@ -37,19 +44,19 @@
  * Update the constant numbers below if you add or remove
  * post-quantum algorithms from the fetch list.
  */
-#ifndef OPENSSL_NO_ML_KEM
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_KEM)
 #define FETCH_ENTRY_ML_KEM_N       3
 #else
 #define FETCH_ENTRY_ML_KEM_N       0
 #endif
 
-#ifndef OPENSSL_NO_ML_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_DSA)
 #define FETCH_ENTRY_ML_DSA_N       3
 #else
 #define FETCH_ENTRY_ML_DSA_N       0
 #endif
 
-#ifndef OPENSSL_NO_SLH_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_SLH_DSA)
 #define FETCH_ENTRY_SLH_DSA_N      6
 #else
 #define FETCH_ENTRY_SLH_DSA_N      0
@@ -83,19 +90,14 @@ typedef enum {
     FETCH_END
 } fetch_type_t;
 
-struct fetch_type_map {
-    char *name;
-    fetch_type_t id;
-};
-
-struct fetch_type_map type_map[] = {
-    { "MD"        , FETCH_MD },
-    { "CIPHER"    , FETCH_CIPHER },
-    { "KDF"       , FETCH_KDF },
-    { "MAC"       , FETCH_MAC },
-    { "RAND"      , FETCH_RAND },
-    { "KEM"       , FETCH_PQ_KEM },
-    { "SIGNATURE" , FETCH_PQ_SIGNATURE },
+static const char *type_map[] = {
+    [FETCH_MD]           = "MD",
+    [FETCH_CIPHER]       = "CIPHER",
+    [FETCH_KDF]          = "KDF",
+    [FETCH_MAC]          = "MAC",
+    [FETCH_RAND]         = "RAND",
+    [FETCH_PQ_KEM]       = "KEM",
+    [FETCH_PQ_SIGNATURE] = "SIGNATURE",
 };
 
 fetch_type_t exclusive_fetch_type = FETCH_END;
@@ -111,7 +113,7 @@ struct fetch_data_entry {
  * The post quantum algorithms must be the last entries in the
  * list, so we can easily skip them if we don't want them.
  */
-static struct fetch_data_entry fetch_entries[] = {
+static const struct fetch_data_entry fetch_entries[] = {
     {FETCH_MD, OSSL_DIGEST_NAME_SHA2_224, NULL},
     {FETCH_MD, OSSL_DIGEST_NAME_SHA2_256, NULL},
     {FETCH_MD, OSSL_DIGEST_NAME_SHA3_224, NULL},
@@ -137,17 +139,17 @@ static struct fetch_data_entry fetch_entries[] = {
 #ifndef OPENSSL_NO_POLY1305
     {FETCH_MAC, OSSL_MAC_NAME_POLY1305, NULL},
 #endif
-#ifndef OPENSSL_NO_ML_KEM
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_KEM)
     {FETCH_PQ_KEM, "ML-KEM-512", NULL},
     {FETCH_PQ_KEM, "ML-KEM-768", NULL},
     {FETCH_PQ_KEM, "ML-KEM-1024", NULL},
 #endif
-#ifndef OPENSSL_NO_ML_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_DSA)
     {FETCH_PQ_SIGNATURE, "ML-DSA-44", NULL},
     {FETCH_PQ_SIGNATURE, "ML-DSA-65", NULL},
     {FETCH_PQ_SIGNATURE, "ML-DSA-87", NULL},
 #endif
-#ifndef OPENSSL_NO_SLH_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_SLH_DSA)
     {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-128s", NULL},
     {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-192s", NULL},
     {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-256s", NULL},
@@ -284,6 +286,27 @@ void do_fetch(size_t num)
     } while (time.t < max_time.t);
 }
 
+static void
+usage(const char *progname)
+{
+    printf("Usage: %s [-t] [-f TYPE:ALGORITHM]" PQ_USAGE_OPT " threadcount\n"
+           "-t - terse output\n"
+           "-f - fetch only the specified algorithm\n"
+           PQ_USAGE_DESC
+           "\nEnvironment variables:\n"
+           "  EVP_FETCH_TYPE - if no -f option is provided, fetch only\n"
+           "                   the specified TYPE:ALGORITHM\n",
+           progname);
+
+    printf("\nAvailable TYPE:ALGORITHM combinations:\n");
+    for (size_t i = 0; i < ARRAY_SIZE(fetch_entries); i++) {
+        const fetch_type_t ft = fetch_entries[i].ftype;
+
+        if (ft >= 0 && ft < ARRAY_SIZE(type_map) && type_map[ft] != NULL)
+            printf("  %s:%s\n", type_map[ft], fetch_entries[i].alg);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     OSSL_TIME duration;
@@ -296,14 +319,13 @@ int main(int argc, char *argv[])
     char *fetch_type = getenv("EVP_FETCH_TYPE");
     int opt;
 
-#ifdef OPENSSL_DO_PQ
-    while ((opt = getopt(argc, argv, "tq")) != -1) {
-#else
-    while ((opt = getopt(argc, argv, "t")) != -1) {
-#endif
+    while ((opt = getopt(argc, argv, "tf:" PQ_GETOPT)) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
+            break;
+        case 'f':
+            fetch_type = optarg;
             break;
 #ifdef OPENSSL_DO_PQ
         case 'q':
@@ -311,15 +333,7 @@ int main(int argc, char *argv[])
             break;
 #endif
         default:
-#ifdef OPENSSL_DO_PQ
-            printf("Usage: %s [-t] [-q] threadcount\n", basename(argv[0]));
-#else
-            printf("Usage: %s [-t] threadcount\n", basename(argv[0]));
-#endif
-            printf("-t - terse output\n");
-#ifdef OPENSSL_DO_PQ
-            printf("-q - include post-quantum algorithms\n");
-#endif
+            usage(basename(argv[0]));
             return EXIT_FAILURE;
         }
     }
@@ -334,8 +348,8 @@ int main(int argc, char *argv[])
         *exclusive_fetch_alg = '\0';
         exclusive_fetch_alg++;
         for (i = 0; i < ARRAY_SIZE(type_map); i++) {
-            if (!strcmp(fetch_type, type_map[i].name)) {
-                exclusive_fetch_type = type_map[i].id;
+            if (type_map[i] != NULL && !strcmp(fetch_type, type_map[i])) {
+                exclusive_fetch_type = i;
                 break;
             }
         }
