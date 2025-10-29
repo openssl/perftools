@@ -289,10 +289,22 @@ void do_fetch(size_t num)
 static void
 usage(const char *progname)
 {
-    printf("Usage: %s [-t]" PQ_USAGE_OPT " threadcount\n"
+    printf("Usage: %s [-t] [-f TYPE:ALGORITHM]" PQ_USAGE_OPT " threadcount\n"
            "-t - terse output\n"
-           PQ_USAGE_DESC,
+           "-f - fetch only the specified algorithm\n"
+           PQ_USAGE_DESC
+           "\nEnvironment variables:\n"
+           "  EVP_FETCH_TYPE - if no -f option is provided, fetch only\n"
+           "                   the specified TYPE:ALGORITHM\n",
            progname);
+
+    printf("\nAvailable TYPE:ALGORITHM combinations:\n");
+    for (size_t i = 0; i < ARRAY_SIZE(fetch_entries); i++) {
+        const fetch_type_t ft = fetch_entries[i].ftype;
+
+        if (ft >= 0 && ft < ARRAY_SIZE(type_map) && type_map[ft] != NULL)
+            printf("  %s:%s\n", type_map[ft], fetch_entries[i].alg);
+    }
 }
 
 int main(int argc, char *argv[])
@@ -307,10 +319,13 @@ int main(int argc, char *argv[])
     char *fetch_type = getenv("EVP_FETCH_TYPE");
     int opt;
 
-    while ((opt = getopt(argc, argv, "t" PQ_GETOPT)) != -1) {
+    while ((opt = getopt(argc, argv, "tf:" PQ_GETOPT)) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
+            break;
+        case 'f':
+            fetch_type = optarg;
             break;
 #ifdef OPENSSL_DO_PQ
         case 'q':
