@@ -44,19 +44,19 @@
  * Update the constant numbers below if you add or remove
  * post-quantum algorithms from the fetch list.
  */
-#ifndef OPENSSL_NO_ML_KEM
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_KEM)
 #define FETCH_ENTRY_ML_KEM_N       3
 #else
 #define FETCH_ENTRY_ML_KEM_N       0
 #endif
 
-#ifndef OPENSSL_NO_ML_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_DSA)
 #define FETCH_ENTRY_ML_DSA_N       3
 #else
 #define FETCH_ENTRY_ML_DSA_N       0
 #endif
 
-#ifndef OPENSSL_NO_SLH_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_SLH_DSA)
 #define FETCH_ENTRY_SLH_DSA_N      6
 #else
 #define FETCH_ENTRY_SLH_DSA_N      0
@@ -144,17 +144,17 @@ static struct fetch_data_entry fetch_entries[] = {
 #ifndef OPENSSL_NO_POLY1305
     {FETCH_MAC, OSSL_MAC_NAME_POLY1305, NULL},
 #endif
-#ifndef OPENSSL_NO_ML_KEM
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_KEM)
     {FETCH_PQ_KEM, "ML-KEM-512", NULL},
     {FETCH_PQ_KEM, "ML-KEM-768", NULL},
     {FETCH_PQ_KEM, "ML-KEM-1024", NULL},
 #endif
-#ifndef OPENSSL_NO_ML_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_ML_DSA)
     {FETCH_PQ_SIGNATURE, "ML-DSA-44", NULL},
     {FETCH_PQ_SIGNATURE, "ML-DSA-65", NULL},
     {FETCH_PQ_SIGNATURE, "ML-DSA-87", NULL},
 #endif
-#ifndef OPENSSL_NO_SLH_DSA
+#if defined(OPENSSL_DO_PQ) && !defined(OPENSSL_NO_SLH_DSA)
     {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-128s", NULL},
     {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-192s", NULL},
     {FETCH_PQ_SIGNATURE, "SLH-DSA-SHA2-256s", NULL},
