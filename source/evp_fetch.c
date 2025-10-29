@@ -90,19 +90,14 @@ typedef enum {
     FETCH_END
 } fetch_type_t;
 
-struct fetch_type_map {
-    char *name;
-    fetch_type_t id;
-};
-
-struct fetch_type_map type_map[] = {
-    { "MD"        , FETCH_MD },
-    { "CIPHER"    , FETCH_CIPHER },
-    { "KDF"       , FETCH_KDF },
-    { "MAC"       , FETCH_MAC },
-    { "RAND"      , FETCH_RAND },
-    { "KEM"       , FETCH_PQ_KEM },
-    { "SIGNATURE" , FETCH_PQ_SIGNATURE },
+static const char *type_map[] = {
+    [FETCH_MD]           = "MD",
+    [FETCH_CIPHER]       = "CIPHER",
+    [FETCH_KDF]          = "KDF",
+    [FETCH_MAC]          = "MAC",
+    [FETCH_RAND]         = "RAND",
+    [FETCH_PQ_KEM]       = "KEM",
+    [FETCH_PQ_SIGNATURE] = "SIGNATURE",
 };
 
 fetch_type_t exclusive_fetch_type = FETCH_END;
@@ -338,8 +333,8 @@ int main(int argc, char *argv[])
         *exclusive_fetch_alg = '\0';
         exclusive_fetch_alg++;
         for (i = 0; i < ARRAY_SIZE(type_map); i++) {
-            if (!strcmp(fetch_type, type_map[i].name)) {
-                exclusive_fetch_type = type_map[i].id;
+            if (type_map[i] != NULL && !strcmp(fetch_type, type_map[i])) {
+                exclusive_fetch_type = i;
                 break;
             }
         }
