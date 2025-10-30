@@ -26,6 +26,9 @@ jobs:
             openssl-branch: "openssl-3.5",
             cmakeopts: '',
           }, {
+            openssl-branch: "openssl-3.6",
+            cmakeopts: '',
+          }, {
             openssl-branch: "master",
             cmakeopts: '',
           }
@@ -93,6 +96,9 @@ jobs:
           }, {
             openssl-branch: "openssl-3.5",
             cmakeopts: '-D OPENSSL_VERSION=3.5',
+          }, {
+            openssl-branch: "openssl-3.6",
+            cmakeopts: '-D OPENSSL_VERSION=3.6',
           }, {
             openssl-branch: "master",
             cmakeopts: '-D OPENSSL_VERSION=4.0',
@@ -162,6 +168,9 @@ jobs:
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
           }, {
             openssl-branch: "openssl-3.5",
+            cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.6",
             cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
           }, {
             openssl-branch: "master",
@@ -265,6 +274,9 @@ jobs:
             openssl-branch: "openssl-3.5",
             cmakeopts: '',
           }, {
+            openssl-branch: "openssl-3.6",
+            cmakeopts: '',
+          }, {
             openssl-branch: "master",
             cmakeopts: '',
           }
@@ -330,6 +342,9 @@ jobs:
             cmakeopts: '-D "run_newrawkey_algos=newrawkey;-a;x25519" -D "run_evp_fetch_pqs=evp_fetch;;" -D "run_handshake_pool_size=handshake;;;-o 4"',
           }, {
             openssl-branch: "openssl-3.5",
+            cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
+          }, {
+            openssl-branch: "openssl-3.6",
             cmakeopts: '-D "run_handshake_pool_size=handshake;;;-o 4"',
           }, {
             openssl-branch: "master",
