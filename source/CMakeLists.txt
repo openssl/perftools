@@ -218,6 +218,10 @@ set(run_tests evp_fetch
               x509storeissuer
               CACHE STRING "List of tests to run")
 
+set(run_add_version_dep ON
+    CACHE BOOL "Whether to print version information on run " +
+               "(call all the tests with -V option before the main run)")
+
 # Per-test options, the format: test option values
 set(run_evp_fetch_pqs
     evp_fetch "" "" "-q"
@@ -300,6 +304,14 @@ add_custom_target(run
                   COMMENT "Run perf tests"
                   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 
+# Version target
+add_custom_target(run-version
+                  COMMENT "Get version information for perf tests"
+                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+if (run_add_version_dep)
+    add_dependencies(run run-version)
+endif()
+
 #
 # On Windows, we can't have nice things, and the easiest way to use
 # specifically the libraries we've built against is to copy them
@@ -320,6 +332,68 @@ if (WIN32)
         list(APPEND dll_search_dirs "${f_dir}")
     endforeach()
 endif()
+
+#
+# gen_run_target(<cmd> <test> [VAR <var>] [NAME <name>])
+#
+# Generates a target that runs <cmd> and depends on target <test> and sets
+# <var> to the target's name.
+#
+function(gen_run_taget _CMD _TEST)
+    include(CMakeParseArguments)
+
+    set(_Options "")
+    set(_OneValueArgs VAR NAME)
+    set(_MultiValueArgs "")
+    cmake_parse_arguments(GEN_RUN_TARGET
+        "${_Options}"
+        "${_OneValueArgs}"
+        "${_MultiValueArgs}"
+        ${ARGN}
+    )
+
+    string(REGEX REPLACE "  *" ";" cmd "${_CMD}")
+    string(REGEX REPLACE "[^0-9A-Za-z]" "-" cmd_target_name "${cmd}")
+    # A hack for lesser OSes that cannot normally distinguish lower-
+    # and uppercase letters.
+    if (WIN32 OR APPLE)
+        string(REGEX REPLACE "[A-Z]" "\\0_" cmd_target_name
+               "${cmd_target_name}")
+    endif()
+    if (NOT GEN_RUN_TARGET_NAME)
+        set(GEN_RUN_TARGET_NAME "run-${cmd_target_name}")
+    endif()
+    string(REPLACE ";" " " cmd_desc "${cmd}")
+
+
+    add_custom_target("${GEN_RUN_TARGET_NAME}"
+                      COMMAND ${cmd}
+                      DEPENDS "${_TEST}"
+                      COMMENT "Run ${cmd_desc}"
+                      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+                      USES_TERMINAL)
+
+    # A dirty hack to copy the dependent DLLs into the build directory so they
+    # get picked up before the ones in the system directory or wherever.
+    if(WIN32)
+        if (NOT TARGET "${_TEST}-copy-dlls")
+            add_custom_target("${_TEST}-copy-dlls"
+                              COMMAND ${CMAKE_COMMAND}
+                                      -D TARGET_FILE=$<TARGET_FILE:${_TEST}>
+                                      -D TARGET_DIR=$<TARGET_FILE_DIR:${_TEST}>
+                                      -D "SEARCH_PATHS=${dll_search_dirs}"
+                                      -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_reqs.cmake"
+                              COMMENT "Copying DLLs for ${_TEST}")
+        endif()
+        # Avoid executing any run targets before the DLL copying
+        add_dependencies(run-copy-dlls "${_TEST}-copy-dlls")
+        add_dependencies("${GEN_RUN_TARGET_NAME}" run-copy-dlls)
+    endif()
+
+    if (GEN_RUN_TARGET_VAR)
+        set("${GEN_RUN_TARGET_VAR}" "${GEN_RUN_TARGET_NAME}" PARENT_SCOPE)
+    endif()
+endfunction()
 
 # run targets generation
 foreach(test IN LISTS run_tests)
@@ -370,39 +444,13 @@ foreach(test IN LISTS run_tests)
     endforeach()
     set(cmds ${new_cmds})
 
+    # Run targets
     foreach(cmd IN LISTS cmds)
-        string(REGEX REPLACE "  *" ";" cmd "${cmd}")
-        string(REGEX REPLACE "[^0-9A-Za-z]" "-" cmd_target_name "${cmd}")
-        # A hack for lesser OSes that cannot normally distinguish lower-
-        # and uppercase letters.
-        if (WIN32 OR APPLE)
-            string(REGEX REPLACE "[A-Z]" "\\0_" cmd_target_name
-                   "${cmd_target_name}")
-        endif()
-        string(REPLACE ";" " " cmd_desc "${cmd}")
-        add_custom_target("run-${cmd_target_name}"
-                          COMMAND ${cmd}
-                          DEPENDS "${test}"
-                          COMMENT "Run ${cmd_desc}"
-                          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-                          USES_TERMINAL)
-        add_dependencies(run "run-${cmd_target_name}")
-
-        # A dirty hack to copy the dependent DLLs into the build directory so they
-        # get picked up before the ones in the system directory or wherever.
-        if(WIN32)
-            if (NOT TARGET "${test}-copy-dlls")
-                add_custom_target("${test}-copy-dlls"
-                                  COMMAND ${CMAKE_COMMAND}
-                                          -D TARGET_FILE=$<TARGET_FILE:${test}>
-                                          -D TARGET_DIR=$<TARGET_FILE_DIR:${test}>
-                                          -D "SEARCH_PATHS=${dll_search_dirs}"
-                                          -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_reqs.cmake"
-                                  COMMENT "Copying DLLs for ${test}")
-            endif()
-            # Avoid executing any run targets before the DLL copying
-            add_dependencies(run-copy-dlls "${test}-copy-dlls")
-            add_dependencies("run-${cmd_target_name}" run-copy-dlls)
-        endif()
+        gen_run_taget("${cmd}" "${test}" VAR run_target_name)
+        add_dependencies(run "${run_target_name}")
     endforeach()
+
+    # Per-test version target
+    gen_run_taget("${test} -V" "${test}" NAME "run-version-${test}")
+    add_dependencies(run-version "run-version-${test}")
 endforeach()
