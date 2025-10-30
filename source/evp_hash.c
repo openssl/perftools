@@ -313,6 +313,8 @@ int main(int argc, char *argv[])
             rc = EXIT_SUCCESS;
             goto out;
         case 'h':
+            rc = EXIT_SUCCESS;
+            /* Fallthrough */
         default:
             print_help();
             goto out;
