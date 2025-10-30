@@ -18,8 +18,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #ifndef _WIN32
+# include <libgen.h>
 # include <unistd.h>
 #else
+# include "perflib/basename.h"
 # include "perflib/getopt.h"
 #endif	/* _WIN32 */
 
@@ -246,12 +248,13 @@ err:
 
 static void print_help()
 {
-    printf("Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count\n");
+    printf("Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] [-V] thread-count\n");
     printf("-h - print this help output\n");
     printf("-t - terse output\n");
     printf("-o operation - mode of operation. One of [deprecated, evp_isolated, evp_shared] (default: evp_shared)\n");
     printf("-u update-times - times to update digest. 1 for one-shot (default: 1)\n");
     printf("-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512] (default: SHA1)\n");
+    printf("-V - print version information and exit\n");
     printf("thread-count - number of threads\n");
 }
 
@@ -263,7 +266,7 @@ int main(int argc, char *argv[])
     int terse = 0, operation = EVP_SHARED, hash_algorithm = SHA1_ALG;
     int j, opt, rc = EXIT_FAILURE;
 
-    while ((opt = getopt(argc, argv, "hto:u:a:")) != -1) {
+    while ((opt = getopt(argc, argv, "hto:u:a:V")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -305,6 +308,10 @@ int main(int argc, char *argv[])
                 goto out;
             }
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            rc = EXIT_SUCCESS;
+            goto out;
         case 'h':
         default:
             print_help();
