@@ -68,14 +68,18 @@ int main(int argc, char *argv[])
     int ret = EXIT_FAILURE;
     int opt;
 
-    while ((opt = getopt(argc, argv, "t")) != -1) {
+    while ((opt = getopt(argc, argv, "tV")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
-            printf("Usage: %s [-t] threadcount\n", basename(argv[0]));
+            printf("Usage: %s [-t] [-V] threadcount\n", basename(argv[0]));
             printf("-t - terse output\n");
+            printf("-V - print version information and exit\n");
             return EXIT_FAILURE;
         }
     }

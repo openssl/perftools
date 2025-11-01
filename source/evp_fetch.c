@@ -183,12 +183,13 @@ void do_fetch(size_t num)
      * to be a multiple of the number of fetch entries therefore at the last
      * iteration we may not check all the algorithms.
      */
+    i = 0;
     do {
         /*
          * If we set a fetch type, always use that
          */
         if (exclusive_fetch_type == FETCH_END) {
-            j = i % array_size;
+            j = i++ % array_size;
             fetch_alg = fetch_entries[j].alg;
             j = fetch_entries[j].ftype;
         } else {
@@ -289,10 +290,12 @@ void do_fetch(size_t num)
 static void
 usage(const char *progname)
 {
-    printf("Usage: %s [-t] [-f TYPE:ALGORITHM]" PQ_USAGE_OPT " threadcount\n"
+    printf("Usage: %s [-t] [-f TYPE:ALGORITHM]" PQ_USAGE_OPT " [-V]"
+           " threadcount\n"
            "-t - terse output\n"
            "-f - fetch only the specified algorithm\n"
            PQ_USAGE_DESC
+           "-V - print version information and exit\n"
            "\nEnvironment variables:\n"
            "  EVP_FETCH_TYPE - if no -f option is provided, fetch only\n"
            "                   the specified TYPE:ALGORITHM\n",
@@ -319,7 +322,7 @@ int main(int argc, char *argv[])
     char *fetch_type = getenv("EVP_FETCH_TYPE");
     int opt;
 
-    while ((opt = getopt(argc, argv, "tf:" PQ_GETOPT)) != -1) {
+    while ((opt = getopt(argc, argv, "tf:" PQ_GETOPT "V")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -332,6 +335,9 @@ int main(int argc, char *argv[])
             pq = 1;
             break;
 #endif
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
             usage(basename(argv[0]));
             return EXIT_FAILURE;

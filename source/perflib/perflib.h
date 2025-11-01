@@ -61,3 +61,11 @@ int perflib_create_ssl_connection(SSL *serverssl, SSL *clientssl, int want);
 void perflib_shutdown_ssl_connection(SSL *serverssl, SSL *clientssl);
 
 #endif
+
+/**
+ * Print relevant version information.  So far only prints OpenSSL library
+ * version and build date.
+ *
+ * @param progname The name of the program.
+ */
+void perflib_print_version(const char *progname);

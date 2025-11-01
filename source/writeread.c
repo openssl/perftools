@@ -117,7 +117,7 @@ int main(int argc, char * const argv[])
     smethod = TLS_server_method();
     cmethod = TLS_client_method();
 
-    while ((opt = getopt(argc, argv, "tsdb:")) != -1) {
+    while ((opt = getopt(argc, argv, "tsdb:V")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -136,13 +136,17 @@ int main(int argc, char * const argv[])
                 return EXIT_FAILURE;
             }
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
-            fprintf(stderr, "Usage: %s [-t] [-s] [-d] [-b size] certsdir threadcount\n",
+            fprintf(stderr, "Usage: %s [-t] [-s] [-d] [-b size] [-V] certsdir threadcount\n",
                     basename(argv[0]));
             fprintf(stderr, "-t - terse output\n");
             fprintf(stderr, "-s - disable context sharing\n");
             fprintf(stderr, "-d - use DTLS as connection method\n");
             fprintf(stderr, "-b - size of buffer to write and read (Default: 1024)\n");
+            fprintf(stderr, "-V - print version information and exit\n");
             return EXIT_FAILURE;
         }
     }

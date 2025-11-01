@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <string.h>
 #ifndef _WIN32
+# include <libgen.h>
 # include <unistd.h>
 #else
 # include <windows.h>
@@ -272,10 +273,11 @@ static void usage(char * const argv[])
     const char **key_name = sample_names;
     const char **format_name = format_names;
 
-    fprintf(stderr, "%s -k key_name -f format_name [-t] [-v] [-T time] threadcount\n"
+    fprintf(stderr, "%s -k key_name -f format_name [-t] [-v] [-T time] [-V] threadcount\n"
         "\t-t  terse output\n"
         "\t-v  verbose output, includes min, max, stddev, and median times\n"
-        "\t-T  timeout for each test run in seconds, can be fractional"
+        "\t-T  timeout for each test run in seconds, can be fractional\n"
+        "\t-V  print version information and exit\n"
         "\twhere key_name is one of these: ", argv[0]);
     fprintf(stderr, "%s", *key_name);
     do {
@@ -313,7 +315,7 @@ int main(int argc, char * const argv[])
     key_id = SAMPLE_INVALID;
     format_id = FORMAT_INVALID;
 
-    while ((ch = getopt(argc, argv, "T:k:f:tv")) != -1) {
+    while ((ch = getopt(argc, argv, "T:k:f:tviV")) != -1) {
         switch (ch) {
         case 'T': {
             double timeout_s;
@@ -342,6 +344,9 @@ int main(int argc, char * const argv[])
         case 'v':
             verbosity = VERBOSITY_VERBOSE;
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         }
     }
 

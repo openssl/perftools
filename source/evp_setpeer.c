@@ -11,9 +11,11 @@
 #include <stdio.h>
 #include <string.h>
 #ifndef _WIN32
+# include <libgen.h>
 # include <unistd.h>
 #else
 # include <windows.h>
+# include "perflib/basename.h"
 # include "perflib/getopt.h"
 #endif	/* _WIN32 */
 #include <openssl/evp.h>
@@ -114,7 +116,7 @@ static void usage(char * const argv[])
 {
     const char **key_name = sample_names;
 
-    fprintf(stderr, "%s -k key_name [-t] threadcount\n", argv[0]);
+    fprintf(stderr, "%s -k key_name [-t] [-V] threadcount\n", argv[0]);
     fprintf(stderr, "-t - terse output\n");
     fprintf(stderr, "-k - one of these options: %s", *key_name);
 
@@ -125,6 +127,8 @@ static void usage(char * const argv[])
         else
             fprintf(stderr, ", %s", *key_name);
     } while (*key_name != NULL);
+
+    fprintf(stderr, "-V - print version information and exit\n");
 }
 
 int main(int argc, char *argv[])
@@ -138,7 +142,7 @@ int main(int argc, char *argv[])
     char *key = NULL;
     int key_id, key_id_min, key_id_max, k;
 
-    while ((opt = getopt(argc, argv, "k:t")) != -1) {
+    while ((opt = getopt(argc, argv, "k:tV")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -146,6 +150,9 @@ int main(int argc, char *argv[])
         case 'k':
             key = optarg;
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
             usage(argv);
             return EXIT_FAILURE;

@@ -395,7 +395,7 @@ int main(int argc, char *argv[])
     int rc = EXIT_FAILURE;
     int opt;
 
-    while ((opt = getopt(argc, argv, "ta:")) != -1) {
+    while ((opt = getopt(argc, argv, "ta:V")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -420,11 +420,15 @@ int main(int argc, char *argv[])
                 return EXIT_FAILURE;
             }
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         default:
-            printf("Usage: %s [-t] [-a algorithm] threadcount\n", basename(argv[0]));
+            printf("Usage: %s [-t] [-a algorithm] [-V] threadcount\n", basename(argv[0]));
             printf("-t - terse output\n");
             printf("-a algorithm - specify the algorithm to test (default: x25519)\n");
             printf("               Supported algorithms: x25519, ml-kem-512, ml-kem-768, ml-kem-1024\n");
+            printf("-V - print version information and exit\n");
             return EXIT_FAILURE;
         }
     }
