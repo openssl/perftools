@@ -544,7 +544,7 @@ usage(char * const argv[])
 {
     fprintf(stderr,
             "Usage: %s [-t] [-v] [-q N] [-T time] [-n nonce_type:type_args]"
-            " [-l max_certs] [-L max_cert_dirs] [-C threads]"
+            " [-l max_certs] [-L max_cert_dirs] [-E] [-C threads]"
             " [-V] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
@@ -562,6 +562,7 @@ usage(char * const argv[])
             "\t\tDefault: " OPENSSL_MSTR(MAX_LOAD_CERTS) "\n"
             "\t-L\tLimit on the number of initially loaded certificate\n"
             "\t\tdirectories.  Default: " OPENSSL_MSTR(MAX_LOAD_CERT_DIRS) "\n"
+            "\t-E\tDo not call X509_STORE_set_default_paths()\n"
             "\t-C\tNumber of threads that share the same X.509\n"
             "\t\tstore context object.  Default: "
             OPENSSL_MSTR(CTX_SHARE_THREADS) "\n"
@@ -633,11 +634,12 @@ main(int argc, char *argv[])
     size_t num_certs = 0;
     size_t max_load_certs = MAX_LOAD_CERTS;
     int max_load_cert_dirs = MAX_LOAD_CERT_DIRS;
+    bool skip_default_paths = false;
     struct nonce_cfg nonce_cfg;
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvq:T:n:l:L:C:V")) != -1) {
+    while ((opt = getopt(argc, argv, "tvq:T:n:l:L:EC:V")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -668,6 +670,9 @@ main(int argc, char *argv[])
             max_load_cert_dirs = parse_int(optarg, 0, INT_MAX,
                                            "maximum certificate directories"
                                            " load count");
+            break;
+        case 'E':
+            skip_default_paths = true;
             break;
         case 'C': /* how many threads share X509_STORE_CTX */
             ctx_share_cnt = parse_int(optarg, 1, INT_MAX,
@@ -715,8 +720,12 @@ main(int argc, char *argv[])
     }
 
     store = X509_STORE_new();
-    if (store == NULL || !X509_STORE_set_default_paths(store))
+    if (store == NULL)
         errx(EXIT_FAILURE, "Failed to create X509_STORE");
+    if (!skip_default_paths) {
+        if (!X509_STORE_set_default_paths(store))
+            errx(EXIT_FAILURE, "Failed to load certificates from default paths");
+    }
 
     num_certs += read_certsdirs(argv + dirs_start, max_load_certs,
                                 OSSL_MIN(argc - dirs_start - 1,
