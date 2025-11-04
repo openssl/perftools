@@ -32,6 +32,8 @@
 #define RUN_TIME 5
 #define QUANTILES 5
 #define NONCE_CFG "file:servercert.pem"
+#define MAX_LOAD_CERTS INT_MAX
+#define MAX_LOAD_CERT_DIRS 0
 #define CTX_SHARE_THREADS 1
 
 static size_t timeout_us = RUN_TIME * 1000000;
@@ -226,7 +228,8 @@ read_cert(const char * const dir, const char * const name, X509_STORE * const st
 
 #if defined(_WIN32)
 static size_t
-read_certsdir(char * const dir, X509_STORE * const store)
+read_certsdir(char * const dir, const size_t max_certs,
+              X509_STORE * const store)
 {
     const size_t dir_len = strlen(dir);
     const size_t glob_len = dir_len + sizeof("\\*");
@@ -235,6 +238,9 @@ read_certsdir(char * const dir, X509_STORE * const store)
     HANDLE find_handle = INVALID_HANDLE_VALUE;
     WIN32_FIND_DATA find_data;
     DWORD last_err;
+
+    if (max_certs == 0)
+        return 0;
 
     search_glob = OPENSSL_malloc(glob_len);
     if (search_glob == NULL) {
@@ -263,6 +269,8 @@ read_certsdir(char * const dir, X509_STORE * const store)
 
         cnt += read_cert(dir, find_data.cFileName, store);
 
+        if (cnt >= max_certs)
+            break;
     } while (FindNextFileA(find_handle, &find_data) != 0);
 
     last_err = GetLastError();
@@ -278,12 +286,17 @@ read_certsdir(char * const dir, X509_STORE * const store)
 }
 #else /* !defined(_WIN32) */
 static size_t
-read_certsdir(char * const dir, X509_STORE * const store)
+read_certsdir(char * const dir, const size_t max_certs,
+              X509_STORE * const store)
 {
     struct dirent *e;
-    DIR *d = opendir(dir);
+    DIR *d;
     size_t cnt = 0;
 
+    if (max_certs == 0)
+        return 0;
+
+    d = opendir(dir);
     if (d == NULL) {
         warn("Could not open \"%s\"", dir);
 
@@ -309,6 +322,9 @@ read_certsdir(char * const dir, X509_STORE * const store)
         }
 
         cnt += read_cert(dir, e->d_name, store);
+
+        if (cnt >= max_certs)
+            break;
     }
 
     closedir(d);
@@ -318,13 +334,17 @@ read_certsdir(char * const dir, X509_STORE * const store)
 #endif /* defined(_WIN32) */
 
 static size_t
-read_certsdirs(char * const * const dirs, const int dir_cnt,
-               X509_STORE * const store)
+read_certsdirs(char * const * const dirs, const size_t max_certs,
+               const int dir_cnt, X509_STORE * const store)
 {
     size_t cnt = 0;
 
-    for (int i = 0; i < dir_cnt; i++)
-        cnt += read_certsdir(dirs[i], store);
+    for (int i = 0; i < dir_cnt; i++) {
+        cnt += read_certsdir(dirs[i], max_certs - cnt, store);
+
+        if (cnt >= max_certs)
+            break;
+    }
 
     return cnt;
 }
@@ -524,7 +544,8 @@ usage(char * const argv[])
 {
     fprintf(stderr,
             "Usage: %s [-t] [-v] [-q N] [-T time] [-n nonce_type:type_args]"
-            " [-C threads] [-V] certsdir [certsdir...] threadcount\n"
+            " [-l max_certs] [-L max_cert_dirs] [-C threads]"
+            " [-V] certsdir [certsdir...] threadcount\n"
             "\t-t\tTerse output\n"
             "\t-v\tVerbose output.  Multiple usage increases verbosity.\n"
             "\t-q\tGather information about temporal N-quantiles.\n"
@@ -537,6 +558,10 @@ usage(char * const argv[])
             "\t\t\tfile:PATH - load nonce certificate from PATH;\n"
             "\t\t\tif PATH is relative, the provided certsdir's are searched.\n"
             "\t\tDefault: " NONCE_CFG "\n"
+            "\t-l\tLimit on the number of initially loaded certificates.\n"
+            "\t\tDefault: " OPENSSL_MSTR(MAX_LOAD_CERTS) "\n"
+            "\t-L\tLimit on the number of initially loaded certificate\n"
+            "\t\tdirectories.  Default: " OPENSSL_MSTR(MAX_LOAD_CERT_DIRS) "\n"
             "\t-C\tNumber of threads that share the same X.509\n"
             "\t\tstore context object.  Default: "
             OPENSSL_MSTR(CTX_SHARE_THREADS) "\n"
@@ -606,11 +631,13 @@ main(int argc, char *argv[])
     int opt;
     int dirs_start;
     size_t num_certs = 0;
+    size_t max_load_certs = MAX_LOAD_CERTS;
+    int max_load_cert_dirs = MAX_LOAD_CERT_DIRS;
     struct nonce_cfg nonce_cfg;
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
 
-    while ((opt = getopt(argc, argv, "tvq:T:n:C:V")) != -1) {
+    while ((opt = getopt(argc, argv, "tvq:T:n:l:L:C:V")) != -1) {
         switch (opt) {
         case 't': /* terse */
             verbosity = VERBOSITY_TERSE;
@@ -632,6 +659,15 @@ main(int argc, char *argv[])
             break;
         case 'n': /* nonce */
             parse_nonce_cfg(optarg, &nonce_cfg);
+            break;
+        case 'l': /* max certs to load */
+            max_load_certs = parse_int(optarg, 0, INT_MAX,
+                                       "maximum certificate load count");
+            break;
+        case 'L': /* max certs dirs to load*/
+            max_load_cert_dirs = parse_int(optarg, 0, INT_MAX,
+                                           "maximum certificate directories"
+                                           " load count");
             break;
         case 'C': /* how many threads share X509_STORE_CTX */
             ctx_share_cnt = parse_int(optarg, 1, INT_MAX,
@@ -682,7 +718,9 @@ main(int argc, char *argv[])
     if (store == NULL || !X509_STORE_set_default_paths(store))
         errx(EXIT_FAILURE, "Failed to create X509_STORE");
 
-    num_certs += read_certsdirs(argv + dirs_start, argc - dirs_start - 1,
+    num_certs += read_certsdirs(argv + dirs_start, max_load_certs,
+                                OSSL_MIN(argc - dirs_start - 1,
+                                         max_load_cert_dirs),
                                 store);
 
     if (verbosity >= VERBOSITY_DEBUG_STATS)
