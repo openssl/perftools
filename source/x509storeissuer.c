@@ -75,6 +75,12 @@ struct nonce_cfg {
     size_t num_dirs;
 };
 
+struct x509_pool {
+    size_t size;
+    size_t capacity;
+    X509 **entries;
+};
+
 /* Cache line size is either 32 or 64 bytes on most arches of interest */
 #if defined(__GNUC__) || defined(__clang__)
 # define ALIGN64       __attribute((aligned(64)))
@@ -105,6 +111,65 @@ OSSL_TIME max_time;
 
 #define OSSL_MIN(p, q) ((p) < (q) ? (p) : (q))
 #define OSSL_MAX(p, q) ((p) > (q) ? (p) : (q))
+
+/**
+ * Extend the x509_pool, by the increment, if inc is 0, the increment size
+ * is decided automatically.
+ */
+static struct x509_pool *
+x509_pool_extend(struct x509_pool *pool, size_t inc)
+{
+    X509 **realloc_ptr;
+
+    if (inc == 0) {
+        inc = OSSL_MIN(OSSL_MAX(64, pool->capacity),
+                       OSSL_MAX(65536, pool->capacity / 16));
+    }
+
+    if (inc >= SIZE_MAX / sizeof(pool->entries[0]) - pool->capacity)
+        errx(EXIT_FAILURE, "x509_pool_extend: the increment is too big"
+                           " (capacity %zu, increment %zu)",
+                           pool->capacity, inc);
+
+    realloc_ptr = OPENSSL_realloc(pool->entries, (pool-> capacity + inc)
+                                                 * sizeof(pool->entries[0]));
+    if (realloc_ptr == NULL)
+        errx(EXIT_FAILURE, "x509_pool_extend: realloc() failed ()"
+                           " (capacity %zu, increment %zu)",
+                           pool->capacity, inc);
+
+    pool->entries = realloc_ptr;
+    pool->capacity += inc;
+
+    return pool;
+}
+
+/**
+ * Returns a pointer to a next entry in the pool, automatically extending (and,
+ * thusly, potentially reallocating) the pool if needed.
+ */
+static X509 **
+x509_pool_next(struct x509_pool *pool)
+{
+    if (pool->size >= pool->capacity)
+        x509_pool_extend(pool, 0);
+
+    return pool->entries + pool->size++;
+}
+
+static void
+x509_pool_empty(struct x509_pool *pool)
+{
+    if (pool->entries != NULL) {
+        for (size_t i = 0; i < pool->size; i++)
+            X509_free(pool->entries[i]);
+    }
+
+    OPENSSL_free(pool->entries);
+
+    pool->entries = NULL;
+    pool->size = pool->capacity = 0;
+}
 
 static X509 *
 load_cert_from_file(const char *path)
@@ -190,11 +255,16 @@ make_nonce(struct nonce_cfg *cfg)
 }
 
 static size_t
-read_cert(const char * const dir, const char * const name, X509_STORE * const store)
+read_cert(const char * const dir, const char * const name,
+          X509_STORE * const store,
+          struct x509_pool * const pool, size_t * const pool_cnt)
 {
     X509 *x509 = NULL;
     char *path = NULL;
     size_t ret = 0;
+
+    if (store == NULL && pool == NULL)
+        return 0;
 
     path = perflib_mk_file_path(dir, name);
     if (path == NULL) {
@@ -208,19 +278,35 @@ read_cert(const char * const dir, const char * const name, X509_STORE * const st
         goto out;
     }
 
-    if (!X509_STORE_add_cert(store, x509)) {
-        warnx("Failed to add a certificate from \"%s\" to the store\n", path);
-        goto out;
-    }
+    if (store != NULL) {
+        if (!X509_STORE_add_cert(store, x509)) {
+            warnx("Failed to add a certificate from \"%s\" to the store\n",
+                  path);
+            goto out;
+        }
 
-    if (verbosity >= VERBOSITY_DEBUG)
-        fprintf(stderr, "Successfully added a certificate from \"%s\""
-                " to the store\n", path);
+        if (verbosity >= VERBOSITY_DEBUG)
+            fprintf(stderr, "Successfully added a certificate from \"%s\""
+                    " to the store\n", path);
+    } else {
+        X509 **ptr = x509_pool_next(pool);
+
+        *ptr = x509;
+
+        if (verbosity >= VERBOSITY_DEBUG) {
+            fprintf(stderr, "Added a certificate from \"%s\" to the pool\n",
+                    path);
+        }
+
+        if (pool_cnt != NULL)
+            *pool_cnt += 1;
+    }
 
     ret = 1;
 
  out:
-    X509_free(x509);
+    if (store != NULL)
+        X509_free(x509);
     OPENSSL_free(path);
 
     return ret;
@@ -229,7 +315,8 @@ read_cert(const char * const dir, const char * const name, X509_STORE * const st
 #if defined(_WIN32)
 static size_t
 read_certsdir(char * const dir, const size_t max_certs,
-              X509_STORE * const store)
+              X509_STORE * const store,
+              struct x509_pool * const pool, size_t * const pool_cnt)
 {
     const size_t dir_len = strlen(dir);
     const size_t glob_len = dir_len + sizeof("\\*");
@@ -239,7 +326,7 @@ read_certsdir(char * const dir, const size_t max_certs,
     WIN32_FIND_DATA find_data;
     DWORD last_err;
 
-    if (max_certs == 0)
+    if (pool == NULL && max_certs == 0)
         return 0;
 
     search_glob = OPENSSL_malloc(glob_len);
@@ -267,9 +354,10 @@ read_certsdir(char * const dir, const size_t max_certs,
             continue;
         }
 
-        cnt += read_cert(dir, find_data.cFileName, store);
+        cnt += read_cert(dir, find_data.cFileName,
+                         cnt < max_certs ? store : NULL, pool, pool_cnt);
 
-        if (cnt >= max_certs)
+        if (pool == NULL && cnt >= max_certs)
             break;
     } while (FindNextFileA(find_handle, &find_data) != 0);
 
@@ -287,13 +375,14 @@ read_certsdir(char * const dir, const size_t max_certs,
 #else /* !defined(_WIN32) */
 static size_t
 read_certsdir(char * const dir, const size_t max_certs,
-              X509_STORE * const store)
+              X509_STORE * const store,
+              struct x509_pool * const pool, size_t * const pool_cnt)
 {
     struct dirent *e;
     DIR *d;
     size_t cnt = 0;
 
-    if (max_certs == 0)
+    if (pool == NULL && max_certs == 0)
         return 0;
 
     d = opendir(dir);
@@ -321,9 +410,10 @@ read_certsdir(char * const dir, const size_t max_certs,
             continue;
         }
 
-        cnt += read_cert(dir, e->d_name, store);
+        cnt += read_cert(dir, e->d_name, cnt < max_certs ? store : NULL,
+                         pool, pool_cnt);
 
-        if (cnt >= max_certs)
+        if (pool == NULL && cnt >= max_certs)
             break;
     }
 
@@ -333,20 +423,52 @@ read_certsdir(char * const dir, const size_t max_certs,
 }
 #endif /* defined(_WIN32) */
 
+/**
+ * Reads certificates (up to max_certs) from dirs (up to max_cert_dirs) into
+ * store, and stores the rest in pool for the later use (unless it is NULL,
+ * in which case certificate reading stops as soon as one of the aforementioned
+ * limit is reached).
+ *
+ * @param dirs          Array of directory paths (dir_cnt in size)
+ *                      to (non-recursively) read certificates from.
+ * @param dir_cnt       Number of elements in dirs parameter.
+ * @param max_certs     Maximum number of certificates to read to store,
+ *                      the rest will be read to pool, if it is non-NULL.
+ * @param max_cert_dirs Maximum number of directories to read to the store,
+ *                      the rest will be read to pool, if it is non-NULL.
+ * @param store         X509_STORE to read certificates to.
+ * @param pool          Certificate pool where certificates are stored
+ *                      for later use.
+ * @param total_read    If non-NULL, total number of certificates read
+ *                      in stored there.
+ * @return              Number of certificates read into the store.
+ */
 static size_t
-read_certsdirs(char * const * const dirs, const size_t max_certs,
-               const int dir_cnt, X509_STORE * const store)
+read_certsdirs(char * const * const dirs, const int dir_cnt,
+               const size_t max_certs, const int max_cert_dirs,
+               X509_STORE * const store, struct x509_pool *pool,
+               size_t * const total_read)
 {
+    /*
+     * For the ease of accounting, we count total and pool counts,
+     * but for the ease of reporting, we return store and total counts.
+     */
     size_t cnt = 0;
+    size_t pool_cnt = 0;
 
     for (int i = 0; i < dir_cnt; i++) {
-        cnt += read_certsdir(dirs[i], max_certs - cnt, store);
+        cnt += read_certsdir(dirs[i], max_certs > cnt ? max_certs  - cnt : 0,
+                             i < max_cert_dirs ? store : NULL,
+                             pool, pool ? &pool_cnt : NULL);
 
-        if (cnt >= max_certs)
+        if (pool == NULL && cnt >= max_certs)
             break;
     }
 
-    return cnt;
+    if (total_read != NULL)
+        *total_read = cnt;
+
+    return cnt - pool_cnt;
 }
 
 static void
@@ -632,9 +754,11 @@ main(int argc, char *argv[])
     int opt;
     int dirs_start;
     size_t num_certs = 0;
+    size_t total_certs_read = 0;
     size_t max_load_certs = MAX_LOAD_CERTS;
     int max_load_cert_dirs = MAX_LOAD_CERT_DIRS;
     bool skip_default_paths = false;
+    struct x509_pool cert_pool = { 0 };
     struct nonce_cfg nonce_cfg;
 
     parse_nonce_cfg(NONCE_CFG, &nonce_cfg);
@@ -727,13 +851,14 @@ main(int argc, char *argv[])
             errx(EXIT_FAILURE, "Failed to load certificates from default paths");
     }
 
-    num_certs += read_certsdirs(argv + dirs_start, max_load_certs,
-                                OSSL_MIN(argc - dirs_start - 1,
-                                         max_load_cert_dirs),
-                                store);
+    num_certs += read_certsdirs(argv + dirs_start, argc - dirs_start - 1,
+                                max_load_certs, max_load_cert_dirs,
+                                store, &cert_pool, &total_certs_read);
 
     if (verbosity >= VERBOSITY_DEBUG_STATS)
-        fprintf(stderr, "Added %zu certificates to the store\n", num_certs);
+        fprintf(stderr, "Added %zu certificates to the store"
+                        " (%zu certificates read in total)\n",
+                        num_certs, total_certs_read);
 
     report_store_size(store, "before the test run", verbosity);
 
@@ -767,6 +892,7 @@ main(int argc, char *argv[])
     ret = EXIT_SUCCESS;
 
     X509_free(x509_nonce);
+    x509_pool_empty(&cert_pool);
     X509_STORE_free(store);
     if (thread_data != NULL) {
         for (size_t i = 0; i < threadcount; i++) {
