@@ -169,8 +169,9 @@ threadcount - number of concurrent threads to run in test.
 ## ssl_poll_perf
 
 Tool to evaluate performance of QUIC client and server which both use
-[SSL_poll](https://docs.openssl.org/master/man3/SSL_poll/)(3ossl). Application creates two threads, one for client the
-other for server. Server and client can both accept/create simultanous
+[SSL_poll](https://docs.openssl.org/master/man3/SSL_poll/)(3ossl). Application runs in
+self-test mode by default. In self-test mode two threads are created, one for client the
+other for server. Server and client can both accept/create simultaneous
 connections. Each connection then can carry multiple unidirectional/bidirectional
 streams. The streams handle HTTP/1.0 GET request/responses only.
 Server always drains the incoming stream initiated by client.  It answers to
@@ -184,6 +185,21 @@ Client may request desired payload with URL as follows:
 In which case the server will send response with 8kB http/1.0 body.
 The URL parser attempts to find leftmost number, which denotes the number
 of bytes client expects in response.
+
+To run client in standalone mode use command as follows:
+```
+./ssl_poll_perf -m c -a 0 -c 10 -b 1 -u 0 http://your_server:port/desired_url
+```
+Command above runs http/0.9 client which creates 10 concurrent connections, each
+connection uses 1 bi-directional stream to send URL-request to desired server.
+
+Similarly one one can use command here to run standalone server:
+```
+./ssl_poll_perf -p 8080 -m s -a 0 servercert.pem serverkey.pem
+```
+Command above runs http/0.9 server at port 8080. You need to specify server's
+certificate and key.
+
 The test program supports options as follows:
 
 ```
@@ -194,6 +210,8 @@ The test program supports options as follows:
 -w - the size of request body, the maximum size is 100MB. The default size is 64.
 -p - port number to use
 -t - terse output
+-m - mode {client|server} (option also accepts short variant 'c' or 's'), self-test mode when ommitted
+-a - alpn {0|1} (0 = http/0.9, 1 = http/1.0), default is http/1.0
 ```
 
 ## evp_hash

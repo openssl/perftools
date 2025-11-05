@@ -353,14 +353,30 @@ struct rr_txt_full {
 
 #define request_txt_full rr_txt_full
 
+enum {
+    RUN_MODE_BOTH,
+    RUN_MODE_CLIENT,
+    RUN_MODE_SERVER
+};
+
+enum {
+    ALPN_0_9,
+    ALPN_1_0,
+    ALPN_NONE
+};
+
 static void destroy_pe(struct poll_event *);
 static int pe_return_error(struct poll_event *);
 static void pe_return_void(struct poll_event *);
 
-static const char *hostname = "localhost";
-static const char *portstr = "8000";
-static SSL_CTX *server_ctx;
+static const char *localhost = "localhost";
+static char *hostname = NULL;
+static const char *port_8000 = "8000";
+static char *portstr = NULL;
+static char *request_path = NULL;
+static SSL_CTX *server_ctx = NULL;
 static int stop_server = 0;
+static int alpn = ALPN_1_0;
 
 /* 100 MB cap on stream size */
 #define STREAM_SZ_CAP (100 * 1024 * 1024)
@@ -578,14 +594,47 @@ rb_txt_full_advrpos_cb(struct rr_buffer *rb, unsigned int sz)
     }
 }
 
+static struct rr_buffer *
+setup_response_1_0(struct rr_txt_full *rtf, unsigned int fsize)
+{
+    char date_str[80];
+    int hlen;
+    time_t t;
+
+    t = time(&t);
+    if (ctime_r(&t, date_str) == NULL)
+        strncpy(date_str, "Thu, 01 Jan 1970 00:00:00 +0000", sizeof(date_str));
+
+    /* TODO check headers if they confirm to HTTP/1.0 */
+    hlen = snprintf(rtf->rtf_headers, sizeof(rtf->rtf_headers),
+                    "HTTP/1.0 200 OK\r\n"
+                    "Content-Type: text/plain\r\n"
+                    "Content-Length: %u\r\n"
+                    "Date: %s\r\n"
+                    "\r\n", fsize, date_str);
+    if (hlen >= (int)sizeof(rtf->rtf_headers))
+        return NULL;
+
+    rtf->rtf_hdr_len = (unsigned int)hlen;
+
+    rtf->rtf_len = rtf->rtf_hdr_len + fsize;
+
+    return (struct rr_buffer *)rtf;
+}
+
+static struct rr_buffer *
+setup_response_0_9(struct rr_txt_full *rtf, unsigned int fsize)
+{
+    rtf->rtf_hdr_len = 0;
+    rtf->rtf_len = rtf->rtf_hdr_len + fsize;
+    return (struct rr_buffer *)rtf;
+}
+
 static struct rr_txt_full *
 new_txt_full_rrbuff(const char *fill_pattern, unsigned int fsize)
 {
     struct rr_txt_full *rtf;
     struct rr_buffer *rb;
-    char date_str[80];
-    int hlen;
-    time_t t;
 
     rtf = OPENSSL_malloc(sizeof(struct rr_txt_full));
     if (rtf == NULL)
@@ -597,51 +646,59 @@ new_txt_full_rrbuff(const char *fill_pattern, unsigned int fsize)
     }
     rtf->rtf_pattern_len = strlen(fill_pattern);
 
-    t = time(&t);
-    ctime_r(&t, date_str);
-    /* TODO check headers if they confirm to HTTP/1.0 */
-    hlen = snprintf(rtf->rtf_headers, sizeof(rtf->rtf_headers),
-                    "HTTP/1.0 200 OK\r\n"
-                    "Content-Type: text/plain\r\n"
-                    "Content-Length: %u\r\n"
-                    "Date: %s\r\n"
-                    "\r\n", fsize, date_str);
-    if (hlen >= (int)sizeof(rtf->rtf_headers)) {
-        OPENSSL_free(rtf->rtf_pattern);
+    switch (alpn) {
+    case ALPN_1_0:
+        rb = setup_response_1_0(rtf, fsize);
+        break;
+    case ALPN_0_9:
+        rb = setup_response_0_9(rtf, fsize);
+        break;
+    default:
         OPENSSL_free(rtf);
         return NULL;
     }
-    rtf->rtf_hdr_len = (unsigned int)hlen;
 
-    rtf->rtf_len = rtf->rtf_hdr_len + fsize;
-
-    rb = (struct rr_buffer *)rtf;
-    rb_init(rb);
-    rb->rb_type = RB_TYPE_TEXT_FULL;
-    rb->rb_eof_cb = rb_txt_full_eof_cb;
-    rb->rb_read_cb = rb_txt_full_read_cb;
-    rb->rb_ondestroy_cb = rb_txt_full_ondestroy_cb;
-    rb->rb_advrpos_cb = rb_txt_full_advrpos_cb;
+    if (rb == NULL) {
+        OPENSSL_free(rtf->rtf_pattern);
+        OPENSSL_free(rtf);
+        rtf = NULL;
+    } else {
+        rb_init(rb);
+        rb->rb_type = RB_TYPE_TEXT_FULL;
+        rb->rb_eof_cb = rb_txt_full_eof_cb;
+        rb->rb_read_cb = rb_txt_full_read_cb;
+        rb->rb_ondestroy_cb = rb_txt_full_ondestroy_cb;
+        rb->rb_advrpos_cb = rb_txt_full_advrpos_cb;
+    }
 
     return rtf;
 }
 
-static struct request_txt_full *
-new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
+static struct rr_buffer *
+setup_request_0_9(struct request_txt_full *rtf, const char *url)
 {
-    struct request_txt_full *rtf;
-    struct rr_buffer *rb;
+    int hlen;
+
+    hlen = snprintf(rtf->rtf_headers, sizeof(rtf->rtf_headers), "GET %s\r\n",
+                    url);
+    if (hlen >= (int)sizeof(rtf->rtf_headers))
+        return NULL;
+    rtf->rtf_hdr_len = (unsigned int)hlen;
+    rtf->rtf_len = rtf->rtf_hdr_len;
+
+    return (struct rr_buffer *)rtf;
+}
+
+static struct rr_buffer *
+setup_request_1_0(struct request_txt_full *rtf, const char *url,
+                  const char *fill_pattern, size_t body_len)
+{
     char date_str[80];
     int hlen;
     time_t t;
 
-    rtf = OPENSSL_zalloc(sizeof(struct request_txt_full));
-    if (rtf == NULL)
-        return NULL;
-
     if (fill_pattern != NULL) {
         if ((rtf->rtf_pattern = strdup(fill_pattern)) == NULL) {
-            OPENSSL_free(rtf);
             return NULL;
         }
         rtf->rtf_pattern_len = strlen(fill_pattern);
@@ -657,20 +714,48 @@ new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
                     "\r\n", url, body_len, date_str);
     if (hlen >= (int)sizeof(rtf->rtf_headers)) {
         OPENSSL_free(rtf->rtf_pattern);
-        OPENSSL_free(rtf);
         return NULL;
     }
     rtf->rtf_hdr_len = (unsigned int)hlen;
 
     rtf->rtf_len = rtf->rtf_hdr_len + body_len;
 
-    rb = (struct rr_buffer *)rtf;
-    rb_init(rb);
-    rb->rb_type = RB_TYPE_TEXT_FULL;
-    rb->rb_eof_cb = rb_txt_full_eof_cb;
-    rb->rb_read_cb = rb_txt_full_read_cb;
-    rb->rb_ondestroy_cb = rb_txt_full_ondestroy_cb;
-    rb->rb_advrpos_cb = rb_txt_full_advrpos_cb;
+    return (struct rr_buffer *)rtf;
+}
+
+static struct request_txt_full *
+new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
+{
+    struct request_txt_full *rtf;
+    struct rr_buffer *rb;
+
+    rtf = OPENSSL_zalloc(sizeof(struct request_txt_full));
+    if (rtf == NULL)
+        return NULL;
+
+    switch (alpn) {
+    case ALPN_0_9:
+        rb = setup_request_0_9(rtf, url);
+        break;
+    case ALPN_1_0:
+        rb = setup_request_1_0(rtf, url, fill_pattern, body_len);
+        break;
+    default:
+        OPENSSL_free(rtf);
+        return NULL;
+    }
+
+    if (rb == NULL) {
+        OPENSSL_free(rtf);
+        rtf = NULL;
+    } else {
+        rb_init(rb);
+        rb->rb_type = RB_TYPE_TEXT_FULL;
+        rb->rb_eof_cb = rb_txt_full_eof_cb;
+        rb->rb_read_cb = rb_txt_full_read_cb;
+        rb->rb_ondestroy_cb = rb_txt_full_ondestroy_cb;
+        rb->rb_advrpos_cb = rb_txt_full_advrpos_cb;
+    }
 
     return rtf;
 }
@@ -1366,8 +1451,8 @@ app_handle_qconn_error(struct poll_event *pe)
 
     if (pe->pe_poll_item.revents & SSL_POLL_EVENT_EC) {
         /*
-	 * Keep to call SSL_shutdown() to drain the connection (let all streams
-	 * to finish transfer)
+         * Keep to call SSL_shutdown() to drain the connection (let all streams
+         * to finish transfer)
          */
         rv = SSL_shutdown(get_ssl_from_pe(pe));
         DPRINTF(stderr,
@@ -1376,9 +1461,9 @@ app_handle_qconn_error(struct poll_event *pe)
                 __func__, pe, pe_type_to_name(pe),
                 (rv == 0) ? "in progress" : (rv == 1) ? "done" : "error");
         /*
-	 * override error we got in shutdown and keep connection in loop. There
-	 * should be _ECD event saying connection is drained and can be
-	 * destroyed.
+         * override error we got in shutdown and keep connection in loop. There
+         * should be _ECD event saying connection is drained and can be
+         * destroyed.
          */
         rv = 0;
     }
@@ -2087,8 +2172,12 @@ err:
  * ALPN strings for TLS handshake. Only 'http/1.0' and 'hq-interop'
  * are accepted.
  */
-static const unsigned char alpn_ossltest[] = {
+static const unsigned char alpn_http_1_0[] = {
     8,  'h', 't', 't', 'p', '/', '1', '.', '0',
+};
+
+static const unsigned char alpn_http_0_9[] = {
+    8,  'h', 't', 't', 'p', '/', '0', '.', '9',
 };
 
 /*
@@ -2098,11 +2187,25 @@ static int
 select_alpn(SSL *ssl, const unsigned char **out, unsigned char *out_len,
             const unsigned char *in, unsigned int in_len, void *arg)
 {
-    if (SSL_select_next_proto((unsigned char **)out, out_len, alpn_ossltest,
-                              sizeof(alpn_ossltest), in,
-                              in_len) == OPENSSL_NPN_NEGOTIATED)
-        return SSL_TLSEXT_ERR_OK;
-    return SSL_TLSEXT_ERR_ALERT_FATAL;
+    int e;
+
+    switch (alpn) {
+    case ALPN_0_9:
+        e = SSL_select_next_proto((unsigned char **)out, out_len,
+                                  alpn_http_0_9, sizeof(alpn_http_0_9),
+                                  in, in_len);
+        break;
+    case ALPN_1_0:
+        e = SSL_select_next_proto((unsigned char **)out, out_len,
+                                  alpn_http_1_0, sizeof(alpn_http_1_0),
+                                  in, in_len);
+        break;
+    default:
+        return SSL_TLSEXT_ERR_ALERT_FATAL;
+    }
+
+    return (e == OPENSSL_NPN_NEGOTIATED) ?
+            SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
 /* Create SSL_CTX. for server */
@@ -2249,10 +2352,13 @@ clntapp_create_request(size_t arg_sz, size_t payload_sz)
     struct request_txt_full *rtf;
     char request[80];
 
-    snprintf(request, sizeof(request), "/foo/%zu", arg_sz);
-
-    rtf = new_txt_full_request(request,
-                               (payload_sz > 0) ? "foo" : NULL, payload_sz);
+    if (request_path == NULL) {
+        snprintf(request, sizeof(request), "/foo/%zu", arg_sz);
+        rtf = new_txt_full_request(request,
+                                   (payload_sz > 0) ? "foo" : NULL, payload_sz);
+    } else {
+        rtf = new_txt_full_request(request_path, NULL, 0);
+    }
 
     return rtf;
 }
@@ -2848,13 +2954,13 @@ create_socket_bio(const char *hostname, const char *port, int family,
 static struct poll_event *
 create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
 {
-    unsigned char alpn[] = { 8, 'h', 't', 't', 'p', '/', '1', '.', '0' };
     SSL *qconn = NULL;
     BIO *bio = NULL;
     BIO_ADDR *peer_addr = NULL;
     struct poll_event *qc_pe;
     struct poll_event_connection *qc_pec;
     struct stream_stats *ss;
+    int e;
 
     qconn = SSL_new(ctx);
     if (qconn == NULL) {
@@ -2881,7 +2987,18 @@ create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
     }
 
     /* SSL_set_alpn_protos returns 0 for success! */
-    if (SSL_set_alpn_protos(qconn, alpn, sizeof(alpn)) != 0) {
+    switch (alpn) {
+    case 0:
+        e = SSL_set_alpn_protos(qconn, alpn_http_0_9, sizeof(alpn_http_0_9));
+        break;
+    case 1:
+        e = SSL_set_alpn_protos(qconn, alpn_http_1_0, sizeof(alpn_http_1_0));
+        break;
+    default:
+        DPRINTFC(stderr, "%s unknown alpn\n", __func__);
+        goto fail;
+    }
+    if (e != 0) {
         DPRINTFC(stderr, "%s SSL_set_alpn_protos() failed\n", __func__);
         goto fail;
     }
@@ -3105,7 +3222,156 @@ client_thread(void)
     return rv;
 }
 
-static void usage(const char *progname)
+static int
+get_run_mode(const char *mode_str)
+{
+    static const char *modes[] = {
+        "client",    /* RUN_MODE_CLIENT == 1 */
+        "server",    /* RUN_MODE_SERVER == 2 */
+        NULL
+    };
+    const char **mode = modes;
+    const char *pattern;
+    const char *ms, *p;
+    int i;
+
+    i = 0;
+    while ((pattern = *mode) != NULL) {
+        ms = mode_str;
+        p = pattern;
+        /*
+         * note: code here also accepts partial match on leading characters
+         * of mode_str with pattern.
+         */
+        while (*ms && tolower(*ms) == *p) {
+            ms++;
+            p++;
+        }
+        if (*ms == '\0')
+            return (i + 1);
+
+        mode++;
+        i++;
+    }
+
+    fprintf(stderr,
+            "Unknown mode %s, mode should be either client or server\n",
+            mode_str);
+
+    return -1;
+}
+
+static void
+parse_url(const char *url_in)
+{
+    char *url;
+    char *u;
+    const char *http = "https://";
+    const char *h = http;
+    char *hostserve_sep, hostserve_save;
+    char *host_str = NULL;
+    char *service = NULL;
+    int ok;
+    long port_l;
+
+    if (url_in == NULL)
+        errx(1, "%s url where to connect to is missing", __func__);
+
+    url = strdup(url_in);
+    if (url == NULL)
+        errx(1, "%s no mem", __func__);
+
+     /*
+      * chop off http
+      */
+     u = url;
+     while (*u && *h && *h == tolower(*u)) {
+         u++;
+         h++;
+     }
+
+     /*
+      * let client mode to silently override port number (either
+      * the default, or explicitly specified).
+      */
+     if (*u == ':') {
+         free(portstr);
+         portstr = strdup("80");
+         if (portstr == NULL)
+             errx(1, "%s no mem", __func__);
+         h++;
+         while (*u && *h && *h == *u) {
+             u++;
+             h++;
+         }
+     } else {
+         free(portstr);
+         portstr = strdup("443");
+         if (portstr == NULL)
+             errx(1, "%s no mem", __func__);
+     }
+
+     if (*h != '\0')
+         errx(1, "%s url (%s) does not start with 'http[s]://'", __func__, url);
+
+     hostserve_sep = strchr(u, '/');
+     if (hostserve_sep != NULL) {
+         hostserve_save = *hostserve_sep;
+         *hostserve_sep = '\0';
+     }
+
+     ok = BIO_parse_hostserv(u, &host_str, NULL, BIO_PARSE_PRIO_HOST);
+     if (ok == 0)
+         errx(1, "%s invalid hostname specification (%s)", __func__, u);
+
+     free(hostname);
+     hostname = host_str;
+     host_str = NULL;
+
+     ok = BIO_parse_hostserv(u, NULL, &service, BIO_PARSE_PRIO_SERV);
+     if (ok == 1) {
+         port_l = strtol(service, NULL, 10);
+         if (port_l < 0 || port_l > 65535)
+             errx(1, "%s invalid port number (%s)", __func__, service);
+
+         if (port_l != 0) {
+             free(portstr);
+             portstr = service;
+             service = NULL;
+         }
+     }
+     OPENSSL_free(service);
+
+     /*
+      * ownership got transferred to global variable
+      */
+     assert(host_str == NULL);
+
+     free(request_path);
+     if (hostserve_sep == NULL) {
+         request_path = strdup("/");
+     } else {
+         *hostserve_sep = hostserve_save;
+         request_path = strdup(hostserve_sep);
+     }
+
+     free(url);
+}
+
+static int
+parse_alpn(const char *alpn_codestr)
+{
+    long alpn;
+
+    alpn = strtol(alpn_codestr, NULL, 10);
+    if (alpn < ALPN_0_9 || alpn > ALPN_1_0)
+        alpn = ALPN_NONE;
+
+    return (int)alpn;
+}
+
+static void
+usage(const char *progname)
 {
     fprintf(stderr, "%s -p portnum -c connections -b bidi_stream_count "
             "-u uni_stream_count -s base_size [-V]"
@@ -3116,6 +3382,8 @@ static void usage(const char *progname)
             "\t-u number of unidirectional streams to use, default 10\n"
             "\t-s data size to request, default 64\n"
             "\t-w request body size, default 64\n"
+            "\t-m {server|client}\n"
+            "\t-a {0|1} alpn, 0 http/0.9, 1 http/1.0\n"
             "\t-V print version information and exit\n"
             "program creates server and client thread.\n"
             "client establishes `c` connections to server\n"
@@ -3123,7 +3391,9 @@ static void usage(const char *progname)
             "from server. Initial size to download is `s` bytes. The second\n"
             "stream then carries `s` * 2, third `s` * 3, etc.\n"
             "Request body increases using the same pattern starting with\n"
-            "`w` size.\n", progname);
+            "`w` size.\n"
+            "If -m is provided program runs in standalone mode, either as\n"
+            "client or as a server.\n", progname);
     exit(EXIT_FAILURE);
 }
 
@@ -3139,19 +3409,30 @@ main(int argc, char *argv[])
         server_thread,
         0
     };
+    int run_mode = RUN_MODE_BOTH;
+    const char *url = NULL;
     const char *ccountstr = "10";
     const char *bstreamstr = "10";
     const char *ustreamstr = "10";
     const char *rep_sizestr = "64";
     const char *req_sizestr = "64";
+    int have_port = 0;
+
+    hostname = strdup(localhost);
+    portstr = strdup(port_8000);
+    if (hostname == NULL || portstr == NULL)
+        errx(1, "%s malloc", __func__);
 
 #ifdef _WIN32
     progname = argv[0];
 #endif
-    while ((ch = getopt(argc, argv, "p:c:b:u:s:w:tV")) != -1) {
+    while ((ch = getopt(argc, argv, "p:c:b:u:s:w:tm:a:V")) != -1) {
         switch (ch) {
         case 'p':
-            portstr = optarg;
+            portstr = strdup(optarg);
+            if (portstr == NULL)
+                errx(1, "%s no mem", __func__);
+            have_port = 1;
             break;
         case 'c':
             ccountstr = optarg;
@@ -3171,6 +3452,12 @@ main(int argc, char *argv[])
         case 't':
             terse = 1;
             break;
+        case 'm':
+            run_mode = get_run_mode(optarg);
+            break;
+        case 'a':
+            alpn = parse_alpn(optarg);
+            break;
         case 'V':
             perflib_print_version(basename(argv[0]));
             return EXIT_SUCCESS;
@@ -3179,14 +3466,8 @@ main(int argc, char *argv[])
         }
     }
 
-    if ((argv[optind] == NULL) || (argv[optind + 1] == NULL))
+    if (alpn == ALPN_NONE)
         usage(argv[0]);
-
-    /* Create SSL_CTX that supports QUIC. */
-    if ((server_ctx = create_srv_ctx(argv[optind], argv[optind + 1])) == NULL) {
-        ERR_print_errors_fp(stderr);
-        errx(res, "Failed to create context");
-    }
 
     /* Parse port number from command line arguments. */
     port = strtoul(portstr, NULL, 0);
@@ -3194,6 +3475,34 @@ main(int argc, char *argv[])
         errx(res, "Failed to parse port number");
     targ.num = port;
     client_config.cc_portstr = portstr;
+
+    switch (run_mode) {
+    case RUN_MODE_BOTH:
+    case RUN_MODE_SERVER:
+        if ((argv[optind] == NULL) || (argv[optind + 1] == NULL))
+            usage(argv[0]); /* never returns */
+
+        /* Create SSL_CTX that supports QUIC. */
+        if ((server_ctx = create_srv_ctx(argv[optind], argv[optind + 1])) == NULL) {
+            ERR_print_errors_fp(stderr);
+            errx(res, "Failed to create context");
+        }
+        break;
+    case RUN_MODE_CLIENT:
+        if (have_port == 1)
+            warnx("%s -p option is always overridden by url argument",
+                  __func__);
+        url = argv[optind];
+        break;
+    default:
+        usage(argv[0]); /* never returns */
+    }
+
+    if (run_mode == RUN_MODE_SERVER) {
+        server_thread(port);
+        res = EXIT_SUCCESS;
+        goto done;
+    }
 
     client_config.cc_clients = strtoul(ccountstr, NULL, 0);
     if (client_config.cc_clients == 0 || client_config.cc_clients > 100)
@@ -3217,14 +3526,25 @@ main(int argc, char *argv[])
         errx(res, "request payload  size is outside of range <0, %u>",
              STREAM_SZ_CAP);
 
-    if (perflib_run_thread(&srv_thrd, &targ) != 0) {
-        /* success do the client job */
-        client_thread();
+    if (run_mode == RUN_MODE_BOTH && perflib_run_thread(&srv_thrd, &targ) == 0)
+        goto done;
+
+    if (run_mode == RUN_MODE_CLIENT)
+        parse_url(url);
+
+    client_thread();
+
+    if (run_mode == RUN_MODE_BOTH) {
         stop_server = 1;
         perflib_wait_for_thread(srv_thrd);
-        res = EXIT_SUCCESS;
     }
 
+    res = EXIT_SUCCESS;
+
+done:
+    free(hostname);
+    free(portstr);
+    free(request_path);
     SSL_CTX_free(server_ctx);
     server_ctx = NULL;
 
