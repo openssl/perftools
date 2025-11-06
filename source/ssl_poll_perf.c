@@ -3332,11 +3332,11 @@ parse_url(const char *url_in)
              service = NULL;
          }
      }
+     OPENSSL_free(service);
 
      /*
-      * ownership got transferred to global variables
+      * ownership got transferred to global variable
       */
-     assert(service == NULL);
      assert(host_str == NULL);
 
      free(request_path);
@@ -3402,6 +3402,7 @@ main(int argc, char *argv[])
     };
     int ccount = 0;
     int run_mode = RUN_MODE_BOTH;
+    const char *url = NULL;
     const char *ccountstr = "10";
     const char *bstreamstr = "10";
     const char *ustreamstr = "10";
@@ -3473,8 +3474,7 @@ main(int argc, char *argv[])
         }
         break;
     case RUN_MODE_CLIENT:
-        if (argv[optind] != NULL)
-            parse_url(argv[optind]);
+        url = argv[optind];
         break;
     default:
         usage(argv[0]); /* never returns */
@@ -3510,6 +3510,9 @@ main(int argc, char *argv[])
 
     if (run_mode == RUN_MODE_BOTH && perflib_run_thread(&srv_thrd, &targ) == 0)
         goto done;
+
+    if (run_mode == RUN_MODE_CLIENT)
+        parse_url(url);
 
     client_thread();
 
