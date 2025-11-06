@@ -2197,7 +2197,7 @@ select_alpn(SSL *ssl, const unsigned char **out, unsigned char *out_len,
         return SSL_TLSEXT_ERR_ALERT_FATAL;
     }
 
-    return (e = OPENSSL_NPN_NEGOTIATED) ?
+    return (e == OPENSSL_NPN_NEGOTIATED) ?
             SSL_TLSEXT_ERR_OK : SSL_TLSEXT_ERR_ALERT_FATAL;
 }
 
