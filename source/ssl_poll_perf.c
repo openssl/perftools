@@ -3355,7 +3355,7 @@ parse_alpn(const char *alpn_codestr)
 {
     long alpn;
 
-    alpn = strtol(alpn_codestr, 0, 10);
+    alpn = strtol(alpn_codestr, NULL, 10);
     if (alpn < ALPN_0_9 || alpn > ALPN_1_0)
         alpn = ALPN_NONE;
 
