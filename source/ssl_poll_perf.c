@@ -3384,7 +3384,7 @@ usage(const char *progname)
             "Request body increases using the same pattern starting with\n"
             "`w` size.\n"
             "If -m is provided program runs in standalone mode, either as\n"
-            "as client or as a server.\n", progname);
+            "client or as a server.\n", progname);
     exit(EXIT_FAILURE);
 }
 
