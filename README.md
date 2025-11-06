@@ -210,7 +210,7 @@ The test program supports options as follows:
 -w - the size of request body, the maximum size is 100MB. The default size is 64.
 -p - port number to use
 -t - terse output
--m - mode {client|server}, self-test mode when ommitted
+-m - mode {client|server} (option also accepts short variant 'c' or 's'), self-test mode when ommitted
 -a - alpn {0|1} (0 = http/0.9, 1 = http/1.0), default is http/1.0
 ```
 

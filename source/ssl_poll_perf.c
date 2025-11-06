@@ -595,7 +595,9 @@ setup_response_1_0(struct rr_txt_full *rtf, unsigned int fsize)
     time_t t;
 
     t = time(&t);
-    ctime_r(&t, date_str);
+    if (ctime_r(&t, date_str) == NULL)
+        strncpy(date_str, "Thu, 01 Jan 1970 00:00:00 +0000", sizeof(date_str));
+
     /* TODO check headers if they confirm to HTTP/1.0 */
     hlen = snprintf(rtf->rtf_headers, sizeof(rtf->rtf_headers),
                     "HTTP/1.0 200 OK\r\n"
@@ -725,10 +727,10 @@ new_txt_full_request(const char *url, const char *fill_pattern, size_t body_len)
         return NULL;
 
     switch (alpn) {
-    case 0:
+    case ALPN_0_9:
         rb = setup_request_0_9(rtf, url);
         break;
-    case 1:
+    case ALPN_1_0:
         rb = setup_request_1_0(rtf, url, fill_pattern, body_len);
         break;
     default:
@@ -2183,12 +2185,12 @@ select_alpn(SSL *ssl, const unsigned char **out, unsigned char *out_len,
     int e;
 
     switch (alpn) {
-    case 0:
+    case ALPN_0_9:
         e = SSL_select_next_proto((unsigned char **)out, out_len,
                                   alpn_http_0_9, sizeof(alpn_http_0_9),
                                   in, in_len);
         break;
-    case 1:
+    case ALPN_1_0:
         e = SSL_select_next_proto((unsigned char **)out, out_len,
                                   alpn_http_1_0, sizeof(alpn_http_1_0),
                                   in, in_len);
@@ -2948,8 +2950,6 @@ create_socket_bio(const char *hostname, const char *port, int family,
 static struct poll_event *
 create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
 {
-    unsigned char alpn_http_1_0[] = { 8, 'h', 't', 't', 'p', '/', '1', '.', '0' };
-    unsigned char alpn_http_0_9[] = { 8, 'h', 't', 't', 'p', '/', '0', '.', '9' };
     SSL *qconn = NULL;
     BIO *bio = NULL;
     BIO_ADDR *peer_addr = NULL;
@@ -3223,7 +3223,7 @@ get_run_mode(const char *mode_str)
 {
     static const char *modes[] = {
         "client",    /* RUN_MODE_CLIENT == 1 */
-	"server",    /* RUN_MODE_SERVER == 2 */
+        "server",    /* RUN_MODE_SERVER == 2 */
         NULL
     };
     const char **mode = modes;
@@ -3235,18 +3235,19 @@ get_run_mode(const char *mode_str)
     while ((pattern = *mode) != NULL) {
         ms = mode_str;
         p = pattern;
+        /*
+	 * note: code here also accepts partial match on leading characters
+         * of mode_str with pattern.
+         */
         while (*ms && tolower(*ms) == *p) {
             ms++;
             p++;
         }
-        /*
-         * partial match on pattern.
-         */
         if (*ms == '\0')
             return (i + 1);
 
         mode++;
-	i++;
+        i++;
     }
 
     fprintf(stderr,
@@ -3264,7 +3265,8 @@ parse_url(const char *url_in)
     const char *http = "https://";
     const char *h = http;
     char *hostserve_sep, hostserve_save;
-    char *host_str, *service;
+    char *host_str = NULL;
+    char *service = NULL;
     int ok;
     long port_l;
 
@@ -3310,8 +3312,6 @@ parse_url(const char *url_in)
          *hostserve_sep = '\0';
      }
 
-     host_str = NULL;
-     service = NULL;
      ok = BIO_parse_hostserv(u, &host_str, NULL, BIO_PARSE_PRIO_HOST);
      if (ok == 0)
          errx(1, "%s invalid hostname specification (%s)", __func__, u);
@@ -3333,17 +3333,17 @@ parse_url(const char *url_in)
          }
      }
 
-     free(service);
-     free(host_str);
+     /*
+      * ownership got transferred to global variables
+      */
+     assert(service == NULL);
+     assert(host_str == NULL);
 
-     if (request_path != NULL)
-         free(request_path);
-
+     free(request_path);
      if (hostserve_sep == NULL) {
          request_path = strdup("/");
      } else {
          *hostserve_sep = hostserve_save;
-         free(request_path);
          request_path = strdup(hostserve_sep);
      }
 
@@ -3394,7 +3394,6 @@ main(int argc, char *argv[])
 {
     int res = EXIT_FAILURE;
     int ch;
-    const char *url;
     unsigned long port;
     thread_t srv_thrd;
     struct thread_arg_st targ = {
@@ -3474,9 +3473,8 @@ main(int argc, char *argv[])
         }
         break;
     case RUN_MODE_CLIENT:
-        if (argv[optind] != NULL) {
-            url = argv[optind];
-        }
+        if (argv[optind] != NULL)
+            parse_url(argv[optind]);
         break;
     default:
         usage(argv[0]); /* never returns */
@@ -3513,9 +3511,6 @@ main(int argc, char *argv[])
     if (run_mode == RUN_MODE_BOTH && perflib_run_thread(&srv_thrd, &targ) == 0)
         goto done;
 
-    if (run_mode == RUN_MODE_CLIENT)
-        parse_url(argv[optind]);
-
     client_thread();
 
     if (run_mode == RUN_MODE_BOTH) {
@@ -3523,13 +3518,12 @@ main(int argc, char *argv[])
         perflib_wait_for_thread(srv_thrd);
     }
 
-    free(hostname);
-    free(portstr);
-    free(request_path);
-
     res = EXIT_SUCCESS;
 
 done:
+    free(hostname);
+    free(portstr);
+    free(request_path);
     SSL_CTX_free(server_ctx);
     server_ctx = NULL;
 
