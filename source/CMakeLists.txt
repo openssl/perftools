@@ -279,6 +279,36 @@ set(run_writeread_dtls
 set(run_writeread_buffers
     writeread "" "" "-b 256" "-b 4096"
     CACHE STRING "Buffer size for writeread")
+# Note that this essentially forces all x509storeissuer runs to take
+# 0.12 seconds by default, as otherwise it takes too long due to the size
+# of the test matrix.
+set(run_x509storeissuer_timeout
+    x509storeissuer "" "-T 0.12"
+    CACHE STRING "Test timeout for x509storeissuer")
+set(run_x509storeissuer_verbosity
+    x509storeissuer "" "" "-v"
+    CACHE STRING "Output verbosity level for x509storeissuer")
+set(run_x509storeissuer_quantiles
+    x509storeissuer "" "" "-q 1" "-q 20"
+    CACHE STRING "Number of quantiles for x509storeissuer")
+set(run_x509storeissuer_nonces
+    x509storeissuer "" "" "-n file:server-pss-cert.pem"
+    CACHE STRING "Nonce configurations for x509storeissuer")
+set(run_x509storeissuer_modes
+    x509storeissuer "" "" "-m rw"
+    CACHE STRING "Run modes for x509storeissuer")
+set(run_x509storeissuer_max_writers
+    x509storeissuer "" "" "-w 3"
+    CACHE STRING "Maximum writers count for x509storeissuer")
+set(run_x509storeissuer_write_prob
+    x509storeissuer "" "" "-W 0.1"
+    CACHE STRING "Write probability for x509storeissuer")
+set(run_x509storeissuer_cert_load_opts
+    x509storeissuer "" "" "-L 3" "-L 1 -l 23 -E"
+    CACHE STRING "Certificate count limit for x509storeissuer")
+set(run_x509storeissuer_ctx_share
+    x509storeissuer "" "" "-C 2"
+    CACHE STRING "X509_STORE_CTX share options for x509storeissuer")
 
 # The list of per-tet options
 set(run_opts run_evp_fetch_pqs
@@ -296,7 +326,16 @@ set(run_opts run_evp_fetch_pqs
              run_writeread_ctx_sharing
              run_writeread_dtls
              run_writeread_buffers
-             CACHE STRING "List of per-text options")
+             run_x509storeissuer_timeout
+             run_x509storeissuer_verbosity
+             run_x509storeissuer_quantiles
+             run_x509storeissuer_nonces
+             run_x509storeissuer_modes
+             run_x509storeissuer_max_writers
+             run_x509storeissuer_write_prob
+             run_x509storeissuer_cert_load_opts
+             run_x509storeissuer_ctx_share
+             CACHE STRING "List of per-test options")
 
 # Used across multiple tests
 set(run_certdir_tests handshake writeread x509storeissuer
