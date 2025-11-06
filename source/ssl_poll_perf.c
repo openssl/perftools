@@ -3479,7 +3479,7 @@ main(int argc, char *argv[])
         }
         break;
     default:
-        usage(argv[9]); /* never returns */
+        usage(argv[0]); /* never returns */
     }
 
     if (run_mode == RUN_MODE_SERVER) {
