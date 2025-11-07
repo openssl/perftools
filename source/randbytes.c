@@ -34,7 +34,6 @@ static int threadcount;
 
 void do_randbytes(size_t num)
 {
-    size_t i;
     unsigned char buf[32];
     OSSL_TIME time;
 

@@ -37,7 +37,6 @@ OSSL_TIME max_time;
 
 void do_setpeer(size_t num)
 {
-    size_t i;
     OSSL_TIME time;
 
     EVP_PKEY_CTX *pkey_ctx = NULL;
@@ -136,7 +135,6 @@ int main(int argc, char *argv[])
     OSSL_TIME duration;
     int terse = 0;
     int rc = EXIT_FAILURE;
-    size_t i;
     int opt;
 
     char *key = NULL;
@@ -219,8 +217,7 @@ int main(int argc, char *argv[])
         pkey = PEM_read_bio_PrivateKey(pem, NULL, NULL, NULL);
         BIO_free(pem);
         if (pkey == NULL) {
-            fprintf(stderr, "Failed to create key: %llu [%s PEM]\n",
-                    (unsigned long long)i,
+            fprintf(stderr, "Failed to create key: [%s PEM]\n",
                     sample_names[k]);
             return EXIT_FAILURE;
         }
