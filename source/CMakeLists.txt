@@ -117,6 +117,15 @@
 cmake_minimum_required(VERSION 3.10)
 project(perf-tools)
 
+if(WIN32)
+    set(CFLAGS_WARNINGS "/Wall" CACHE STRING "Compiler options for warnings")
+else()
+    set(CFLAGS_WARNINGS "-Wall" CACHE STRING "Compiler options for warnings")
+endif()
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CFLAGS_WARNINGS}"
+    CACHE STRING "C compiler options" FORCE)
+
 find_package(Threads)
 link_libraries(${CMAKE_THREAD_LIBS_INIT})
 

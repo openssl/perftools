@@ -335,7 +335,6 @@ static int threadcount;
 
 void do_newrawkey(size_t num)
 {
-    size_t i;
     EVP_PKEY *pkey;
     OSSL_TIME time;
     const unsigned char *key_data = key_x25519;
