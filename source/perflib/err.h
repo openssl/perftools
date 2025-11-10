@@ -15,14 +15,15 @@
 #  include <err.h>
 # else /* _WIN32 */
 #  include <stdarg.h>
+#  include "noreturn.h"
 
 extern const char *progname;
 
 extern void vwarnx(const char *, va_list);
 extern void vwarn(const char *, va_list);
 
-extern void errx(int, const char *, ...);
-extern void err(int, const char *, ...);
+extern ossl_noreturn void errx(int, const char *, ...);
+extern ossl_noreturn void err(int, const char *, ...);
 
 extern void warnx(const char *, ...);
 extern void warn(const char *, ...);

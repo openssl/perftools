@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include "err.h"
 
 const char *progname;
 
@@ -37,7 +38,7 @@ vwarn(const char *fmt, va_list ap)
     perror(NULL);
 }
 
-void
+ossl_noreturn void
 errx(int status, const char *fmt, ...)
 {
     va_list ap;
@@ -48,7 +49,7 @@ errx(int status, const char *fmt, ...)
     exit(status);
 }
 
-void
+ossl_noreturn void
 err(int status, const char *fmt, ...)
 {
     va_list ap;
