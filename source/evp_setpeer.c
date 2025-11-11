@@ -182,8 +182,6 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
-
     counts = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
     if (counts == NULL) {
         printf("Failed to create counts array\n");
@@ -221,6 +219,8 @@ int main(int argc, char *argv[])
                     sample_names[k]);
             return EXIT_FAILURE;
         }
+
+        max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
         if (!perflib_run_multi_thread_test(do_setpeer, threadcount, &duration)) {
             fprintf(stderr, "Failed to run the test %s\n", sample_names[k]);
