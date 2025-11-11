@@ -43,6 +43,7 @@
 #endif
 
 #include <openssl/bio.h>
+#include <openssl/e_os2.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 #include <openssl/quic.h>
@@ -72,15 +73,21 @@
  * then the server sends 64kB of data in HTTP/1.0 response.
  */
 
+static ossl_inline void
+debug_printf(FILE * const f, const char * const fmt, ...)
+{
 #ifdef DEBUG
-# define DPRINTF fprintf
-# define DPRINTFC fprintf
-# define DPRINTFS fprintf
-#else
-# define DPRINTF(...) (void)(0)
-# define DPRINTFC(...) (void)(0)
-# define DPRINTFS(...) (void)(0)
+    va_list ap;
+
+    va_start(ap, fmt);
+    vfprintf(f, fmt, ap);
+    va_end(ap);
 #endif
+}
+
+#define DPRINTF debug_printf
+#define DPRINTFC debug_printf
+#define DPRINTFS debug_printf
 
 /*
  * format string so we can print SSL_poll() events in more informative
@@ -962,9 +969,7 @@ handle_ssl_error(struct poll_event *pe, int rc, const char *caller)
 {
     SSL *ssl = get_ssl_from_pe(pe);
     int ssl_error, rv;
-#ifdef DEBUG
     char err_str[120];
-#endif
 
     /* may be we should use SSL_shutdown_ex() to signal peer what's going on */
     ssl_error = SSL_get_error(ssl, rc);
@@ -2386,7 +2391,6 @@ clntapp_write_cstreamcb(struct poll_event *pe)
 static int
 clntapp_write_custreamcb(struct poll_event *pe)
 {
-    struct request_buffer *rb;
     struct poll_event_custream *pecsu = pecsu = pe_to_custream(pe);
 
     if (pecsu == NULL) {
@@ -3135,7 +3139,6 @@ main(int argc, char *argv[])
         server_thread,
         0
     };
-    int ccount = 0;
     const char *ccountstr = "10";
     const char *bstreamstr = "10";
     const char *ustreamstr = "10";
