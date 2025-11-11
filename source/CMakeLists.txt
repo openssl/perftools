@@ -213,6 +213,8 @@ target_link_libraries(evp_hash PRIVATE perf)
 
 ## Running tests
 # Options
+option(enable_run_target "Enable generation of run* targets")
+
 set(run_tests evp_fetch
               evp_hash
               evp_setpeer
@@ -446,61 +448,63 @@ function(gen_run_taget _CMD _TEST)
 endfunction()
 
 # run targets generation
-foreach(test IN LISTS run_tests)
-    set(cmds "${test}")
+if (enable_run_target)
+    foreach(test IN LISTS run_tests)
+        set(cmds "${test}")
 
-    # test-specific options
-    foreach(opt_name IN LISTS run_opts)
-        set(opt "${${opt_name}}")
-        list(GET opt 0 test_name)
-        list(GET opt 1 test_opt)
-        list(REMOVE_AT opt 0 1)
+        # test-specific options
+        foreach(opt_name IN LISTS run_opts)
+            set(opt "${${opt_name}}")
+            list(GET opt 0 test_name)
+            list(GET opt 1 test_opt)
+            list(REMOVE_AT opt 0 1)
 
-        if(test IN_LIST test_name)
+            if(test IN_LIST test_name)
+                set(new_cmds)
+                foreach(cmd IN LISTS cmds)
+                    foreach(val IN LISTS opt)
+                        list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
+                    endforeach()
+                endforeach()
+                set(cmds ${new_cmds})
+            endif()
+        endforeach()
+
+        # terse
+        set(new_cmds)
+        foreach(cmd IN LISTS cmds)
+            foreach(val IN LISTS run_terse)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
+        endforeach()
+        set(cmds ${new_cmds})
+
+        # certdir
+        if(test IN_LIST run_certdir_tests)
             set(new_cmds)
             foreach(cmd IN LISTS cmds)
-                foreach(val IN LISTS opt)
-                    list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
-                endforeach()
+                list(APPEND new_cmds "${cmd} ${run_certdir}")
             endforeach()
             set(cmds ${new_cmds})
         endif()
-    endforeach()
 
-    # terse
-    set(new_cmds)
-    foreach(cmd IN LISTS cmds)
-        foreach(val IN LISTS run_terse)
-            list(APPEND new_cmds "${cmd} ${val}")
-        endforeach()
-    endforeach()
-    set(cmds ${new_cmds})
-
-    # certdir
-    if(test IN_LIST run_certdir_tests)
+        # threads
         set(new_cmds)
         foreach(cmd IN LISTS cmds)
-            list(APPEND new_cmds "${cmd} ${run_certdir}")
+            foreach(val IN LISTS run_threads)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
         endforeach()
         set(cmds ${new_cmds})
-    endif()
 
-    # threads
-    set(new_cmds)
-    foreach(cmd IN LISTS cmds)
-        foreach(val IN LISTS run_threads)
-            list(APPEND new_cmds "${cmd} ${val}")
+        # Run targets
+        foreach(cmd IN LISTS cmds)
+            gen_run_taget("${cmd}" "${test}" VAR run_target_name)
+            add_dependencies(run "${run_target_name}")
         endforeach()
-    endforeach()
-    set(cmds ${new_cmds})
 
-    # Run targets
-    foreach(cmd IN LISTS cmds)
-        gen_run_taget("${cmd}" "${test}" VAR run_target_name)
-        add_dependencies(run "${run_target_name}")
+        # Per-test version target
+        gen_run_taget("${test} -V" "${test}" NAME "run-version-${test}")
+        add_dependencies(run-version "run-version-${test}")
     endforeach()
-
-    # Per-test version target
-    gen_run_taget("${test} -V" "${test}" NAME "run-version-${test}")
-    add_dependencies(run-version "run-version-${test}")
-endforeach()
+endif()
