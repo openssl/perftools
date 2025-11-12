@@ -68,7 +68,7 @@ jobs:
     - name: "Build openssl"
       working-directory: "./openssl"
       run: |
-        make -j
+        make -j 4
     - name: "Install openssl"
       working-directory: "./openssl"
       run: |
@@ -169,7 +169,7 @@ jobs:
     - name: "Build openssl"
       working-directory: "./openssl"
       run: |
-        make -j
+        make -j 4
     - name: "Install openssl"
       working-directory: "./openssl"
       run: |
@@ -508,7 +508,7 @@ jobs:
     - name: "Build openssl"
       working-directory: "./openssl"
       run: |
-        make -j
+        make -j 4
     - name: "Install openssl"
       working-directory: "./openssl"
       run: |
