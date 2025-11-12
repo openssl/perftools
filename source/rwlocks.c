@@ -26,7 +26,7 @@
 #define RUN_TIME 5
 
 size_t threadcount = 0;
-int err = 0;
+int error = 0;
 unsigned long *dataval = NULL;
 int writers = 0;
 int readers = 0;
@@ -165,7 +165,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         return EXIT_FAILURE;
     }

@@ -90,7 +90,7 @@ jobs:
     - name: "Config perftools build"
       working-directory: "./perftools/source"
       run: |
-        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Denable_run_target:BOOL=ON -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: "./perftools/source"
       run: |
@@ -191,7 +191,7 @@ jobs:
     - name: "Config perftools build"
       working-directory: "./perftools/source"
       run: |
-        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Denable_run_target:BOOL=ON -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: "./perftools/source"
       run: |
@@ -323,7 +323,7 @@ jobs:
         shutdown_vm: false
         run: |
           cd perftools/source
-          cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
+          cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Denable_run_target:BOOL=ON -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       uses: "cross-platform-actions/action@fe0167d8082ac584754ef3ffb567fded22642c7d" #v0.27.0
       with:
@@ -436,7 +436,7 @@ jobs:
     - name: "Config perftools build"
       working-directory: ".\\perftools\\source"
       run: |
-        cmake -S . -B .\build -DOPENSSL_ROOT_DIR="$env:GITHUB_WORKSPACE\openssl" -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
+        cmake -S . -B .\build -DOPENSSL_ROOT_DIR="$env:GITHUB_WORKSPACE\openssl" -Denable_run_target:BOOL=ON -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: ".\\perftools\\source"
       run: |
@@ -530,7 +530,7 @@ jobs:
     - name: "Config perftools build"
       working-directory: "./perftools/source"
       run: |
-        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
+        cmake -S . -B build -DOPENSSL_ROOT_DIR="$GITHUB_WORKSPACE/openssl" -Denable_run_target:BOOL=ON -Drun_add_version_dep:BOOL=OFF ${{ matrix.release.cmakeopts }}
     - name: "Build perftools"
       working-directory: "./perftools/source"
       run: |

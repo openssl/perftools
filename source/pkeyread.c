@@ -51,7 +51,7 @@ size_t num_calls;
 size_t *counts;
 OSSL_TIME max_time;
 
-int err = 0;
+int error = 0;
 
 static int threadcount;
 
@@ -70,7 +70,7 @@ static void do_pemread(size_t num)
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -81,7 +81,7 @@ static void do_pemread(size_t num)
     if (pem == NULL) {
         fprintf(stderr, "%s Cannot create mem BIO [%s PEM]\n",
                 __func__, sample_names[sample_id]);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -94,14 +94,14 @@ static void do_pemread(size_t num)
         if (key == NULL) {
             fprintf(stderr, "Failed to create key [%s PEM]\n",
                     sample_names[sample_id]);
-            err = 1;
+            error = 1;
             goto end;
         }
         EVP_PKEY_free(key);
         if (BIO_reset(pem) == 0) {
             fprintf(stderr, "Failed to reset BIO [%s PEM]\n",
                     sample_names[sample_id]);
-            err = 1;
+            error = 1;
             goto end;
         }
 
@@ -131,7 +131,7 @@ static void do_derread(size_t num)
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
-        err = 1;
+        error = 1;
         return;
     }
 
@@ -145,7 +145,7 @@ static void do_derread(size_t num)
         if (pkey == NULL) {
             fprintf(stderr, "%s pkey is NULL [%s DER]\n",
                     __func__, sample_names[sample_id]);
-            err = 1;
+            error = 1;
             goto error;
         }
 error:
@@ -239,7 +239,7 @@ static void report_result(int key_id, int format_id, int verbosity)
 {
     struct call_times times = { 0 };
 
-    if (err) {
+    if (error) {
         fprintf(stderr, "Error during test of %s in %s format\n",
                 sample_names[key_id], format_names[format_id]);
         exit(EXIT_FAILURE);

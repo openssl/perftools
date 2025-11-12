@@ -24,7 +24,7 @@
 
 #define RUN_TIME 5
 
-int err = 0;
+int error = 0;
 static SSL_CTX *ctx;
 
 static int threadcount;
@@ -46,7 +46,7 @@ void do_sslnew(size_t num)
         wbio = BIO_new(BIO_s_mem());
 
         if (s == NULL || rbio == NULL || wbio == NULL) {
-            err = 1;
+            error = 1;
             BIO_free(rbio);
             BIO_free(wbio);
         } else {
@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
         goto out;
     }
 
-    if (err) {
+    if (error) {
         printf("Error during test\n");
         goto out;
     }

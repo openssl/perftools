@@ -151,6 +151,12 @@ if(WIN32)
     set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE "${OUTPUT_DIRECTORY}")
 endif()
 
+if(WIN32)
+    set(libm_dep)
+else()
+    set(libm_dep PUBLIC m)
+endif()
+
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 
@@ -188,17 +194,13 @@ add_executable(rsasign rsasign.c)
 target_link_libraries(rsasign PRIVATE perf)
 
 add_executable(x509storeissuer x509storeissuer.c)
-target_link_libraries(x509storeissuer PRIVATE perf)
+target_link_libraries(x509storeissuer ${libm_dep} PRIVATE perf)
 
 add_executable(rwlocks rwlocks.c)
 target_link_libraries(rwlocks PRIVATE perf)
 
 add_executable(pkeyread pkeyread.c)
-if(WIN32)
-    target_link_libraries(pkeyread PRIVATE perf)
-else()
-    target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
-endif()
+target_link_libraries(pkeyread ${libm_dep} PRIVATE perf)
 
 add_executable(evp_setpeer evp_setpeer.c)
 target_link_libraries(evp_setpeer PRIVATE perf)
@@ -211,6 +213,8 @@ target_link_libraries(evp_hash PRIVATE perf)
 
 ## Running tests
 # Options
+option(enable_run_target "Enable generation of run* targets")
+
 set(run_tests evp_fetch
               evp_hash
               evp_setpeer
@@ -277,6 +281,36 @@ set(run_writeread_dtls
 set(run_writeread_buffers
     writeread "" "" "-b 256" "-b 4096"
     CACHE STRING "Buffer size for writeread")
+# Note that this essentially forces all x509storeissuer runs to take
+# 0.12 seconds by default, as otherwise it takes too long due to the size
+# of the test matrix.
+set(run_x509storeissuer_timeout
+    x509storeissuer "" "-T 0.12"
+    CACHE STRING "Test timeout for x509storeissuer")
+set(run_x509storeissuer_verbosity
+    x509storeissuer "" "" "-v"
+    CACHE STRING "Output verbosity level for x509storeissuer")
+set(run_x509storeissuer_quantiles
+    x509storeissuer "" "" "-q 1" "-q 20"
+    CACHE STRING "Number of quantiles for x509storeissuer")
+set(run_x509storeissuer_nonces
+    x509storeissuer "" "" "-n file:server-pss-cert.pem"
+    CACHE STRING "Nonce configurations for x509storeissuer")
+set(run_x509storeissuer_modes
+    x509storeissuer "" "" "-m rw"
+    CACHE STRING "Run modes for x509storeissuer")
+set(run_x509storeissuer_max_writers
+    x509storeissuer "" "" "-w 3"
+    CACHE STRING "Maximum writers count for x509storeissuer")
+set(run_x509storeissuer_write_prob
+    x509storeissuer "" "" "-W 0.1"
+    CACHE STRING "Write probability for x509storeissuer")
+set(run_x509storeissuer_cert_load_opts
+    x509storeissuer "" "" "-L 3" "-L 1 -l 23 -E"
+    CACHE STRING "Certificate count limit for x509storeissuer")
+set(run_x509storeissuer_ctx_share
+    x509storeissuer "" "" "-C 2"
+    CACHE STRING "X509_STORE_CTX share options for x509storeissuer")
 
 # The list of per-tet options
 set(run_opts run_evp_fetch_pqs
@@ -294,7 +328,16 @@ set(run_opts run_evp_fetch_pqs
              run_writeread_ctx_sharing
              run_writeread_dtls
              run_writeread_buffers
-             CACHE STRING "List of per-text options")
+             run_x509storeissuer_timeout
+             run_x509storeissuer_verbosity
+             run_x509storeissuer_quantiles
+             run_x509storeissuer_nonces
+             run_x509storeissuer_modes
+             run_x509storeissuer_max_writers
+             run_x509storeissuer_write_prob
+             run_x509storeissuer_cert_load_opts
+             run_x509storeissuer_ctx_share
+             CACHE STRING "List of per-test options")
 
 # Used across multiple tests
 set(run_certdir_tests handshake writeread x509storeissuer
@@ -405,61 +448,63 @@ function(gen_run_taget _CMD _TEST)
 endfunction()
 
 # run targets generation
-foreach(test IN LISTS run_tests)
-    set(cmds "${test}")
+if (enable_run_target)
+    foreach(test IN LISTS run_tests)
+        set(cmds "${test}")
 
-    # test-specific options
-    foreach(opt_name IN LISTS run_opts)
-        set(opt "${${opt_name}}")
-        list(GET opt 0 test_name)
-        list(GET opt 1 test_opt)
-        list(REMOVE_AT opt 0 1)
+        # test-specific options
+        foreach(opt_name IN LISTS run_opts)
+            set(opt "${${opt_name}}")
+            list(GET opt 0 test_name)
+            list(GET opt 1 test_opt)
+            list(REMOVE_AT opt 0 1)
 
-        if(test IN_LIST test_name)
+            if(test IN_LIST test_name)
+                set(new_cmds)
+                foreach(cmd IN LISTS cmds)
+                    foreach(val IN LISTS opt)
+                        list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
+                    endforeach()
+                endforeach()
+                set(cmds ${new_cmds})
+            endif()
+        endforeach()
+
+        # terse
+        set(new_cmds)
+        foreach(cmd IN LISTS cmds)
+            foreach(val IN LISTS run_terse)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
+        endforeach()
+        set(cmds ${new_cmds})
+
+        # certdir
+        if(test IN_LIST run_certdir_tests)
             set(new_cmds)
             foreach(cmd IN LISTS cmds)
-                foreach(val IN LISTS opt)
-                    list(APPEND new_cmds "${cmd} ${test_opt} ${val}")
-                endforeach()
+                list(APPEND new_cmds "${cmd} ${run_certdir}")
             endforeach()
             set(cmds ${new_cmds})
         endif()
-    endforeach()
 
-    # terse
-    set(new_cmds)
-    foreach(cmd IN LISTS cmds)
-        foreach(val IN LISTS run_terse)
-            list(APPEND new_cmds "${cmd} ${val}")
-        endforeach()
-    endforeach()
-    set(cmds ${new_cmds})
-
-    # certdir
-    if(test IN_LIST run_certdir_tests)
+        # threads
         set(new_cmds)
         foreach(cmd IN LISTS cmds)
-            list(APPEND new_cmds "${cmd} ${run_certdir}")
+            foreach(val IN LISTS run_threads)
+                list(APPEND new_cmds "${cmd} ${val}")
+            endforeach()
         endforeach()
         set(cmds ${new_cmds})
-    endif()
 
-    # threads
-    set(new_cmds)
-    foreach(cmd IN LISTS cmds)
-        foreach(val IN LISTS run_threads)
-            list(APPEND new_cmds "${cmd} ${val}")
+        # Run targets
+        foreach(cmd IN LISTS cmds)
+            gen_run_taget("${cmd}" "${test}" VAR run_target_name)
+            add_dependencies(run "${run_target_name}")
         endforeach()
-    endforeach()
-    set(cmds ${new_cmds})
 
-    # Run targets
-    foreach(cmd IN LISTS cmds)
-        gen_run_taget("${cmd}" "${test}" VAR run_target_name)
-        add_dependencies(run "${run_target_name}")
+        # Per-test version target
+        gen_run_taget("${test} -V" "${test}" NAME "run-version-${test}")
+        add_dependencies(run-version "run-version-${test}")
     endforeach()
-
-    # Per-test version target
-    gen_run_taget("${test} -V" "${test}" NAME "run-version-${test}")
-    add_dependencies(run-version "run-version-${test}")
-endforeach()
+endif()
