@@ -57,6 +57,34 @@ Apart from adjusting paths in nginx.conf the script also sets
 option `work_process` to auto. Nginx server configuration is
 saved along the results for each test.
 
+## HA-proxy
+
+The HA-proxy configuration for tests is based on State of SSL stacks [8]
+paper published by HA-proxy project. The test uses chain of 10 hA-proxy
+instances by default. You may use `BENCH_PROXY_CHAIN` env. variable to
+change that. The test collects results for 1, 2, 4, ..., 32, 64 threads.
+It uses h1load [9] and siege [6]. Both HA-proxy and h1load client are
+linked with target SSL library for testing. The h1load client runs with
+options as follows:
+
+    # h1load \
+            -c 1280	\ # 1280 concurrent connections
+            -n 40000	\ # 40000 requests per connection
+            -r 1	\ # 1 request per connection
+            -P		\ # gather percentile data (currently not processsed)
+            -t 64	\ # number of threads
+            https://127.0.0.1:xxxx
+
+The h1load client fetches a static content provided by HA-proxy. The benchmark
+uses the h1load test duration to compare SSL libraries. The longer duration the
+worse result.
+
+The siege client does not build with aws-lc library. To workaround that,
+all tests use siege as http client connecting to HA-proxy, which then
+establishes SSL connection towards httpterm [10] server. To collect performance
+data The siege client executes requests which fetch 1k of data from httpterm
+server.
+
 ## Build requirements
 
 Requirements for ubuntu are the following:
@@ -145,3 +173,9 @@ should be named as `bench_run_xtool.sh`
 [6]: https://www.joedog.org/siege-home/
 
 [7]: https://www.joedog.org/siege-manual/
+
+[8]: https://www.haproxy.com/blog/state-of-ssl-stacks
+
+[9]: https://github.com/wtarreau/h1load
+
+[10]: https://github.com/wtarreau/httpterm
