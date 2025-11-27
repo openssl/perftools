@@ -131,6 +131,7 @@ function install_wolfssl {
 	typeset DIRNAME="wolfssl-${VERSION}"
 	typeset WOLFSSL_WORKSPCE="${WORKSPACE_ROOT}/${DIRNAME}"
 	typeset WOLFSSL_REPO='https://github.com/wolfSSL/wolfssl'
+	typeset HAPROXY_OPTS=$2
 
 	if [[ -z ${VERSION} ]] ; then
 		DIRNAME='wolfssl'
@@ -158,8 +159,13 @@ function install_wolfssl {
 
 	AUTOCONF_VERSION=2.72 AUTOMAKE_VERSION=1.16 ./autogen.sh || exit 1
 
-	./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
-	    --enable-nginx || exit 1
+	if [[ -z ${HAPROXY_OPTS} ]] ; then
+		./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
+		    --enable-nginx || exit 1
+	else
+		./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
+		    ${HAPROXY_OPTS} || exit 1
+	fi
 
 	make ${MAKE_OPTS} || exit 1
 	make ${MAKE_OPTS} install || exit 1
@@ -202,7 +208,7 @@ diff -r -u CMakeLists.txt CMakeLists.txt
 +++ CMakeLists.txt	2025-09-25 11:40:45.054887797 +0000
 @@ -795,7 +795,7 @@
  endif()
- 
+
  if(INSTALL_ENABLED)
 -  install(TARGETS crypto ssl EXPORT OpenSSLTargets)
 +  install(TARGETS crypto ssl decrepit EXPORT OpenSSLTargets)
@@ -336,15 +342,103 @@ function gen_certkey {
 	typeset SERVERCERT=$1
 	typeset SERVERKEY=$2
 	typeset OPENSSL="${INSTALL_ROOT}"/openssl-master/bin/openssl
+	typeset RSABITS=$3
+
+	if [[ -z "${RSABITS}" ]] ; then
+		RSABITS='4096'
+	fi
+
+	if [[ ! -x ${OPENSSL} ]] ; then
+		echo "no openssl found at ${INSTALL_ROOT}/openssl-master..."
+		echo "run bench_config_.... script first"
+		exit 1;
+	fi
 
 	#
-	# generate self-signed cert with key
+	# generate self-signed cert with rsa key
 	# note this is hack because we always assume
 	# openssl-master is installed in INSTALL root
 	#
 	$(LD_LIBRARY_PATH="${INSTALL_ROOT}/openssl-master/lib" "${OPENSSL}" \
-	    req -x509 -newkey rsa:4096 -days 180 -noenc -keyout \
+	    req -x509 -newkey rsa:${RSABITS} -days 180 -noenc -keyout \
 	    "${SERVERKEY}" -out "${SERVERCERT}" -subj "${CERT_SUBJ}" \
 	    -addext "${CERT_ALT_SUBJ}") || exit 1
 }
 
+function gen_certkey_ec {
+	typeset SERVERCERT=$1
+	typeset SERVERKEY=$2
+	typeset OPENSSL="${INSTALL_ROOT}"/openssl-master/bin/openssl
+	typeset PKEYOPT=$3
+
+	if [[ -z "${PKEYOPT}" ]] ; then
+		PKEYOPT='ec_paramgen_curve:prime256v1'
+	fi
+
+	if [[ ! -x ${OPENSSL} ]] ; then
+		echo "no openssl found at ${INSTALL_ROOT}/openssl-master..."
+		echo "run bench_config_.... script first"
+		exit 1;
+	fi
+
+	#
+	# generate self-signed cert with ecdsa key
+	# note this is hack because we always assume
+	# openssl-master is installed in INSTALL root
+	#
+	$(LD_LIBRARY_PATH="${INSTALL_ROOT}/openssl-master/lib" "${OPENSSL}" \
+	    req -x509 -newkey ec -pkeyopt ${PKEYOPT} -days 180 -noenc -keyout \
+	    "${SERVERKEY}" -out "${SERVERCERT}" -subj "${CERT_SUBJ}" \
+	    -addext "${CERT_ALT_SUBJ}") || exit 1
+}
+
+#
+# yields list of libraries we test ha-proxy
+# the  libraries are separated by space. output
+# reads as follows:
+#
+#    openssl-master openssl-3.0 .... libressl-4.1.0 wolfssl-5.8.2 aws-lc
+#
+function ssl_libs_haproxy {
+	echo -n 'openssl-master'
+	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
+		echo -n " openssl-$i"
+	done
+	echo -n ' libressl-4.1.0'
+	echo -n ' wolfssl-5.8.2'
+	echo ' aws-lc'
+}
+
+#
+# yields list of rows/stats provided by siege [1]
+# [1] https://www.joedog.org/siege-manual/
+# Fields are separated by ':', remember to adjust IFS
+#
+function siege_rows {
+	echo -n 'Transactions:'
+	echo -n 'Availability:'
+	echo -n 'Elapsed time:'
+	echo -n 'Data transferred:'
+	echo -n 'Response time:'
+	echo -n 'Transaction rate:'
+	echo -n 'Throughput:'
+	echo -n 'Concurrency:'
+	echo -n 'Successful transactions:'
+	echo -n 'Failed transactions:'
+	echo -n 'Longest transaction:'
+	echo 'Shortest transaction:'
+}
+
+#
+# number of processes we perform the test runs
+# thou output reads as follows:
+#	1 2 4 8 16 32 64
+function procs {
+	echo -n '1 '
+	echo -n '2 '
+	echo -n '4 '
+	echo -n '8 '
+	echo -n '16 '
+	echo -n '32 '
+	echo '64'
+}
