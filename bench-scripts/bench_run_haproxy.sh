@@ -23,7 +23,7 @@ CERT_SUBJ=${BENCH_CERT_SUBJ:-'/CN=localhost'}
 CERT_ALT_SUBJ=${BENCH_CERT_ALT_SUBJ:-'subjectAltName=DNS:localhost,IP:127.0.0.1'}
 HTTPTERM_HOST=${BENCH_HTTPTERM_HOST:-${HOST}}
 HTTPTERM_PORT=${BENCH_HTTPTERM_PORT:-9999}
-PROXY_CHAIN=${BENCH_PROXY_CHAIN:-21}
+PROXY_CHAIN=${BENCH_PROXY_CHAIN:-10}
 HAPROXY_VERSION='v3.2.0'
 TEST_TIME=${BENCH_TEST_TIME:-'10'}
 
@@ -42,7 +42,7 @@ function run_haproxy {
 
     LD_LIBRARY_PATH="${OPENSSL_DIR}/lib" "${HAPROXY}" \
         -f "${OPENSSL_DIR}/etc/haproxy.conf" \
-    -p ${HAPPIDFILE} \
+        -p ${HAPPIDFILE} \
         -D
     if [[ $? -ne 0 ]] ; then
         echo "could not start haproxy"
@@ -60,7 +60,7 @@ function run_httpterm {
     typeset HTTPTERM="${OPENSSL_DIR}"/bin/httpterm
 
     LD_LIBRARY_PATH="${OPENSSL_DIR}/lib" "${HTTPTERM}" \
-    -p ${HTTPTERMPIDFILE} \
+        -p ${HTTPTERMPIDFILE} \
         -L ${HTTPTERM_HOST}:${HTTPTERM_PORT} \
         -D
     if [[ $? -ne 0 ]] ; then
@@ -99,7 +99,7 @@ function run_test {
     run_haproxy ${SSL_LIB} ${HAPPIDFILE}
     run_httpterm ${SSL_LIB} ${HTTPTERMPIDFILE}
 
-    echo "proxy running for ${SSL_LIB} ${THREAD_COUNT}"
+    echo "HA-proxy running with ${SSL_LIB}, h1load uses ${THREAD_COUNT} threads"
 
     for TEST_NAME in dh-rsa-reuse dh-rsa-noreuse ec-dsa-reuse ec-dsa-noreuse ; do
         case ${TEST_NAME} in
@@ -121,11 +121,18 @@ function run_test {
                 ;;
         esac
         RESULT=${RESULT_DIR}/h1load-${TEST_NAME}-${THREAD_COUNT}-${SSL_LIB}.out
+        #
+        # -c number of concurrent connections, must be divisible by thread count
+        # -n number of requests, should X * number of connections, here X == 5
+        # -r number of requests per connection
+        # -P add percentile data to result (those are not plotted yet)
+        # -t number of threads
+        #
         LD_LIBRARY_PATH=${OPENSSL_DIR}/lib ${H1LOAD} \
-            -l \
-            -P \
-            -d ${TEST_TIME} \
-            -c 500 \
+            -c 1280  \
+            -n 40000 \
+            -r 1    \
+            -P      \
             -t ${THREAD_COUNT} \
             ${BASE_URL}${PORT} > ${RESULT} || exit 1
     done
@@ -168,8 +175,8 @@ function run_tests {
             run_test openssl-${i} ${t}
         done
         run_test OpenSSL_1_1_1-stable ${t}
-        run_test libressl-4.1.0 ${t}
-        run_test wolfssl-5.8.2 ${t}
+        run_test libressl-${HAPROXY_LIBRE_VERSION} ${t}
+        run_test wolfssl-${HAPROXY_WOLF_VERSION} ${t}
         run_test aws-lc ${t}
         #
         # could not get haproxy working with boringssl
@@ -178,26 +185,113 @@ function run_tests {
 }
 
 #
+# function uses gnuplot(1) to generate .png
+# with plot of performance data we got from
+# siege. It currently plots data for:
+# openssl-master, ..., openssl-3.0, openssl-1.1.1,
+# libressl, wolfssl, aws-lc
+#
+function plot_siege {
+    typeset DATA_FILE=${1}
+    typeset OUT_FILE=${2}
+    typeset TITLE=${3}
+    typeset YLABEL=${4}
+
+    gnuplot << EOF
+set title "${TITLE}"
+set grid lt 0 lw 1 ls 1 lc rgb "#d7d7d7"
+set xlabel "Number of threads"
+set ylabel "${YLABEL}"
+set terminal pngcairo size 800,400 background rgb "#f8f8f8"
+set output "${OUT_FILE}"
+set key autotitle columnhead outside
+set auto x
+set style data histogram
+set style histogram cluster gap 1
+set style fill solid border -1
+set boxwidth 0.9
+plot \
+    "${DATA_FILE}" using 3:xticlabels(2) ti col, \
+    "${DATA_FILE}" using 4 ti col, \
+    "${DATA_FILE}" using 5 ti col, \
+    "${DATA_FILE}" using 6 ti col, \
+    "${DATA_FILE}" using 7 ti col, \
+    "${DATA_FILE}" using 8 ti col, \
+    "${DATA_FILE}" using 9 ti col, \
+    "${DATA_FILE}" using 10 ti col, \
+    "${DATA_FILE}" using 11 ti col, \
+    "${DATA_FILE}" using 12 ti col, \
+    "${DATA_FILE}" using 13 ti col, \
+    "${DATA_FILE}" using 14 ti col, \
+    "${DATA_FILE}" using 15 ti col
+EOF
+}
+
+#
+# function uses gnuplot(1) to generate .png
+# with plot of performance data we got from
+# h1load. It currently plots data for:
+# openssl-master, ..., openssl-3.0, openssl-1.1.1,
+# libressl, wolfssl, aws-lc
+#
+function plot_h1load {
+    typeset DATA_FILE=${1}
+    typeset OUT_FILE=${2}
+    typeset TITLE=${3}
+    typeset YLABEL='secs to complete h1load'
+
+    gnuplot << EOF
+set title "${TITLE}"
+set grid lt 0 lw 1 ls 1 lc rgb "#d7d7d7"
+set xlabel "Number of threads"
+set ylabel "${YLABEL}"
+set terminal pngcairo size 800,400 background rgb "#f8f8f8"
+set output "${OUT_FILE}"
+set key autotitle columnhead outside
+set auto x
+set style data histogram
+set style histogram cluster gap 1
+set style fill solid border -1
+set boxwidth 0.9
+plot \
+    "${DATA_FILE}" using 2:xticlabels(1) ti col, \
+    "${DATA_FILE}" using 3 ti col, \
+    "${DATA_FILE}" using 4 ti col, \
+    "${DATA_FILE}" using 5 ti col, \
+    "${DATA_FILE}" using 6 ti col, \
+    "${DATA_FILE}" using 7 ti col, \
+    "${DATA_FILE}" using 8 ti col, \
+    "${DATA_FILE}" using 9 ti col, \
+    "${DATA_FILE}" using 10 ti col, \
+    "${DATA_FILE}" using 11 ti col, \
+    "${DATA_FILE}" using 12 ti col, \
+    "${DATA_FILE}" using 13 ti col, \
+    "${DATA_FILE}" using 14 ti col
+EOF
+}
+
+#
 # function merges siege tests to tables so results
-# can be compared plotted. The tests collect data
-# to files. Each file contains a combination of:
+# can be plotted. The tests collect data to files.
+# Each file contains a combination of:
 #    - ha-proxy configuration
 #    - ssl library
 #    - number of processes used
 # the list of files looks then as follows:
-#   h1load-dh-rsa-noreuse-1-openssl-3.4.out
+#   siege-dh-rsa-noreuse-1-openssl-3.4.out
 #   ...
-#   h1load-dh-rsa-noreuse-2-wolfssl-5.8.2.out
+#   siege-dh-rsa-noreuse-2-wolfssl-5.8.2.out
 #   ...
-#   h1load-dh-rsa-noreuse-64-openssl-master.out
+#   siege-dh-rsa-noreuse-64-openssl-master.out
 #
-# the h1load-dh-rsa-noreuse- identifies ha-proxy configuration
-# used for testing.
+# the siege-dh-rsa-noreuse- identifies ha-proxy configuration
+# and test tool used to obtain data. In this case data
+# come from siege using RSA key exchange during SSL handshake.
 #
 # the next -1, -3, ..., -64 infix represents number of threads/cpus
 # used for test.
 #
-# openss-3.4, weolfssl-5.8.2, ... is the ssl library used
+# openssl-3.4, weolfssl-5.8.2, ... is the ssl library used
 # for testing
 #
 # this function merges collected data to tables so we can
@@ -218,6 +312,7 @@ function merge_siege {
     typeset INPUT_FILE=''
     typeset OUTPUT_FILE=''
     typeset SAVE_IFS=''
+    typeset LINE=1
 
     for HANDSHAKE in siege-dh-rsa-noreuse siege-ec-dsa-noreuse ; do
         SAVE_IFS=${IFS}
@@ -233,15 +328,18 @@ function merge_siege {
             #
             # print header with column labels
             #
+            printf "line-no.\tThreads" >> ${OUTPUT_FILE}
             for SSL_LIB in `ssl_libs_haproxy` ; do
                 printf "\t${SSL_LIB}" >> ${OUTPUT_FILE}
             done
             printf '\n' >> ${OUTPUT_FILE}
+            LINE=1
             for PROCS in `procs` ; do
                 #
                 # row header with number CPUs used for test
                 #
-                printf "${PROCS}" >> ${OUTPUT_FILE}
+                printf "${LINE}\t${PROCS}" >> ${OUTPUT_FILE}
+                LINE=$(( ${LINE} + 1))
                 for SSL_LIB in `ssl_libs_haproxy` ; do
                     INPUT_FILE=${HANDSHAKE}-${PROCS}-${SSL_LIB}.out
                     INPUT_FILE=${RESULT_DIR}/${INPUT_FILE}
@@ -272,5 +370,149 @@ function merge_siege {
     done
 }
 
+#
+# function merges h1load tests to tables so results
+# can be plotted. The tests collect data
+# to files. Each file contains a combination of:
+#    - ha-proxy configuration
+#    - ssl library
+#    - number of processes used
+# the list of files looks then as follows:
+#   h1load-dh-rsa-noreuse-1-openssl-3.4.out
+#   ...
+#   h1load-dh-rsa-noreuse-2-wolfssl-5.8.2.out
+#   ...
+#   h1load-dh-rsa-noreuse-64-openssl-master.out
+#
+# the h1load-dh-rsa-noreuse- identifies ha-proxy configuration
+# and tool used for testing.
+#
+# the next -1, -3, ..., -64 infix represents number of threads/cpus
+# used for test.
+#
+# openss-3.4, weolfssl-5.8.2, ... is the ssl library used
+# for testing
+#
+# the merge process uses a test duration to compose the results
+# into single table to plot. The idea is the longer the test run
+# takes the worse performance.
+#
+function merge_h1load {
+    typeset RESULT_DIR=${1:-'.'}
+    typeset HANDSHAKE=''
+    typeset PROCS=''
+    typeset SSL_LIB=''
+    typeset DURATION=''
+    typeset INPUT_FILE=''
+    typeset OUTPUT_FILE=''
+
+    for HANDSHAKE in h1load-dh-rsa-noreuse h1load-dh-rsa-reuse h1load-ec-dsa-noreuse h1load-ec-dsa-reuse ; do
+        OUTPUT_FILE=${RESULT_DIR}/${HANDSHAKE}.merged
+        printf "Threads" > ${OUTPUT_FILE}
+        for SSL_LIB in `ssl_libs_haproxy` ; do
+            printf "\t${SSL_LIB}" >> ${OUTPUT_FILE}
+        done
+        printf "\n" >> ${OUTPUT_FILE}
+        for PROCS in `procs` ; do
+            printf "${PROCS}" >> ${OUTPUT_FILE}
+            for SSL_LIB in `ssl_libs_haproxy` ; do
+                INPUT_FILE=${RESULT_DIR}/${HANDSHAKE}-${PROCS}-${SSL_LIB}.out
+                #
+                # h1load outputs performance data combined with percentile table. Those
+                # parts are delimited by ^#= delimiter. The sed expression chops off
+                # the first part (performance table).
+                # tail -1 then grabs the last line where we find the test duration
+                # in secs. The test duration is found in the first column we read
+                # using awk
+                #
+                DURATION=$(sed -ne '/^#=/q;p' "${INPUT_FILE}" |tail -1 |awk '{ printf($1); }')
+                printf "\t${DURATION}" >> ${OUTPUT_FILE}
+            one
+            #
+            # new line
+            #
+            printf "\n" >> ${OUTPUT_FILE}
+        done
+    done
+}
+
+#
+# siege charts to plot:
+#        Trnsaction Rate		(in trans/sec)
+#
+function create_siege_plots {
+    typeset RESULTS=${1}
+    typeset HANDSHAKE=''
+    typeset DATA_FILE=''
+    typeset OUT_FILE=''
+
+    for HANDSHAKE in siege-dh-rsa-noreuse siege-ec-dsa-noreuse ; do
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Transactions.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Transactions.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Number of transactions in ${TEST_TIME} secs (${HANDSHAKE})" \
+            "Transactions"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Data_transferred.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Data_transferred.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Bytes transferred in ${TEST_TIME} secs (${HANDSHAKE})" \
+            "Data Transfer [MB]"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Longest_transaction.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Longest_transaction.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Longest transaction (${HANDSHAKE})" \
+            "Duration [ms]"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Shortest_transaction.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Shortest_trnsaction.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Shortest transaction (${HANDSHAKE})" \
+            "Duration [ms]"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Response_time.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Response_time.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Average response time (${HANDSHAKE})" \
+            "time [ms]"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Throughput.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Throughput.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Throughput (${HANDSHAKE})" \
+            "MB/sec"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Throughput.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Throughput.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Throughput (${HANDSHAKE})" \
+            "MB/sec"
+
+        DATA_FILE=${RESULTS}/${HANDSHAKE}-Transaction_rate.merged
+        OUT_FILE=${RESULTS}/${HANDSHAKE}-Transaction_rate.png
+        plot_siege ${DATA_FILE} ${OUT_FILE} \
+            "Transaction rate (${HANDSHAKE})" \
+            "trans/sec"
+    done
+}
+
+function create_h1load_plots {
+    typeset RESULTS=${1}
+    typeset HANDSHAKE=''
+    typeset DATA_FILE=''
+    typeset OUT_FILE=''
+
+    for HANDSHAKE in dh-rsa-noreuse dh-rsa-reuse ec-dsa-noreuse ec-dsa-reuse ; do
+        DATA_FILE=${RESULTS}/h1load-${HANDSHAKE}.merged
+        OUT_FILE=${RESULTS}/h1load-${HANDSHAKE}.png
+        plot_h1load ${DATA_FILE} ${OUT_FILE} \
+            "Time in seconds to complete the\n${HANDSHAKE} test"
+    done
+}
+
 run_tests
 merge_siege ${RESULT_DIR}
+merge_h1load ${RESULT_DIR}
+create_siege_plots ${RESULT_DIR}
+create_h1load_plots ${RESULT_DIR}

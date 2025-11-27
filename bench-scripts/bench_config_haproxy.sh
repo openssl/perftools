@@ -144,15 +144,14 @@ global
         ssl-server-verify none
 
 EOF
-
 }
 
 function emit_frontend {
-        typeset HAPROXY_CONF=$1
-        typeset REUSE_LABEL=$2
-        typeset BASEPORT=$3
-        typeset PROXYCERT=$4
-        typeset SSL_REUSE=$5
+    typeset HAPROXY_CONF=$1
+    typeset REUSE_LABEL=$2
+    typeset BASEPORT=$3
+    typeset PROXYCERT=$4
+    typeset SSL_REUSE=$5
 
 
 cat <<EOF >> ${HAPROXY_CONF}
@@ -172,12 +171,16 @@ frontend port${BASEPORT}
 EOF
 }
 
+#
+# http connection to httpterm server. The server
+# does not support https
+#
 function emit_httpterm {
-        typeset HAPROXY_CONF=$1
-        typeset REUSE_LABEL=$2
-        typeset BASEPORT=$3
-        typeset PROXYCERT=$4
-        typeset SSL_REUSE=$5
+    typeset HAPROXY_CONF=$1
+    typeset REUSE_LABEL=$2
+    typeset BASEPORT=$3
+    typeset PROXYCERT=$4
+    typeset SSL_REUSE=$5
 
 cat <<EOF >> ${HAPROXY_CONF}
 defaults ${REUSE_LABEL}
@@ -199,14 +202,22 @@ backend httpterm${BASEPORT}
 EOF
 }
 
+#
+# make runtime stats available on URL below.
+# https://127.0.0.1:{$PORT_RSA_REUSE, $PORT_RSA}, $PORT_EC_REUSE, $PORT_EC}/stats
+# see link here to find more information on this:
+# https://www.haproxy.com/documentation/haproxy-configuration-tutorials/alerts-and-monitoring/statistics/
+#
 function emit_stats {
-        typeset HAPROXY_CONF=$1
-        typeset BASEPORT=$2
-        typeset PROXYCERT=$3
+    typeset HAPROXY_CONF=$1
+    typeset BASEPORT=$2
+    typeset PROXYCERT=$3
 
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${BASEPORT}
         bind ${HOST}:${BASEPORT} ssl crt ${PROXYCERT}
+        stats enable
+        stats refresh 5s
         stats uri /stats
         server next ${HOST}:$(( ${BASEPORT} - 1))
 
@@ -214,9 +225,9 @@ EOF
 }
 
 function emit_https_port {
-        typeset HAPROXY_CONF=$1
-        typeset PORT=$2
-        typeset PROXYCERT=$3
+    typeset HAPROXY_CONF=$1
+    typeset PORT=$2
+    typeset PROXYCERT=$3
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${PORT}
         bind ${HOST}:${PORT} ssl crt ${PROXYCERT}
@@ -225,10 +236,15 @@ listen port${PORT}
 EOF
 }
 
+#
+# the http port is used by siege client.
+# proxy accepts http connections and then
+# connects with https towards proxy-chain
+#
 function emit_http_port {
-        typeset HAPROXY_CONF=$1
-        typeset HTTP_PORT=$2
-        typeset PORT=$3
+    typeset HAPROXY_CONF=$1
+    typeset HTTP_PORT=$2
+    typeset PORT=$3
 
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${HTTP_PORT}
@@ -273,6 +289,7 @@ function config_haproxy {
     typeset BASEPORT_RSA=''
     typeset BASEPORT_EC_REUSE=''
     typeset BASEPORT_EC=''
+    typeset EMIT_STATS=0
 
     if [[ -z "${SSL_LIB}" ]] ; then
         SSL_LIB='openssl-=master'
@@ -321,23 +338,24 @@ function config_haproxy {
                 emit_httpterm ${HAPROXY_CONF} ${REUSE_LABEL} ${BASEPORT} ${PROXYCERT} ${SSL_REUSE}
             fi
 
+            TOPPORT=$(( ${BASEPORT} + ${PROXY_CHAIN} ))
             BASEPORT=$(( ${BASEPORT} + 1))
-            TOPPORT=$(( ${BASEPORT} + ${PROXY_CHAIN} - 1 ))
-            emit_stats ${HAPROXY_CONF} ${BASEPORT} ${PROXYCERT}
-
-            BASEPORT=$(( ${BASEPORT} + 1))
+            EMIT_STATS=1
             for PORT in $(seq ${BASEPORT} ${TOPPORT}) ; do
-                emit_https_port ${HAPROXY_CONF} ${PORT} ${PROXYCERT}
+		if [[ ${EMIT_STATS} -eq 1 ]] ; then
+                    emit_stats ${HAPROXY_CONF} ${BASEPORT} ${PROXYCERT}
+                    EMIT_STATS=0
+		else
+                    emit_https_port ${HAPROXY_CONF} ${PORT} ${PROXYCERT}
+		fi
             done
 
-            PORT=$(( ${TOPPORT} + 1 ))
             #
             # tests use siege client without https support.
             # so here we create http to https proxy. The proxy
             # is created for no-reuse tests only.
             #
             if [[ ${REUSE_LABEL} = 'no-ssl-reuse' ]] ; then
-                PORT=$(( ${TOPPORT} + 1 ))
                 HTTP_PORT=$(( ${PORT} + 1))
                 emit_http_port ${HAPROXY_CONF} ${HTTP_PORT} ${PORT}
             fi
@@ -380,21 +398,21 @@ function setup_tests {
     clean_build
 
     cd "${WORKSPACE_ROOT}"
-    install_wolfssl 5.8.2 '--enable-haproxy --enable-quic'
-    install_haproxy wolfssl-5.8.2
-    install_httpterm wolfssl-5.8.2
-    install_h1load wolfssl-5.8.2
-    install_siege wolfssl-5.8.2
-    config_haproxy wolfssl-5.8.2
+    install_wolfssl ${HAPROXY_WOLF_VERSION} '--enable-haproxy --enable-quic'
+    install_haproxy wolfssl-${HAPROXY_WOLF_VERSION}
+    install_httpterm wolfssl-${HAPROXY_WOLF_VERSION}
+    install_h1load wolfssl-${HAPROXY_WOLF_VERSION}
+    install_siege wolfssl-${HAPROXY_WOLF_VERSION}
+    config_haproxy wolfssl-${HAPROXY_WOLF_VERSION}
     clean_build
 
     cd "${WORKSPACE_ROOT}"
-    install_libressl 4.1.0
-    install_haproxy libressl-4.1.0
-    install_httpterm libressl-4.1.0
-    install_h1load libressl-4.1.0
-    install_siege libressl-4.1.0
-    config_haproxy libressl-4.1.0
+    install_libressl ${HAPROXY_LIBRE_VERSION}
+    install_haproxy libressl-${HAPROXY_LIBRE_VERSION}
+    install_httpterm libressl-${HAPROXY_LIBRE_VERSION}
+    install_h1load libressl-${HAPROXY_LIBRE_VERSION}
+    install_siege libressl-${HAPROXY_LIBRE_VERSION}
+    config_haproxy libressl-${HAPROXY_LIBRE_VERSION}
     clean_build
 
     #

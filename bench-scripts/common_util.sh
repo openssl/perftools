@@ -399,13 +399,16 @@ function gen_certkey_ec {
 #
 #    openssl-master openssl-3.0 .... libressl-4.1.0 wolfssl-5.8.2 aws-lc
 #
+HAPROXY_LIBRE_VERSION='4.2.1'
+HAPROXY_WOLF_VERSION='5.8.4'
 function ssl_libs_haproxy {
 	echo -n 'openssl-master'
 	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
 		echo -n " openssl-$i"
 	done
-	echo -n ' libressl-4.1.0'
-	echo -n ' wolfssl-5.8.2'
+        echo -n ' OpenSSL_1_1_1-stable'
+	echo -n " libressl-${HAPROXY_LIBRE_VERSION}"
+	echo -n " wolfssl-${HAPROXY_WOLF_VERSION}"
 	echo ' aws-lc'
 }
 
