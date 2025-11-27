@@ -63,7 +63,6 @@ HOST=${BENCH_HOST:-'127.0.0.1'}
 APACHE_VERSION='2.4.65'
 
 . ./common_util.sh
-. ./bench_config_haproxy.sh
 
 function install_wolfssl_for_apache {
 	typeset VERSION=$1

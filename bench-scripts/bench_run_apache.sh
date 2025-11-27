@@ -61,7 +61,6 @@ CERT_ALT_SUBJ=${BENCH_CERT_ALT_SUBJ:-'subjectAltName=DNS:localhost,IP:127.0.0.1'
 TEST_TIME=${BENCH_TEST_TIME:-'5M'}
 HOST=${BENCH_HOST:-'127.0.0.1'}
 APACHE_VERSION='2.4.65'
-HAPROXY='no'
 
 . ./common_util.sh
 . ./bench_run_haproxy.sh
@@ -97,15 +96,11 @@ function enable_mpm {
 
 function run_test {
 	typeset SSL_LIB=$1
-	typeset HAPROXY=$2
 	typeset i=0
 	typeset PORT=${HTTPS_PORT}
 	typeset PROTOCOL="https"
 	if [[ -z "${SSL_LIB}" ]] ; then
 		SSL_LIB='openssl-master'
-	fi
-	if [[ -z "${HAPROXY}" ]] ; then
-		HAPROXY='no'
 	fi
 	typeset RESULTS="${SSL_LIB}".txt
 	if [[ "${SSL_LIB}" = 'nossl' ]] ; then
@@ -113,9 +108,6 @@ function run_test {
 		RESULTS='nossl.txt'
 		PORT=${HTTP_PORT}
 		PROTOCOL="http"
-	fi
-	if [[ "${HAPROXY}" != 'no' ]] ; then
-		RESULTS="haproxy-${SSL_LIB}-${HAPROXY}.txt"
 	fi
 	typeset HTDOCS="${INSTALL_ROOT}/${SSL_LIB}"/htdocs
 	typeset SIEGE="${INSTALL_ROOT}"/openssl-master/bin/siege
@@ -145,22 +137,8 @@ function run_test {
 	#
 	rm -f siege_urls.txt
 	for i in `ls -1 ${HTDOCS}/*.txt` ; do
-		if [[ "${HAPROXY}" = "no" ]] ; then
-			echo "${PROTOCOL}://${HOST}:${PORT}/`basename $i`" >> siege_urls.txt
-		elif [[ "${HAPROXY}" = "no-ssl" ]] ; then
-			echo "http://${HOST}:${HAPROXY_NOSSL_PORT}/`basename $i`" >> siege_urls.txt
-		elif [[ "${HAPROXY}" = "server" ]] ; then
-			echo "https://${HOST}:${HAPROXY_C2P_PORT}/`basename $i`" >> siege_urls.txt
-		elif [[ "${HAPROXY}" = "client" ]] ; then
-			echo "http://${HOST}:${HAPROXY_P2S_PORT}/`basename $i`" >> siege_urls.txt
-		elif [[ "${HAPROXY}" = "both" ]] ; then
-			echo "https://${HOST}:${HAPROXY_C2S_PORT}/`basename $i`" >> siege_urls.txt
-		fi
+		echo "${PROTOCOL}://${HOST}:${PORT}/`basename $i`" >> siege_urls.txt
 	done
-
-	if [[ "${HAPROXY}" = "server" ]] || [[ "${HAPROXY}" = "both" ]] ; then
-		conf_siege_haproxy_cert $SSL_LIB
-	fi
 
 	#
 	# start apache httpd server
@@ -200,44 +178,32 @@ function run_test {
 	    ${RESULT_DIR}/httpd-${SSL_LIB}.conf
 	cp ${INSTALL_ROOT}/${SSL_LIB}/conf/extra/httpd-ssl.conf \
 	    ${RESULT_DIR}/httpd-ssl-${SSL_LIB}.conf
-
-	if [[ "${HAPROXY}" = "server" ]] || [[ "${HAPROXY}" = "both" ]] ; then
-		unconf_siege_haproxy_cert
-	fi
 }
 
 function run_tests {
 	typeset SAVE_RESULT_DIR="${RESULT_DIR}"
-	typeset HAPROXY_OPTIONS=('no' 'client' 'server' 'both')
-	typeset mode=""
+	typeset MODE=""
 	typeset i=""
 
-	for mode in event worker prefork ; do
-		mkdir -p ${SAVE_RESULT_DIR}/${mode} || exit 1
+	for MODE in event worker prefork ; do
+		mkdir -p ${SAVE_RESULT_DIR}/${MODE} || exit 1
 
-		enable_mpm ${mode}
-		RESULT_DIR="${SAVE_RESULT_DIR}/${mode}"
+		enable_mpm ${MODE}
+		RESULT_DIR="${SAVE_RESULT_DIR}/${MODE}"
 		run_test nossl
-		run_haproxy
-		run_test nossl 'no-ssl'
-		kill_haproxy
 		for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 master ; do
-		    enable_mpm ${mode} openssl-${i}
-		    run_haproxy openssl-${i}
-		    for OPTION in ${HAPROXY_OPTIONS[@]} ; do
-				run_test openssl-${i} ${OPTION}
-		    done
-		    kill_haproxy
+			enable_mpm ${MODE} openssl-${i}
+			run_test openssl-${i} ${OPTION}
 		done
-		enable_mpm ${mode} OpenSSL_1_1_1-stable
+		enable_mpm ${MODE} OpenSSL_1_1_1-stable
 		run_test OpenSSL_1_1_1-stable
-		enable_mpm ${mode} libressl-4.1.0
+		enable_mpm ${MODE} libressl-4.1.0
 		run_test libressl-4.1.0
-		#enable_mpm ${mode} wolfssl-5.8.2
+		#enable_mpm ${MODE} wolfssl-5.8.2
 		#run_test wolfssl-5.8.2
-		enable_mpm ${mode} boringssl
+		enable_mpm ${MODE} boringssl
 		run_test boringssl
-		enable_mpm ${mode} aws-lc
+		enable_mpm ${MODE} aws-lc
 		run_test aws-lc
 	done
 
@@ -247,8 +213,8 @@ function run_tests {
 check_env
 run_tests
 SAVE_RESULT_DIR=${RESULT_DIR}
-for mode in event worker prefork ; do
-	RESULT_DIR=${SAVE_RESULT_DIR}/${mode}
+for MODE in event worker prefork ; do
+	RESULT_DIR=${SAVE_RESULT_DIR}/${MODE}
 	plot_results
 done
 RESULT_DIR=${SAVE_RESULT_DIR}
