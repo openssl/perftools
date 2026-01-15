@@ -209,10 +209,14 @@ target_link_libraries(writeread PRIVATE perf)
 add_executable(evp_hash evp_hash.c)
 target_link_libraries(evp_hash PRIVATE perf)
 
+add_executable(evp_cipher evp_cipher.c)
+target_link_libraries(evp_cipher PRIVATE perf)
+
 ## Running tests
 # Options
 set(run_tests evp_fetch
               evp_hash
+              evp_cipher
               evp_setpeer
               handshake
               newrawkey
@@ -244,6 +248,12 @@ set(run_evp_hash_update_times
 set(run_evp_hash_algorithms
     evp_hash "" "" "-a SHA1" "-a SHA224" "-a SHA256" "-a SHA384" "-a SHA512"
     CACHE STRING "Digest hash algorithms for evp_hash")
+set(run_evp_cipher_operations
+    evp_cipher "" "" "-o evp_isolated" "-o evp_shared"
+    CACHE STRING "Modes of operation for evp_cipher")
+set(run_evp_cipher_algorithms
+    evp_cipher "" "" "-a AES-128-CBC" "-a AES-256-CBC"
+    CACHE STRING "Encryption algorithms for evp_cipher")
 set(run_evp_setpeer_keys
     evp_setpeer "-k" dh ec256 ec521 x25519 all
     CACHE STRING "Key types for evp_setpeer")
@@ -283,6 +293,8 @@ set(run_opts run_evp_fetch_pqs
              run_evp_hash_operations
              run_evp_hash_update_times
              run_evp_hash_algorithms
+             run_evp_cipher_operations
+             run_evp_cipher_algorithms
              run_evp_setpeer_keys
              run_newrawkey_algos
              run_pkeyread_keys

@@ -237,3 +237,25 @@ thread-count - number of threads
 ```sh
 evp_hash -u 10 -a SHA512 -o evp_isolated 15
 ```
+
+## evp_cipher
+
+Tool that encrypts random data using the specified algorithm.
+Runs for 5 seconds and prints the average execution time per encryption.
+Two modes of operation:
+- evp_isolated: Use EVP API and don't allow shared data between threads
+- evp_shared (default): Use EVP API and allow shared data between threads
+
+```
+Usage: evp_cipher [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count
+-h - print this help output
+-t - terse output
+-o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)
+-u update-times - times to update (default: 1)
+-a algorithm - One of: [AES-128-CBC, AES-256-CBC] (default: AES-128-CBC)
+thread-count - number of threads
+```
+
+```sh
+evp_cipher -a AES-128-CBC -o evp_isolated 10
+```
