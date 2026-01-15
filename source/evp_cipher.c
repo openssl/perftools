@@ -25,6 +25,7 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include "perflib/perflib.h"
+#include "perflib/basename.h"
 
 #define RUN_TIME 5
 #define DATA_SIZE 16
@@ -120,12 +121,13 @@ err:
 
 static void print_help(FILE *file)
 {
-    fprintf(file, "Usage: evp_cipher [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count\n");
+    fprintf(file, "Usage: evp_cipher [-h] [-t] [-o operation] [-u update-times] [-a algorithm] [-V] thread-count\n");
     fprintf(file, "-h - print this help output\n");
     fprintf(file, "-t - terse output\n");
     fprintf(file, "-o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)\n");
     fprintf(file, "-u update-times - times to update (default: 1)\n");
     fprintf(file, "-a algorithm - One of: [AES-128-CBC, AES-256-CBC] (default: AES-128-CBC)\n");
+    fprintf(file, "-V - print version information and exit\n");
     fprintf(file, "thread-count - number of threads\n");
 }
 
@@ -138,7 +140,7 @@ int main(int argc, char *argv[])
     int j, opt, rc = EXIT_FAILURE;
     int key_len, iv_len;
 
-    while ((opt = getopt(argc, argv, "hto:u:a:")) != -1) {
+    while ((opt = getopt(argc, argv, "Vhto:u:a:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -172,6 +174,9 @@ int main(int argc, char *argv[])
                 goto err;
             }
             break;
+        case 'V':
+            perflib_print_version(basename(argv[0]));
+            return EXIT_SUCCESS;
         case 'h':
             print_help(stdout);
             return EXIT_SUCCESS;
