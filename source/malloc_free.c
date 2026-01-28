@@ -18,7 +18,7 @@
 # include "perflib/basename.h"
 # include "perflib/getopt.h"
 #endif	/* _WIN32 */
-#include <openssl/evp.h>
+#include <openssl/crypto.h>
 #include "perflib/perflib.h"
 
 #define RUN_TIME 5
@@ -29,7 +29,7 @@ size_t num_calls;
 static int threadcount;
 size_t *counts;
 static size_t min_size = 1;
-static size_t max_size = 1024;
+static size_t max_size = 20;
 
 EVP_PKEY *pkey = NULL;
 OSSL_TIME max_time;
@@ -37,10 +37,19 @@ OSSL_TIME max_time;
 void do_malloc_free(size_t num)
 {
     OSSL_TIME time;
+    size_t alloc_sz;
+    void *obj;
 
     counts[num] = 0;
 
     do {
+        alloc_sz = rand() % max_size;
+
+        alloc_sz = (alloc_sz < min_size) ? min_size : alloc_sz;
+        alloc_sz = 1 << alloc_sz;
+
+        obj = OPENSSL_malloc(alloc_sz);
+        OPENSSL_free(obj);
         counts[num]++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
@@ -64,19 +73,22 @@ static double get_avcalltime(void)
 static void report_result(int terse)
 {
     if (err) {
-        fprintf(stderr, "Error during test\n",
+        fprintf(stderr, "Error during test\n");
         exit(EXIT_FAILURE);
     }
 
     if (terse)
         printf("%lf\n", get_avcalltime());
     else
-        printf("Average time per %s malloc/free call: %lfus\n",
+        printf("Average time per malloc/free call: %lfus\n",
             get_avcalltime());
 }
 
 static void usage(char * const argv[])
 {
+    fprintf(stderr, "%s [options] <threadcount>\n", argv[0]);
+    fprintf(stderr, "-s - min allocation size\n");
+    fprintf(stderr, "-l - max allocation size\n");
     fprintf(stderr, "-V - print version information and exit\n");
 }
 
@@ -116,12 +128,6 @@ int main(int argc, char *argv[])
     threadcount = atoi(argv[optind]);
     if (threadcount < 1) {
         fprintf(stderr, "threadcount must be > 0\n");
-        usage(argv);
-        return EXIT_FAILURE;
-    }
-
-    if (key == NULL) {
-        fprintf(stderr, "option -k is missing\n");
         usage(argv);
         return EXIT_FAILURE;
     }
