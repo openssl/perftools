@@ -172,6 +172,9 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3.6 )
     endif()
 endif()
 
+add_executable(malloc_free malloc_free.c)
+target_link_libraries(malloc_free PRIVATE perf)
+
 add_executable(randbytes randbytes.c)
 target_link_libraries(randbytes PRIVATE perf)
 
