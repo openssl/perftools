@@ -402,6 +402,10 @@ int main(int argc, char * const argv[])
             break;
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
         case 'S': {
+#ifdef WITH_OPENSSL_FORK
+            fprintf(stderr, "Secure malloc is not support for OpenSSL forks\n");;
+            return EXIT_FAILURE;
+#else
             char *end = NULL;
             int sec_mem_size;
 
@@ -420,6 +424,7 @@ int main(int argc, char * const argv[])
                 fprintf(stderr, "Secure heap not initialized\n");
                 return EXIT_FAILURE;
             }
+#endif
             break;
         }
         case 'V':

@@ -30,6 +30,8 @@
 #include <openssl/rand.h>
 #include "perflib/perflib.h"
 
+#include <string.h>
+
 #define RUN_TIME 5
 #define DATA_SIZE 1500
 
@@ -355,7 +357,7 @@ int main(int argc, char *argv[])
     if (!RAND_bytes((unsigned char *)data, sizeof(data)))
         goto out;
 
-    counts = OPENSSL_zalloc(sizeof(size_t) * threadcount);
+    counts = calloc(1, sizeof(size_t) * threadcount);
     if (counts == NULL) {
         fprintf(stderr, "Failed to create counts array\n");
         goto out;

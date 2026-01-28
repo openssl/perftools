@@ -164,6 +164,7 @@ function install_wolfssl {
 
 	if [[ -z ${HAPROXY_OPTS} ]] ; then
 		./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
+		    --enable-dtls \
 		    --enable-nginx || exit 1
 	else
 		./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
@@ -200,7 +201,27 @@ function install_boringssl {
 	cd "${WORKSPACE_ROOT}"
 	mkdir -p "${BORING_NAME}"
 	cd "${BORING_NAME}"
-	git clone "${BORING_REPO}" --depth 1 . || exit 1
+	#
+	# note we are cloning a master branch of boringssl.
+	# if things are unfortunate the branch may not build
+	# if it is the case, then be ready to modify the
+	# command here to clone version which builds.
+	# It looks like boringssl tides up its releases
+	# with google chrome:
+	#	https://boringssl.googlesource.com/boringssl
+	# using a tag from list above should help you to get
+	# a stable release. There is also this list on
+	# github which may also help:
+	#	https://github.com/google/boringssl/releases
+	#
+	# example checks out:
+	#	git clone "${BORING_REPO}" . || exit 1
+	#	git checkout 0.20260211.0 || exit 1
+	# release From Feb 11th 20226 should be the same
+	# to what's found here:
+	#	https://github.com/google/boringssl/releases/tag/0.20260211.0
+	#
+	git clone --depth 1 "${BORING_REPO}" . || exit 1
 	#
 	# we need to install libdecrepit.so so mod_ssl can use
 	# base64 BIO file stream
