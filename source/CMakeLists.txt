@@ -114,6 +114,8 @@
 # [1] https://cmake.org/cmake/help/v4.0/release/4.0.html#other-changes
 #
 
+option(WITH_OPENSSL_FORK "WITH_OPENSSL_FORK" 0)
+
 cmake_minimum_required(VERSION 3.10)
 project(perf-tools)
 include(CheckSymbolExists)
@@ -136,7 +138,6 @@ if(OPENSSL_CONFIG_MODE)
 else()
     unset(OPENSSL_CONFIG_MODE)
 endif()
-find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
 
 add_library(perf perflib/perfhelper.c perflib/perfsslhelper.c perflib/threads.c
 	perflib/time.c)
@@ -153,9 +154,55 @@ if(WIN32)
 endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
-target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-set(CMAKE_REQUIRED_LIBRARIES OpenSSL::Crypto)
-set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
+if (WITH_OPENSSL_FORK)
+    find_package(PkgConfig)
+    if( ${CMAKE_PREFIX_PATH} MATCHES .*wolfssl.* )
+        pkg_check_modules(WOLFSSL REQUIRED IMPORTED_TARGET wolfssl)
+        target_link_libraries(perf PUBLIC PkgConfig::WOLFSSL)
+        include_directories(BEFORE ${WOLFSSL_INCLUDE_DIRS})
+        include_directories(BEFORE ${CMAKE_PREFIX_PATH}/include/wolfssl)
+        include_directories(BEFORE ${CMAKE_PREFIX_PATH}/include)
+        #
+        # wolfssl recommends applications to include
+        # wolfssl/options.h header file which is generated
+        # at build time during configure step.
+        # Instead of updating perftools applications we
+        # just pass missing definitions here:
+        #	OPENSSL_EXTRA
+        #	WOLFSSL_DTLS
+        #	WOLFSSL_NO_OPTIONS_H
+        #       WC_NO_HARDEN (suppresses false positive warning)
+        #
+        add_compile_definitions(WOLFSSL_NO_OPTIONS_H
+                                WITH_OPENSSL_FORK
+                                OPENSSL_EXTRA
+                                WC_NO_HARDEN
+                                WOLFSSL_DTLS)
+    elseif( ${CMAKE_PREFIX_PATH} MATCHES .*libressl.* )
+        pkg_check_modules(LIBRESSL REQUIRED IMPORTED_TARGET openssl)
+        target_link_libraries(perf PUBLIC PkgConfig::LIBRESSL)
+        include_directories(BEFORE ${CMAKE_PREFIX_PATH}/include)
+        add_compile_definitions(WITH_OPENSSL_FORK)
+    elseif( ${CMAKE_PREFIX_PATH} MATCHES .*boringssl.* )
+        find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
+        target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+        include_directories(BEFORE ${CMAKE_PREFIX_PATH}/include)
+        add_compile_definitions(WITH_OPENSSL_FORK)
+    elseif( ${CMAKE_PREFIX_PATH} MATCHES .*aws-lc.* )
+        find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
+        target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+        include_directories(BEFORE ${CMAKE_PREFIX_PATH}/include)
+        add_compile_definitions(WITH_OPENSSL_FORK)
+    else()
+        message(FATAL_ERROR
+            "CMAKE_PREFIX_PATH does not point to wolfssl|libressl|boringssl|aws-lc")
+    endif()
+else()
+    find_package(OpenSSL REQUIRED ${OPENSSL_CONFIG_MODE})
+    target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    set(CMAKE_REQUIRED_LIBRARIES OpenSSL::Crypto)
+    set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
+endif()
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(evp_fetch evp_fetch.c)
@@ -186,67 +233,85 @@ target_link_libraries(handshake PRIVATE perf)
 add_executable(sslnew sslnew.c)
 target_link_libraries(sslnew PRIVATE perf)
 
-add_executable(newrawkey newrawkey.c)
-target_link_libraries(newrawkey PRIVATE perf)
-
 add_executable(rsasign rsasign.c)
 target_link_libraries(rsasign PRIVATE perf)
 
 add_executable(x509storeissuer x509storeissuer.c)
 target_link_libraries(x509storeissuer PRIVATE perf)
 
-add_executable(rwlocks rwlocks.c)
-target_link_libraries(rwlocks PRIVATE perf)
+if( WITH_OPENSSL_FORK )
 
-add_executable(pkeyread pkeyread.c)
-if(WIN32)
-    target_link_libraries(pkeyread PRIVATE perf)
+    add_executable(evp_setpeer evp_setpeer.c)
+    target_link_libraries(evp_setpeer PRIVATE perf)
+
+    add_executable(writeread writeread.c)
+    target_link_libraries(writeread PRIVATE perf)
+
+    set(run_tests evp_setpeer
+		  handshake
+		  randbytes
+		  rsasign
+		  sslnew
+		  writeread
+		  x509storeissuer
+		  CACHE STRING "List of tests to run")
 else()
-    target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
+    add_executable(rwlocks rwlocks.c)
+    target_link_libraries(rwlocks PRIVATE perf)
+
+    add_executable(pkeyread pkeyread.c)
+    if(WIN32)
+        target_link_libraries(pkeyread PRIVATE perf)
+    else()
+        target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
+    endif()
+
+    add_executable(newrawkey newrawkey.c)
+    target_link_libraries(newrawkey PRIVATE perf)
+
+    add_executable(evp_setpeer evp_setpeer.c)
+    target_link_libraries(evp_setpeer PRIVATE perf)
+
+    add_executable(writeread writeread.c)
+    target_link_libraries(writeread PRIVATE perf)
+
+    add_executable(evp_hash evp_hash.c)
+    target_link_libraries(evp_hash PRIVATE perf)
+
+    add_executable(evp_cipher evp_cipher.c)
+    target_link_libraries(evp_cipher PRIVATE perf)
+
+    add_executable(evp_mac evp_mac.c)
+    target_link_libraries(evp_mac PRIVATE perf)
+
+    add_executable(evp_kdf evp_kdf.c)
+    target_link_libraries(evp_kdf PRIVATE perf)
+
+    add_executable(evp_rand evp_rand.c)
+    target_link_libraries(evp_rand PRIVATE perf)
+    ## Running tests
+    # Options
+    set(run_tests evp_fetch
+		  evp_hash
+		  evp_cipher
+		  evp_mac
+		  evp_kdf
+		  evp_rand
+		  evp_setpeer
+		  handshake
+		  newrawkey
+		  pkeyread
+		  providerdoall
+		  randbytes
+		  rsasign
+		  rwlocks
+		  sslnew
+		  #ssl_poll_perf
+		  writeread
+		  x509storeissuer
+		  CACHE STRING "List of tests to run")
 endif()
 
-add_executable(evp_setpeer evp_setpeer.c)
-target_link_libraries(evp_setpeer PRIVATE perf)
-
-add_executable(writeread writeread.c)
-target_link_libraries(writeread PRIVATE perf)
-
-add_executable(evp_hash evp_hash.c)
-target_link_libraries(evp_hash PRIVATE perf)
-
-add_executable(evp_cipher evp_cipher.c)
-target_link_libraries(evp_cipher PRIVATE perf)
-
-add_executable(evp_mac evp_mac.c)
-target_link_libraries(evp_mac PRIVATE perf)
-
-add_executable(evp_kdf evp_kdf.c)
-target_link_libraries(evp_kdf PRIVATE perf)
-
-add_executable(evp_rand evp_rand.c)
-target_link_libraries(evp_rand PRIVATE perf)
-
-## Running tests
-# Options
-set(run_tests evp_fetch
-              evp_hash
-              evp_cipher
-              evp_mac
-              evp_kdf
-              evp_rand
-              evp_setpeer
-              handshake
-              newrawkey
-              pkeyread
-              providerdoall
-              randbytes
-              rsasign
-              rwlocks
-              sslnew
-              #ssl_poll_perf
-              writeread
-              x509storeissuer
-              CACHE STRING "List of tests to run")
 
 set(run_add_version_dep ON
     CACHE BOOL "Whether to print version information on run " +

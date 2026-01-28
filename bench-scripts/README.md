@@ -84,6 +84,21 @@ all siege tests connect to HA-proxy via, which then establishes SSL connection
 towards httpterm [10] server. To collect performance data The siege client
 executes requests which fetch 1k of data from httpterm server.
 
+## OpenSSL Forks
+
+This test builds OpenSSL forks and uses perftools to benchmark those forks.
+The list of perftools which can run with forks:
+    randbytes
+    rsasign
+    handshake
+    sslnew
+    x509storeissuer
+    evp_setpeer (only for some keys)
+
+The bench_config_forks.sh script builds and install libraries. It also builds
+perftools for each OpenSSL fork library. The script also builds openssl-master.
+The bench_run_forks.sh runs tests and plots results as .png files.
+
 ## Build requirements
 
 Requirements for ubuntu are the following:

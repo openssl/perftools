@@ -19,6 +19,7 @@
 # include "perflib/getopt.h"
 #endif	/* _WIN32 */
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 #include "perflib/perflib.h"
 
 /* run 'make regen_key_samples' if header file is missing */

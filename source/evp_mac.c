@@ -18,6 +18,7 @@
 #include <stdio.h>
 #ifndef _WIN32
 # include <unistd.h>
+# include <string.h>
 #else
 # include "perflib/getopt.h"
 #endif	/* _WIN32 */
