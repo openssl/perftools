@@ -247,7 +247,7 @@ int perflib_create_ssl_connection(SSL *serverssl, SSL *clientssl, int want)
 {
     int i;
     unsigned char buf;
-    size_t readbytes;
+    int readbytes;
 
     if (!perflib_create_bare_ssl_connection(serverssl, clientssl, want))
         return 0;
@@ -258,7 +258,8 @@ int perflib_create_ssl_connection(SSL *serverssl, SSL *clientssl, int want)
      * appropriate. We do this twice because there are 2 NewSessionTickets.
      */
     for (i = 0; i < 2; i++) {
-        if (SSL_read_ex(clientssl, &buf, sizeof(buf), &readbytes) > 0) {
+        readbytes = SSL_read(clientssl, &buf, sizeof(buf));
+        if (readbytes >= 0) {
             if (readbytes != 0) {
                 printf("Unexpected data reading ticket\n");
                 return 0;

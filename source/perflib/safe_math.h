@@ -12,7 +12,13 @@
 # pragma once
 
 # include <stddef.h>
+#ifndef WITH_OPENSSL_FORK
 # include <openssl/e_os2.h>              /* For 'ossl_inline' */
+#else
+
+#define ossl_inline	inline
+#define ossl_unused
+#endif
 
 # ifndef OPENSSL_NO_BUILTIN_OVERFLOW_CHECKING
 #  ifdef __has_builtin
