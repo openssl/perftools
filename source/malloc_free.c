@@ -28,7 +28,7 @@ int err = 0;
 size_t num_calls;
 static int threadcount;
 size_t *counts;
-static size_t min_size = 1;
+static size_t min_size = 0;
 static size_t max_size = 20;
 
 EVP_PKEY *pkey = NULL;
@@ -39,14 +39,15 @@ void do_malloc_free(size_t num)
     OSSL_TIME time;
     size_t alloc_sz;
     void *obj;
+    size_t mysize = min_size;
 
     counts[num] = 0;
 
     do {
-        alloc_sz = rand() % max_size;
 
-        alloc_sz = (alloc_sz < min_size) ? min_size : alloc_sz;
-        alloc_sz = 1 << alloc_sz;
+        alloc_sz = 1 << mysize;
+        mysize = (mysize + 1) % max_size;
+        mysize = (mysize < min_size) ? min_size : mysize;
 
         obj = OPENSSL_malloc(alloc_sz);
         OPENSSL_free(obj);
