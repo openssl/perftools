@@ -215,12 +215,16 @@ target_link_libraries(evp_cipher PRIVATE perf)
 add_executable(evp_mac evp_mac.c)
 target_link_libraries(evp_mac PRIVATE perf)
 
+add_executable(evp_kdf evp_kdf.c)
+target_link_libraries(evp_kdf PRIVATE perf)
+
 ## Running tests
 # Options
 set(run_tests evp_fetch
               evp_hash
               evp_cipher
               evp_mac
+              evp_kdf
               evp_setpeer
               handshake
               newrawkey
@@ -261,6 +265,9 @@ set(run_evp_cipher_algorithms
 set(run_evp_mac_operations
     evp_mac "" "" "-o deprecated_isolated" "-o deprecated_shared" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_mac")
+set(run_evp_kdf_operations
+    evp_kdf "" "" "-o evp_shared" "-o evp_isolated" "-o deprecated_shared" "-o deprecated_isolated"
+    CACHE STRING "Modes of operation for evp_kdf")
 set(run_evp_setpeer_keys
     evp_setpeer "-k" dh ec256 ec521 x25519 all
     CACHE STRING "Key types for evp_setpeer")
@@ -303,6 +310,7 @@ set(run_opts run_evp_fetch_pqs
              run_evp_cipher_operations
              run_evp_cipher_algorithms
              run_evp_mac_operations
+             run_evp_kdf_operations
              run_evp_setpeer_keys
              run_newrawkey_algos
              run_pkeyread_keys
