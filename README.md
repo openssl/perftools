@@ -283,3 +283,27 @@ thread-count - number of threads
 ```sh
 evp_mac -o evp_shared 10
 ```
+
+## evp_kdf
+
+This CLI tool derives keys from random data with SHA-256 digest.
+Runs for 5 seconds and prints the average execution time per computation.
+
+Four modes of operation:
+- evp_shared (default): Use EVP API and allow shared data between computations
+- evp_isolated: Use EVP API and don't allow shared data between computations
+- deprecated_shared: Use legacy API and allow shared data between computations
+- deprecated_isolated: Use legacy API and don't allow shared data between computations
+
+```
+Usage: evp_kdf [-h] [-t] [-o operation] [-V] thread-count
+-h - print this help output
+-t - terse output
+-o operation - mode of operation. One of [evp_isolated, evp_shared, deprecated_isolated, deprecated_shared] (default: evp_shared)
+-V - print version information and exit
+thread-count - number of threads
+```
+
+```sh
+./evp_kdf -o evp_shared 10
+```
