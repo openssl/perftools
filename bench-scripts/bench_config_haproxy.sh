@@ -50,7 +50,7 @@ function install_httpterm {
 
 function install_h1load {
     typeset SSL_LIB=$1
-    typeset H1LOAD_REPO="https://github.com/sashan/h1load"
+    typeset H1LOAD_REPO="https://github.com/wtarreau/h1load"
     typeset BASENAME='h1load'
     typeset DIRNAME="${BASENAME}"
     typeset SSL_CFLAGS=''
