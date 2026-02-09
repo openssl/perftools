@@ -329,12 +329,15 @@ function config_haproxy {
             for PORT in $(seq ${BASEPORT} ${TOPPORT}) ; do
                 emit_https_port ${HAPROXY_CONF} ${PORT} ${PROXYCERT}
             done
+
+            PORT=$(( ${TOPPORT} + 1 ))
             #
             # tests use siege client without https support.
             # so here we create http to https proxy. The proxy
             # is created for no-reuse tests only.
             #
             if [[ ${REUSE_LABEL} = 'no-ssl-reuse' ]] ; then
+                PORT=$(( ${TOPPORT} + 1 ))
                 HTTP_PORT=$(( ${PORT} + 1))
                 emit_http_port ${HAPROXY_CONF} ${HTTP_PORT} ${PORT}
             fi
@@ -419,4 +422,8 @@ function setup_tests {
 }
 
 check_env
-setup_tests
+if [[ ${PROXY_CHAIN} -lt 1 ]] ; then
+    echo "BENCH_PROXY_CHAIN must be at least 1"
+else
+    setup_tests
+fi
