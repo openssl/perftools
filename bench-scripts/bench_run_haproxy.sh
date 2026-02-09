@@ -127,7 +127,6 @@ function run_test {
             -d ${TEST_TIME} \
             -c 500 \
             -t ${THREAD_COUNT} \
-            -u \
             ${BASE_URL}${PORT} > ${RESULT} || exit 1
     done
 
