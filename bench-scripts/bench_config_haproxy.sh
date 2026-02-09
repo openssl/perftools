@@ -166,7 +166,7 @@ defaults ${REUSE_LABEL}
         timeout connect 10s
 
 frontend port${BASEPORT}
-        bind :${BASEPORT} ssl crt ${PROXYCERT}
+        bind ${HOST}:${BASEPORT} ssl crt ${PROXYCERT}
         http-request return status 200 content-type "text/plain" string "it works"
 
 EOF
@@ -190,7 +190,7 @@ defaults ${REUSE_LABEL}
         timeout connect 10s
 
 frontend port${BASEPORT}
-        bind :${BASEPORT} ssl crt ${PROXYCERT}
+        bind ${HOST}:${BASEPORT} ssl crt ${PROXYCERT}
         default_backend httpterm${BASEPORT}
 
 backend httpterm${BASEPORT}
@@ -206,7 +206,7 @@ function emit_stats {
 
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${BASEPORT}
-        bind :${BASEPORT} ssl crt ${PROXYCERT}
+        bind ${HOST}:${BASEPORT} ssl crt ${PROXYCERT}
         stats uri /stats
         server next ${HOST}:$(( ${BASEPORT} - 1))
 
@@ -219,7 +219,7 @@ function emit_https_port {
         typeset PROXYCERT=$3
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${PORT}
-        bind :${PORT} ssl crt ${PROXYCERT}
+        bind ${HOST}:${PORT} ssl crt ${PROXYCERT}
         server next ${HOST}:$(( ${PORT} - 1))
 
 EOF
@@ -232,7 +232,7 @@ function emit_http_port {
 
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${HTTP_PORT}
-        bind :${HTTP_PORT}
+        bind ${HOST}:${HTTP_PORT}
         server port${PORT} ${HOST}:${PORT} ssl verify none
 
 EOF
