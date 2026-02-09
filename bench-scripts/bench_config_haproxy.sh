@@ -77,7 +77,7 @@ function install_h1load {
     # this fork adds -u option to keep time as uptime
     #
     cd "${WORKSPACE_ROOT}" || exit 1
-    git clone -b float "${H1LOAD_REPO}" "${DIRNAME}" || exit 1
+    git clone "${H1LOAD_REPO}" "${DIRNAME}" || exit 1
     cd ${DIRNAME} || exit 1
     make SSL_CFLAGS="${SSL_CFLAGS}" SSL_LFLAGS="${SSL_LFLAGS}" || exit 1
     install h1load "${INSTALL_ROOT}/${SSL_LIB}/bin/h1load" || exit 1
