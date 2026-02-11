@@ -248,9 +248,10 @@ Two modes of operation:
 - evp_shared (default): Use EVP API and allow shared data between threads
 
 ```
-Usage: evp_cipher [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count
+Usage: evp_cipher [-h] [-t] [-f] [-o operation] [-u update-times] [-a algorithm] thread-count
 -h - print this help output
 -t - terse output
+-f - freeze default context (available only with openssl >= 4.x.x)
 -o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)
 -u update-times - times to update (default: 1)
 -a algorithm - One of: [AES-128-CBC, AES-256-CBC] (default: AES-128-CBC)
