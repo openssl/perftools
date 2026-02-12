@@ -202,6 +202,12 @@ backend httpterm${BASEPORT}
 EOF
 }
 
+#
+# make runtime stats available on URL below.
+# https://127.0.0.1:{$PORT_RSA_REUSE, $PORT_RSA}, $PORT_EC_REUSE, $PORT_EC}/stats
+# see link here to find more information on this:
+# https://www.haproxy.com/documentation/haproxy-configuration-tutorials/alerts-and-monitoring/statistics/
+#
 function emit_stats {
     typeset HAPROXY_CONF=$1
     typeset BASEPORT=$2
@@ -210,6 +216,8 @@ function emit_stats {
 cat <<EOF >> ${HAPROXY_CONF}
 listen port${BASEPORT}
         bind ${HOST}:${BASEPORT} ssl crt ${PROXYCERT}
+        stats enable
+        stats refresh 5s
         stats uri /stats
         server next ${HOST}:$(( ${BASEPORT} - 1))
 
