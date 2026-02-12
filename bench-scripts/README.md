@@ -80,10 +80,9 @@ uses the h1load test duration to compare SSL libraries. The longer duration the
 worse result.
 
 The siege client does not build with aws-lc library. To workaround that,
-all tests use siege as http client connecting to HA-proxy, which then
-establishes SSL connection towards httpterm [10] server. To collect performance
-data The siege client executes requests which fetch 1k of data from httpterm
-server.
+all siege tests connect to HA-proxy via, which then establishes SSL connection
+towards httpterm [10] server. To collect performance data The siege client
+executes requests which fetch 1k of data from httpterm server.
 
 ## Build requirements
 

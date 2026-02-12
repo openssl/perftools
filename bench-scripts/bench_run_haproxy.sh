@@ -413,10 +413,10 @@ function merge_h1load {
             printf "\t${SSL_LIB}" >> ${OUTPUT_FILE}
         done
         printf "\n" >> ${OUTPUT_FILE}
-	for PROCS in `procs` ; do
+        for PROCS in `procs` ; do
             printf "${PROCS}" >> ${OUTPUT_FILE}
-	    for SSL_LIB in `ssl_libs_haproxy` ; do
-		INPUT_FILE=${RESULT_DIR}/${HANDSHAKE}-${PROCS}-${SSL_LIB}.out
+            for SSL_LIB in `ssl_libs_haproxy` ; do
+                INPUT_FILE=${RESULT_DIR}/${HANDSHAKE}-${PROCS}-${SSL_LIB}.out
                 #
                 # h1load outputs performance data combined with percentile table. Those
                 # parts are delimited by ^#= delimiter. The sed expression chops off
@@ -425,20 +425,20 @@ function merge_h1load {
                 # in secs. The test duration is found in the first column we read
                 # using awk
                 #
-		DURATION=$(sed -ne '/^#=/q;p' "${INPUT_FILE}" |tail -1 |awk '{ printf($1); }')
+                DURATION=$(sed -ne '/^#=/q;p' "${INPUT_FILE}" |tail -1 |awk '{ printf($1); }')
                 printf "\t${DURATION}" >> ${OUTPUT_FILE}
-	    done
-	    #
-	    # new line
-	    #
-	    printf "\n" >> ${OUTPUT_FILE}
-	done
+            one
+            #
+            # new line
+            #
+            printf "\n" >> ${OUTPUT_FILE}
+        done
     done
 }
 
 #
 # siege charts to plot:
-#	Trnsaction Rate		(in trans/sec)
+#        Trnsaction Rate		(in trans/sec)
 #
 function create_siege_plots {
     typeset RESULTS=${1}
