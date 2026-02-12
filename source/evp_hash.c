@@ -15,6 +15,7 @@
 
 #define OPENSSL_SUPPRESS_DEPRECATED
 
+#include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #ifndef _WIN32
@@ -248,9 +249,16 @@ err:
 
 static void print_help()
 {
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    printf("Usage: evp_hash [-h] [-t] [-f] [-o operation] [-u update-times] [-a algorithm] [-V] thread-count\n");
+#else
     printf("Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] [-V] thread-count\n");
+#endif
     printf("-h - print this help output\n");
     printf("-t - terse output\n");
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    printf("-f - freeze default context\n");
+#endif
     printf("-o operation - mode of operation. One of [deprecated, evp_isolated, evp_shared] (default: evp_shared)\n");
     printf("-u update-times - times to update digest. 1 for one-shot (default: 1)\n");
     printf("-a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512] (default: SHA1)\n");
@@ -265,9 +273,19 @@ int main(int argc, char *argv[])
     double av;
     int terse = 0, operation = EVP_SHARED, hash_algorithm = SHA1_ALG;
     int j, opt, rc = EXIT_FAILURE;
+    char *getopt_options = "hto:u:a:V";
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    int freeze = 0;
+    getopt_options = "hto:u:a:Vf";
+#endif
 
-    while ((opt = getopt(argc, argv, "hto:u:a:V")) != -1) {
+    while ((opt = getopt(argc, argv, getopt_options)) != -1) {
         switch (opt) {
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+        case 'f':
+            freeze = 1;
+            break;
+#endif
         case 't':
             terse = 1;
             break;
@@ -344,6 +362,15 @@ int main(int argc, char *argv[])
     }
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
+
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    if (freeze) {
+        if (OSSL_LIB_CTX_freeze(NULL, NULL) == 0) {
+            fprintf(stderr, "Freezing LIB CTX failed\n");
+            goto out;
+        }
+    }
+#endif
 
     switch (operation) {
     case DEPRECATED:

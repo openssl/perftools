@@ -1,0 +1,4 @@
+/* config.h.in */
+
+/* Define to 1 if you have the `OSSL_LIB_CTX_freeze' function. */
+#cmakedefine HAVE_OSSL_LIB_CTX_FREEZE
