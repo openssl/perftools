@@ -228,6 +228,7 @@ Three modes of operation:
 Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count
 -h - print this help output
 -t - terse output
+-f - freeze default context (available only with openssl >= 4.x.x)
 -o operation - mode of operation. One of [deprecated, evp_isolated, evp_shared] (default: evp_shared)
 -u update-times - times to update digest. 1 for one-shot (default: 1)
 -a algorithm - One of: [SHA1, SHA224, SHA256, SHA384, SHA512] (default: SHA1)
