@@ -125,7 +125,9 @@ function run_test {
         # -c number of concurrent connections, must be divisible by thread count
         # -n number of requests, should X * number of connections, here X == 5
         # -r number of requests per connection
+        # -P add percentile data to result (those are not plotted yet)
         # -t number of threads
+        #
         LD_LIBRARY_PATH=${OPENSSL_DIR}/lib ${H1LOAD} \
             -c 1280  \
             -n 40000 \
