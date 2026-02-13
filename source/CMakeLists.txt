@@ -116,6 +116,7 @@
 
 cmake_minimum_required(VERSION 3.10)
 project(perf-tools)
+include(CheckSymbolExists)
 
 if(WIN32)
     set(CFLAGS_WARNINGS "/Wall" CACHE STRING "Compiler options for warnings")
@@ -153,6 +154,8 @@ endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+set(CMAKE_REQUIRED_LIBRARIES OpenSSL::Crypto)
+set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(evp_fetch evp_fetch.c)
@@ -162,6 +165,8 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     target_link_libraries(providerdoall PRIVATE perf)
 
 endif()
+
+check_symbol_exists(OSSL_LIB_CTX_freeze "openssl/crypto.h" HAVE_OSSL_LIB_CTX_FREEZE)
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3.6 )
     add_executable(ssl_poll_perf ssl_poll_perf.c)
@@ -260,6 +265,9 @@ set(run_evp_hash_update_times
 set(run_evp_hash_algorithms
     evp_hash "" "" "-a SHA1" "-a SHA224" "-a SHA256" "-a SHA384" "-a SHA512"
     CACHE STRING "Digest hash algorithms for evp_hash")
+set(run_evp_hash_freeze
+    evp_hash "" "" "-f"
+    CACHE STRING "Freeze LIB_CTX for evp_hash")
 set(run_evp_cipher_operations
     evp_cipher "" "" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_cipher")
@@ -332,6 +340,10 @@ set(run_opts run_evp_fetch_pqs
              run_writeread_buffers
              CACHE STRING "List of per-text options")
 
+if(HAVE_OSSL_LIB_CTX_FREEZE)
+  list(APPEND run_opts run_evp_hash_freeze)
+endif()
+
 # Used across multiple tests
 set(run_certdir_tests handshake writeread x509storeissuer
     CACHE STRING "List of tests that require certdir parameter")
@@ -377,6 +389,9 @@ if (WIN32)
         list(APPEND dll_search_dirs "${f_dir}")
     endforeach()
 endif()
+
+# Generate config.h from config.h.in
+configure_file(config.h.in ${CMAKE_SOURCE_DIR}/config.h)
 
 #
 # gen_run_target(<cmd> <test> [VAR <var>] [NAME <name>])
