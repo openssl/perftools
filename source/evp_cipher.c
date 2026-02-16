@@ -154,8 +154,8 @@ int main(int argc, char *argv[])
 #endif
 
     while ((opt = getopt(argc, argv, getopt_options)) != -1) {
-#ifdef HAVE_OSSL_LIB_CTX_FREEZE
 	switch (opt) {
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
         case 'f':
             freeze = 1;
             break;
