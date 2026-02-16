@@ -226,6 +226,9 @@ target_link_libraries(evp_kdf PRIVATE perf)
 add_executable(evp_rand evp_rand.c)
 target_link_libraries(evp_rand PRIVATE perf)
 
+add_executable(evp_signature evp_signature.c)
+target_link_libraries(evp_signature PRIVATE perf)
+
 ## Running tests
 # Options
 set(run_tests evp_fetch
@@ -234,6 +237,7 @@ set(run_tests evp_fetch
               evp_mac
               evp_kdf
               evp_rand
+              evp_signature
               evp_setpeer
               handshake
               newrawkey
@@ -283,6 +287,9 @@ set(run_evp_kdf_operations
 set(run_evp_rand_operations
     evp_rand "" "" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_rand")
+set(run_evp_signature_operations
+    evp_signature "" "" "-o evp_isolated" "-o evp_shared"
+    CACHE STRING "Modes of operation for evp_signature")
 set(run_evp_setpeer_keys
     evp_setpeer "-k" dh ec256 ec521 x25519 all
     CACHE STRING "Key types for evp_setpeer")
@@ -327,6 +334,7 @@ set(run_opts run_evp_fetch_pqs
              run_evp_mac_operations
              run_evp_kdf_operations
              run_evp_rand_operations
+             run_evp_signature_operations
              run_evp_setpeer_keys
              run_newrawkey_algos
              run_pkeyread_keys
