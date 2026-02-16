@@ -275,7 +275,7 @@ set(run_evp_cipher_algorithms
     evp_cipher "" "" "-a AES-128-CBC" "-a AES-256-CBC"
     CACHE STRING "Encryption algorithms for evp_cipher")
 set(run_evp_cipher_freeze
-    evp_hash "" "" "-f"
+    evp_cipher "" "" "-f"
     CACHE STRING "Freeze LIB_CTX for evp_cipher")
 set(run_evp_mac_operations
     evp_mac "" "" "-o deprecated_isolated" "-o deprecated_shared" "-o evp_isolated" "-o evp_shared"
@@ -344,7 +344,8 @@ set(run_opts run_evp_fetch_pqs
              CACHE STRING "List of per-text options")
 
 if(HAVE_OSSL_LIB_CTX_FREEZE)
-  list(APPEND run_opts run_evp_hash_freeze run_evp_cipher_freeze)
+  list(APPEND run_opts run_evp_hash_freeze
+                       run_evp_cipher_freeze)
 endif()
 
 # Used across multiple tests
