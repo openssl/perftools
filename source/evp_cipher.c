@@ -251,7 +251,7 @@ int main(int argc, char *argv[])
         if (OSSL_LIB_CTX_freeze(NULL, NULL) == 0) {
             fprintf(stderr, "Freezing LIB CTX failed\n");
             goto err;
-	}
+        }
     }
 #endif
 
