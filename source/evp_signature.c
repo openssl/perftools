@@ -52,7 +52,6 @@ static int evp_isolated()
 
     if ((pctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL)) == NULL
         || EVP_PKEY_keygen_init(pctx) <= 0
-        || EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) <= 0
         || EVP_PKEY_keygen(pctx, &pkey) <= 0
         || (mdctx = EVP_MD_CTX_new()) == NULL
         || EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, pkey) <= 0
@@ -100,7 +99,6 @@ static void do_evp_shared(size_t num)
 
     if ((pctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL)) == NULL
         || EVP_PKEY_keygen_init(pctx) <= 0
-        || EVP_PKEY_CTX_set_rsa_keygen_bits(pctx, 2048) <= 0
         || EVP_PKEY_keygen(pctx, &pkey) <= 0
         || (mdctx = EVP_MD_CTX_new()) == NULL) {
         run_err = 1;
