@@ -283,6 +283,9 @@ set(run_evp_mac_operations
 set(run_evp_kdf_operations
     evp_kdf "" "" "-o evp_shared" "-o evp_isolated" "-o deprecated_shared" "-o deprecated_isolated"
     CACHE STRING "Modes of operation for evp_kdf")
+set(run_evp_kdf_freeze
+    evp_kdf "" "" "-f"
+    CACHE STRING "Freeze LIB_CTX for evp_kdf")
 set(run_evp_rand_operations
     evp_rand "" "" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_rand")
@@ -345,7 +348,8 @@ set(run_opts run_evp_fetch_pqs
 
 if(HAVE_OSSL_LIB_CTX_FREEZE)
   list(APPEND run_opts run_evp_hash_freeze
-                       run_evp_cipher_freeze)
+                       run_evp_cipher_freeze
+                       run_evp_kdf_freeze)
 endif()
 
 # Used across multiple tests
