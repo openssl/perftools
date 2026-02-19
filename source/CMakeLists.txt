@@ -346,6 +346,12 @@ list(APPEND run_opts run_writeread_buffers)
 add_executable(evp_hash evp_hash.c)
 target_link_libraries(evp_hash PRIVATE perf)
 list(APPEND run_tests evp_hash)
+if( HAVE_OSSL_LIB_CTX_FREEZE )
+    set(run_evp_kdf_freeze
+        evp_kdf "" "" "-f"
+        CACHE STRING "Freeze LIB_CTX for evp_kdf")
+    list(APPEND run_opts run_evp_kdf_freeze)
+endif()
 set(run_evp_hash_operations
     evp_hash "" "" "-o deprecated" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_hash")
