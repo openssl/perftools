@@ -8,8 +8,8 @@
  */
 
 /*
- * This CLI tool signs data using RSA and a SHA256 digest as input.
- * Runs for 5 seconds and prints the average execution time per computation.
+ * This CLI tool that generates keys using a given algorithm.
+ * Runs for 5 seconds and prints the average execution time per key generation.
  */
 
 #include <stdlib.h>
@@ -26,15 +26,12 @@
 #include "perflib/basename.h"
 
 #define RUN_TIME 5
-#define DATA_SIZE 64
-#define SIG_SIZE 256
 
 static int threadcount;
 static OSSL_TIME max_time;
 static size_t *counts = NULL;
 static int run_err = 0;
-
-static char data[DATA_SIZE];
+static const char *algorithm = "ED25519";
 
 typedef enum {
     EVP_SHARED = 0,
@@ -45,25 +42,17 @@ static int evp_isolated()
 {
     EVP_PKEY *pkey = NULL;
     EVP_PKEY_CTX *pctx = NULL;
-    EVP_MD_CTX *mdctx = NULL;
-    unsigned char sig[SIG_SIZE];
-    size_t siglen = sizeof(sig);
     int ret = 0;
 
-    if ((pctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL)) == NULL
+    if ((pctx = EVP_PKEY_CTX_new_from_name(NULL, algorithm, NULL)) == NULL
         || EVP_PKEY_keygen_init(pctx) <= 0
-        || EVP_PKEY_keygen(pctx, &pkey) <= 0
-        || (mdctx = EVP_MD_CTX_new()) == NULL
-        || EVP_DigestSignInit(mdctx, NULL, EVP_sha256(), NULL, pkey) <= 0
-        || EVP_DigestSignUpdate(mdctx, data, sizeof(data)) <= 0
-        || EVP_DigestSignFinal(mdctx, sig, &siglen) <= 0)
+        || EVP_PKEY_keygen(pctx, &pkey) <= 0)
         goto err;
 
     ret = 1;
 
 err:
     EVP_PKEY_CTX_free(pctx);
-    EVP_MD_CTX_free(mdctx);
     EVP_PKEY_free(pkey);
 
     return ret;
@@ -92,23 +81,16 @@ static void do_evp_shared(size_t num)
     OSSL_TIME time;
     EVP_PKEY *pkey = NULL;
     EVP_PKEY_CTX *pctx = NULL;
-    EVP_MD_CTX *mdctx = NULL;
-    unsigned char sig[SIG_SIZE];
-    size_t count = 0, siglen = sizeof(sig);
-    const EVP_MD *md = EVP_sha256();
+    size_t count = 0;
 
-    if ((pctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL)) == NULL
-        || EVP_PKEY_keygen_init(pctx) <= 0
-        || EVP_PKEY_keygen(pctx, &pkey) <= 0
-        || (mdctx = EVP_MD_CTX_new()) == NULL) {
+    if ((pctx = EVP_PKEY_CTX_new_from_name(NULL, algorithm, NULL)) == NULL) {
         run_err = 1;
         goto err;
     }
 
     do {
-        if (EVP_DigestSignInit(mdctx, NULL, md, NULL, pkey) <= 0
-            || EVP_DigestSignUpdate(mdctx, data, sizeof(data)) <= 0
-            || EVP_DigestSignFinal(mdctx, sig, &siglen) <= 0) {
+        if (EVP_PKEY_keygen_init(pctx) <= 0
+            || EVP_PKEY_keygen(pctx, &pkey) <= 0) {
             run_err = 1;
             goto err;
         }
@@ -120,16 +102,16 @@ static void do_evp_shared(size_t num)
 
 err:
     EVP_PKEY_CTX_free(pctx);
-    EVP_MD_CTX_free(mdctx);
     EVP_PKEY_free(pkey);
 }
 
 static void print_help(FILE *file)
 {
-    fprintf(file, "Usage: evp_signature [-h] [-t] [-o operation] [-V] thread-count\n");
+    fprintf(file, "Usage: evp_pkey [-h] [-t] [-o operation] [-a algorithm] [-V] thread-count\n");
     fprintf(file, "-h - print this help output\n");
     fprintf(file, "-t - terse output\n");
     fprintf(file, "-o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)\n");
+    fprintf(file, "-a algorithm - algorithm for generated key. One of [RSA, X25519, X448, ED25519, ED448] (default: ED25519)\n");
     fprintf(file, "-V - print version information and exit\n");
     fprintf(file, "thread-count - number of threads\n");
 }
@@ -142,7 +124,7 @@ int main(int argc, char *argv[])
     int terse = 0, operation = EVP_SHARED;
     int j, opt, rc = EXIT_FAILURE;
 
-    while ((opt = getopt(argc, argv, "Vhto:")) != -1) {
+    while ((opt = getopt(argc, argv, "Vhto:a:")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -154,6 +136,19 @@ int main(int argc, char *argv[])
                 operation = EVP_SHARED;
             } else {
                 fprintf(stderr, "Invalid operation");
+                print_help(stderr);
+                goto err;
+            }
+            break;
+        case 'a':
+            if (strcmp(optarg, "RSA") == 0
+                || strcmp(optarg, "X25519") == 0
+                || strcmp(optarg, "X448") == 0
+                || strcmp(optarg, "ED25519") == 0
+                || strcmp(optarg, "ED448") == 0) {
+                algorithm = optarg;
+            } else {
+                fprintf(stderr, "Invalid algorithm");
                 print_help(stderr);
                 goto err;
             }
@@ -184,7 +179,7 @@ int main(int argc, char *argv[])
     }
 
     counts = OPENSSL_zalloc(sizeof(size_t) * threadcount);
-    if (counts == NULL || !RAND_bytes((unsigned char *)data, DATA_SIZE))
+    if (counts == NULL)
         goto err;
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
@@ -220,7 +215,7 @@ int main(int argc, char *argv[])
     if (terse)
         printf("%lf\n", av);
     else
-        printf("Average time per computation: %lfus\n", av);
+        printf("Average time per key generation: %lfus\n", av);
 
     rc = EXIT_SUCCESS;
 err:
