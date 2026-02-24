@@ -73,20 +73,22 @@ static void do_writeread(size_t num)
     }
 
     do {
-        size_t written = 0;
-        if (SSL_write_ex(clientssl, cbuf, buf_size, &written) <= 0) {
+        int written = 0;
+        written = SSL_write(clientssl, cbuf, buf_size);
+        if (written <= 0) {
             fprintf(stderr, "Failed to write data\n");
             err = 1;
             return;
         }
-        size_t readbytes;
-        if (SSL_read_ex(serverssl, sbuf, buf_size, &readbytes) <= 0) {
+        int readbytes;
+        readbytes = SSL_read(serverssl, sbuf, buf_size);
+        if (readbytes <= 0) {
             fprintf(stderr, "Failed to read data\n");
             err = 1;
             return;
         }
         if (readbytes != written) {
-            fprintf(stderr, "Failed to read %ld bytes, got %ld\n", written, readbytes);
+            fprintf(stderr, "Failed to read %d bytes, got %d\n", written, readbytes);
             err = 1;
             return;
         }
@@ -173,7 +175,7 @@ int main(int argc, char * const argv[])
         goto err;
     }
 
-    counts = OPENSSL_zalloc(sizeof(size_t) * threadcount);
+    counts = calloc(1, sizeof(size_t) * threadcount);
     if (counts == NULL) {
         fprintf(stderr, "Failed to create counts array\n");
         goto err;
@@ -212,9 +214,9 @@ int main(int argc, char * const argv[])
 
     ret = EXIT_SUCCESS;
  err:
-    OPENSSL_free(cert);
-    OPENSSL_free(privkey);
-    OPENSSL_free(counts);
+    free(cert);
+    free(privkey);
+    free(counts);
     if (share_ctx == 1) {
         SSL_CTX_free(sctx);
         SSL_CTX_free(cctx);

@@ -161,6 +161,7 @@ function install_wolfssl {
 
 	if [[ -z ${HAPROXY_OPTS} ]] ; then
 		./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
+		    --enable-dtls \
 		    --enable-nginx || exit 1
 	else
 		./configure --prefix="${INSTALL_ROOT}/${DIRNAME}" \
@@ -197,7 +198,9 @@ function install_boringssl {
 	cd "${WORKSPACE_ROOT}"
 	mkdir -p "${BORING_NAME}"
 	cd "${BORING_NAME}"
-	git clone "${BORING_REPO}" --depth 1 . || exit 1
+	git clone "${BORING_REPO}" . || exit 1
+	git checkout 0.20251124.0 || exit 1
+#	git clone "${BORING_REPO}" --depth 1 . || exit 1
 	#
 	# we need to install libdecrepit.so so mod_ssl can use
 	# base64 BIO file stream
