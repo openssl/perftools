@@ -154,7 +154,7 @@ endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-set(CMAKE_REQUIRED_LIBRARIES OpenSSL::Crypto)
+set(CMAKE_REQUIRED_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
 set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
@@ -167,6 +167,7 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
 endif()
 
 check_symbol_exists(OSSL_LIB_CTX_freeze "openssl/crypto.h" HAVE_OSSL_LIB_CTX_FREEZE)
+check_symbol_exists(SSL_set1_dnsname "openssl/ssl.h" HAVE_SSL_SET1_DNSNAME)
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3.6 )
     add_executable(ssl_poll_perf ssl_poll_perf.c)
