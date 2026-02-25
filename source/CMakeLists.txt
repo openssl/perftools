@@ -256,6 +256,9 @@ set(run_add_version_dep ON
 set(run_evp_fetch_pqs
     evp_fetch "" "" "-q"
     CACHE STRING "Post-quantum option for evp_fetch")
+set(run_evp_fetch_freeze
+    evp_fetch "" "" "-f"
+    CACHE STRING "Freeze LIB_CTX for evp_fetch")
 set(run_evp_hash_operations
     evp_hash "" "" "-o deprecated" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_hash")
@@ -345,7 +348,8 @@ set(run_opts run_evp_fetch_pqs
 
 if(HAVE_OSSL_LIB_CTX_FREEZE)
   list(APPEND run_opts run_evp_hash_freeze
-                       run_evp_cipher_freeze)
+                       run_evp_cipher_freeze
+                       run_evp_fetch_freeze)
 endif()
 
 # Used across multiple tests

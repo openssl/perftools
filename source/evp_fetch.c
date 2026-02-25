@@ -7,6 +7,7 @@
  * https://www.openssl.org/source/license.html
  */
 
+#include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,6 +37,16 @@
 # define PQ_GETOPT ""
 # define PQ_USAGE_OPT ""
 # define PQ_USAGE_DESC ""
+#endif
+
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+#define FREEZE_GETOPT "F"
+#define FREEZE_USAGE_OPT " [-F]"
+#define FREEZE_USAGE_DESC "-F - freeze context\n"
+#else
+#define FREEZE_GETOPT ""
+#define FREEZE_USAGE_OPT ""
+#define FREEZE_USAGE_DESC ""
 #endif
 
 #define RUN_TIME 5
@@ -295,6 +306,7 @@ usage(const char *progname)
            "-t - terse output\n"
            "-f - fetch only the specified algorithm\n"
            PQ_USAGE_DESC
+           FREEZE_USAGE_DESC
            "-V - print version information and exit\n"
            "\nEnvironment variables:\n"
            "  EVP_FETCH_TYPE - if no -f option is provided, fetch only\n"
@@ -321,9 +333,17 @@ int main(int argc, char *argv[])
     int rc = EXIT_FAILURE;
     char *fetch_type = getenv("EVP_FETCH_TYPE");
     int opt;
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    int freeze = 0;
+#endif
 
-    while ((opt = getopt(argc, argv, "tf:" PQ_GETOPT "V")) != -1) {
+    while ((opt = getopt(argc, argv, "tf:" PQ_GETOPT "V" FREEZE_GETOPT)) != -1) {
         switch (opt) {
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+        case 'F':
+            freeze = 1;
+            break;
+#endif
         case 't':
             terse = 1;
             break;
@@ -380,6 +400,15 @@ int main(int argc, char *argv[])
     ctx = OSSL_LIB_CTX_new();
     if (ctx == NULL)
         return EXIT_FAILURE;
+
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    if (freeze) {
+        if (OSSL_LIB_CTX_freeze(ctx, NULL) == 0) {
+            fprintf(stderr, "Freezing LIB CTX failed\n");
+            goto out;
+        }
+    }
+#endif
 
     counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
