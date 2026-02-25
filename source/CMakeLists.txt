@@ -154,7 +154,7 @@ endif()
 
 target_include_directories(perf PUBLIC "${PROJECT_SOURCE_DIR}")
 target_link_libraries(perf PUBLIC OpenSSL::SSL OpenSSL::Crypto)
-set(CMAKE_REQUIRED_LIBRARIES OpenSSL::Crypto)
+set(CMAKE_REQUIRED_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
 set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
@@ -167,6 +167,7 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
 endif()
 
 check_symbol_exists(OSSL_LIB_CTX_freeze "openssl/crypto.h" HAVE_OSSL_LIB_CTX_FREEZE)
+check_symbol_exists(SSL_set1_dnsname "openssl/ssl.h" HAVE_SSL_SET1_DNSNAME)
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3.6 )
     add_executable(ssl_poll_perf ssl_poll_perf.c)
@@ -256,6 +257,9 @@ set(run_add_version_dep ON
 set(run_evp_fetch_pqs
     evp_fetch "" "" "-q"
     CACHE STRING "Post-quantum option for evp_fetch")
+set(run_evp_fetch_freeze
+    evp_fetch "" "" "-f"
+    CACHE STRING "Freeze LIB_CTX for evp_fetch")
 set(run_evp_hash_operations
     evp_hash "" "" "-o deprecated" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_hash")
@@ -345,7 +349,8 @@ set(run_opts run_evp_fetch_pqs
 
 if(HAVE_OSSL_LIB_CTX_FREEZE)
   list(APPEND run_opts run_evp_hash_freeze
-                       run_evp_cipher_freeze)
+                       run_evp_cipher_freeze
+                       run_evp_fetch_freeze)
 endif()
 
 # Used across multiple tests
