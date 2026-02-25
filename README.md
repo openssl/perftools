@@ -239,6 +239,37 @@ thread-count - number of threads
 evp_hash -u 10 -a SHA512 -o evp_isolated 15
 ```
 
+## evp_fetch
+
+Tool that measures the cost of [EVP_*_fetch()](https://docs.openssl.org/master/man3/EVP_MD_fetch/) calls.
+Runs for 5 seconds and prints the average execution time per fetch.
+
+By default it cycles over a built-in list of TYPE:ALGORITHM combinations. You can
+limit the run to one combination using `-f TYPE:ALGORITHM` or by setting the
+`EVP_FETCH_TYPE` environment variable.
+
+```
+Usage: evp_fetch [-t] [-f TYPE:ALGORITHM] [-V] [-q] [-F] threadcount
+-t - terse output
+-f - fetch only the specified algorithm
+-q - include post-quantum algorithms (available with OpenSSL >= 3.5 and PQ enabled)
+-F - freeze context (available only with openssl >= 4.x.x)
+-V - print version information and exit
+threadcount - number of threads
+```
+
+Environment variables:
+
+```
+EVP_FETCH_TYPE - if no -f option is provided, fetch only the specified TYPE:ALGORITHM
+```
+```sh
+./evp_fetch 4
+./evp_fetch -f CIPHER:AES-256-GCM 4
+EVP_FETCH_TYPE=MD:SHA3-256 ./evp_fetch 4
+./evp_fetch -q 4
+```
+
 ## evp_cipher
 
 Tool that encrypts random data using the specified algorithm.
