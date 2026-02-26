@@ -109,6 +109,9 @@ function install_openssl {
 
 	if [[ "${BRANCH_NAME}" = 'master' ]] ; then
 		DIRNAME='openssl-master'
+	elif [[ "${BRANCH_NAME}" = 'openssl-master' ]] ; then
+		DIRNAME='openssl-master'
+		BRANCH_NAME='master'
 	else
 		DIRNAME="${BRANCH_NAME}"
 	fi
@@ -402,6 +405,12 @@ function gen_certkey_ec {
 HAPROXY_LIBRE_VERSION='4.2.1'
 HAPROXY_WOLF_VERSION='5.8.4'
 function ssl_libs_haproxy {
+	typeset i=''
+
+	#
+	# NOTE: always build openssl-master,because test
+	# uses openssl(1) tool from master to generate certificates.
+	#
 	echo -n 'openssl-master'
 	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
 		echo -n " openssl-$i"
@@ -410,6 +419,9 @@ function ssl_libs_haproxy {
 	echo -n " libressl-${HAPROXY_LIBRE_VERSION}"
 	echo -n " wolfssl-${HAPROXY_WOLF_VERSION}"
 	echo ' aws-lc'
+	#
+	# could not get ha-proxy working with boringssl
+	#
 }
 
 #
@@ -436,7 +448,7 @@ function siege_rows {
 # number of processes we perform the test runs
 # thou output reads as follows:
 #	1 2 4 8 16 32 64
-function procs {
+function thread_counts {
 	echo -n '1 '
 	echo -n '2 '
 	echo -n '4 '

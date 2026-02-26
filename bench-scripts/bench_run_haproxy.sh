@@ -167,20 +167,13 @@ function run_test {
 }
 
 function run_tests {
-    typeset i=''
-    typeset t=''
+    typeset SSL_LIB=''
+    typeset THREAD_COUNT=''
 
-    for t in 1 2 4 8 16 32 64 ; do
-        for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 master ; do
-            run_test openssl-${i} ${t}
+    for THREAD_COUNT in `thread_counts` ; do
+        for SSL_LIB in `ssl_libs_haproxy` ; do
+            run_test ${SSL_LIB} ${THREAD_COUNT}
         done
-        run_test OpenSSL_1_1_1-stable ${t}
-        run_test libressl-${HAPROXY_LIBRE_VERSION} ${t}
-        run_test wolfssl-${HAPROXY_WOLF_VERSION} ${t}
-        run_test aws-lc ${t}
-        #
-        # could not get haproxy working with boringssl
-        #
     done
 }
 
@@ -300,12 +293,12 @@ EOF
 # by 2 ha-proxy configurations used for testing)
 # The columns in merged file holds benchmark results for
 # particular library (ssl_libs_haproxy), while rows hold
-# the result for number of procs
+# the result for number of threads
 #
 function merge_siege {
     typeset RESULT_DIR=${1:-'.'}
     typeset HANDSHAKE=''
-    typeset PROCS=''
+    typeset THREAD_COUNT=''
     typeset SSL_LIB=''
     typeset ROW=''
     typeset VALUE=''
@@ -334,14 +327,14 @@ function merge_siege {
             done
             printf '\n' >> ${OUTPUT_FILE}
             LINE=1
-            for PROCS in `procs` ; do
+            for THREAD_COUNT in `thread_counts` ; do
                 #
                 # row header with number CPUs used for test
                 #
-                printf "${LINE}\t${PROCS}" >> ${OUTPUT_FILE}
+                printf "${LINE}\t${THREAD_COUNT}" >> ${OUTPUT_FILE}
                 LINE=$(( ${LINE} + 1))
                 for SSL_LIB in `ssl_libs_haproxy` ; do
-                    INPUT_FILE=${HANDSHAKE}-${PROCS}-${SSL_LIB}.out
+                    INPUT_FILE=${HANDSHAKE}-${THREAD_COUNT}-${SSL_LIB}.out
                     INPUT_FILE=${RESULT_DIR}/${INPUT_FILE}
                     if [[ -f ${INPUT_FILE} ]] ; then
                         #
@@ -400,7 +393,7 @@ function merge_siege {
 function merge_h1load {
     typeset RESULT_DIR=${1:-'.'}
     typeset HANDSHAKE=''
-    typeset PROCS=''
+    typeset THREAD_COUNT=''
     typeset SSL_LIB=''
     typeset DURATION=''
     typeset INPUT_FILE=''
@@ -413,10 +406,10 @@ function merge_h1load {
             printf "\t${SSL_LIB}" >> ${OUTPUT_FILE}
         done
         printf "\n" >> ${OUTPUT_FILE}
-        for PROCS in `procs` ; do
-            printf "${PROCS}" >> ${OUTPUT_FILE}
+        for THREAD_COUNT in `thread_counts` ; do
+            printf "${THREAD_COUNT}" >> ${OUTPUT_FILE}
             for SSL_LIB in `ssl_libs_haproxy` ; do
-                INPUT_FILE=${RESULT_DIR}/${HANDSHAKE}-${PROCS}-${SSL_LIB}.out
+                INPUT_FILE=${RESULT_DIR}/${HANDSHAKE}-${THREAD_COUNT}-${SSL_LIB}.out
                 #
                 # h1load outputs performance data combined with percentile table. Those
                 # parts are delimited by ^#= delimiter. The sed expression chops off
@@ -427,7 +420,7 @@ function merge_h1load {
                 #
                 DURATION=$(sed -ne '/^#=/q;p' "${INPUT_FILE}" |tail -1 |awk '{ printf($1); }')
                 printf "\t${DURATION}" >> ${OUTPUT_FILE}
-            one
+            done
             #
             # new line
             #
