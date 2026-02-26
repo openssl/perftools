@@ -320,12 +320,13 @@ Two modes of operation:
 - evp_isolated: Use EVP API and don't allow shared data between computations
 
 ```
-Usage: evp_rand [-h] [-t] [-o operation] [-V] thread-count
+Usage: evp_rand [-h] [-t] [-f] [-o operation] [-V] thread-count
 -h - print this help output
 -t - terse output
+-f - freeze default context
 -o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)
 -V - print version information and exit
-thread-count - number of thread
+thread-count - number of threads
 ```
 
 ```sh
