@@ -114,9 +114,14 @@ function install_haproxy {
         cd "${WORKSPACE_ROOT}" || exit 1
         mkdir -p "${DIRNAME}" || exit 1
         cd "${DIRNAME}"
-        git clone "${HAPROXY_REPO}" -b ${VERSION} --depth 1 . || exit 1
-        
-        # haproxy does not have a configure script; only a big makefile
+        git clone -b ${VERSION} --depth 1 "${HAPROXY_REPO}" . || exit 1
+
+        #
+        # haproxy does not have a configure script; only makefile
+        # also note gnu-make is assumed here for ha-proxy build,
+        # you may need to adjust the script when on non-gnu
+        # platform.
+        #
         make clean
         make ${MAKE_OPTS} \
              TARGET=${HAPROXY_BUILD_TARG} \
@@ -367,76 +372,38 @@ function config_haproxy {
 }
 
 function setup_tests {
-    typeset i=0
-    cd "${WORKSPACE_ROOT}"
-    install_openssl master
-    install_haproxy openssl-master
-    install_httpterm openssl-master
-    install_h1load openssl-master
-    install_siege openssl-master
-    config_haproxy openssl-master
-    clean_build
+    typeset SSL_LIB=""
 
-    for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
-        cd "${WORKSPACE_ROOT}"
-        install_openssl openssl-$i
-        install_haproxy openssl-$i
-        install_httpterm openssl-$i
-        install_h1load openssl-$i
-        install_siege openssl-$i
-        config_haproxy openssl-$i
-        clean_build
+    cd "${WORKSPACE_ROOT}"
+
+    for SSL_LIB in `ssl_libs_haproxy` ;  do
+         case ${SSL_LIB} in
+             openssl*)
+                 install_openssl ${SSL_LIB}
+                 ;;
+             OpenSSL_*)
+                 install_openssl ${SSL_LIB}
+                 ;;
+             wolfssl*)
+                 install_wolfssl ${HAPROXY_WOLF_VERSION} '--enable-haproxy --enable-quic'
+                 ;;
+             libressl*)
+                 install_libressl ${HAPROXY_LIBRE_VERSION}
+                 ;;
+             aws-lc*)
+                 install_aws_lc
+                 ;;
+         esac
+         if [[ ${SSL_LIB} = 'openssl-master' ]] ; then
+             install_siege ${SSL_LIB}
+         fi
+
+         install_haproxy ${SSL_LIB}
+         install_httpterm ${SSL_LIB}
+         install_h1load ${SSL_LIB}
+         config_haproxy ${SSL_LIB}
+         clean_build ${SSL_LIB}
     done
-
-    cd "${WORKSPACE_ROOT}"
-    install_openssl OpenSSL_1_1_1-stable
-    install_haproxy OpenSSL_1_1_1-stable
-    install_httpterm OpenSSL_1_1_1-stable
-    install_h1load OpenSSL_1_1_1-stable
-    install_siege OpenSSL_1_1_1-stable
-    config_haproxy OpenSSL_1_1_1-stable
-    clean_build
-
-    cd "${WORKSPACE_ROOT}"
-    install_wolfssl ${HAPROXY_WOLF_VERSION} '--enable-haproxy --enable-quic'
-    install_haproxy wolfssl-${HAPROXY_WOLF_VERSION}
-    install_httpterm wolfssl-${HAPROXY_WOLF_VERSION}
-    install_h1load wolfssl-${HAPROXY_WOLF_VERSION}
-    install_siege wolfssl-${HAPROXY_WOLF_VERSION}
-    config_haproxy wolfssl-${HAPROXY_WOLF_VERSION}
-    clean_build
-
-    cd "${WORKSPACE_ROOT}"
-    install_libressl ${HAPROXY_LIBRE_VERSION}
-    install_haproxy libressl-${HAPROXY_LIBRE_VERSION}
-    install_httpterm libressl-${HAPROXY_LIBRE_VERSION}
-    install_h1load libressl-${HAPROXY_LIBRE_VERSION}
-    install_siege libressl-${HAPROXY_LIBRE_VERSION}
-    config_haproxy libressl-${HAPROXY_LIBRE_VERSION}
-    clean_build
-
-    #
-    # does not build with boring
-    #
-    #install_boringssl
-    #install_haproxy boringssl
-    #install_httpterm boringssl
-    #install_h1load boringssl
-    #config_haproxy boringssl
-    #cd "${WORKSPACE_ROOT}"
-    #clean_build
-
-    cd "${WORKSPACE_ROOT}"
-    install_aws_lc
-    install_haproxy aws-lc
-    install_httpterm aws-lc
-    install_h1load aws-lc
-    #
-    # siege does not build for aws-lc due to missing CRYPTO_thread_id()
-    #
-    #install_siege aws-lc
-    config_haproxy aws-lc
-    clean_build aws-lc
 }
 
 check_env
