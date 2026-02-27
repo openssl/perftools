@@ -29,7 +29,6 @@
 #include <time.h>
 #include <stdlib.h>
 
-#include "config.h"
 /* Include the appropriate header file for SOCK_STREAM */
 #ifdef _WIN32 /* Windows */
 # include <winsock2.h>
@@ -50,6 +49,7 @@
 #include <openssl/quic.h>
 #include "perflib/perflib.h"
 #include "perflib/list.h"
+#include "config.h"
 
 #ifndef _WIN32
 # include <unistd.h>
