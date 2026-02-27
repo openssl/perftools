@@ -288,6 +288,9 @@ set(run_evp_kdf_operations
 set(run_evp_rand_operations
     evp_rand "" "" "-o evp_isolated" "-o evp_shared"
     CACHE STRING "Modes of operation for evp_rand")
+set(run_evp_rand_freeze
+    evp_rand "" "" "-f"
+    CACHE STRING "Freeze LIB_CTX for evp_rand")
 set(run_evp_setpeer_keys
     evp_setpeer "-k" dh ec256 ec521 x25519 all
     CACHE STRING "Key types for evp_setpeer")
@@ -347,7 +350,8 @@ set(run_opts run_evp_fetch_pqs
 
 if(HAVE_OSSL_LIB_CTX_FREEZE)
   list(APPEND run_opts run_evp_hash_freeze
-                       run_evp_cipher_freeze)
+                       run_evp_cipher_freeze
+                       run_evp_rand_freeze)
 endif()
 
 # Used across multiple tests

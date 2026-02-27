@@ -14,6 +14,7 @@
 
 #define OPENSSL_SUPPRESS_DEPRECATED
 
+#include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #ifndef _WIN32
@@ -121,9 +122,16 @@ err:
 
 static void print_help(FILE *file)
 {
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    fprintf(file, "Usage: evp_rand [-h] [-t] [-f] [-o operation] [-V] thread-count\n");
+#else
     fprintf(file, "Usage: evp_rand [-h] [-t] [-o operation] [-V] thread-count\n");
+#endif
     fprintf(file, "-h - print this help output\n");
     fprintf(file, "-t - terse output\n");
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    fprintf(file, "-f - freeze default context\n");
+#endif
     fprintf(file, "-o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)\n");
     fprintf(file, "-V - print version information and exit\n");
     fprintf(file, "thread-count - number of threads\n");
@@ -136,12 +144,24 @@ int main(int argc, char *argv[])
     double av;
     int terse = 0, operation = EVP_SHARED;
     int j, opt, rc = EXIT_FAILURE;
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    int freeze = 0;
+    char *getopt_options = "Vhtfo:";
+#else
+    char *getopt_options = "Vhto:";
+#endif
 
-    while ((opt = getopt(argc, argv, "Vhto:")) != -1) {
+
+    while ((opt = getopt(argc, argv, getopt_options)) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
             break;
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+        case 'f':
+            freeze = 1;
+            break;
+#endif
         case 'o':
             if (strcmp(optarg, "evp_isolated") == 0) {
                 operation = EVP_ISOLATED;
@@ -183,6 +203,15 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Failed to create counts array\n");
         goto err;
     }
+
+#ifdef HAVE_OSSL_LIB_CTX_FREEZE
+    if (freeze) {
+        if (OSSL_LIB_CTX_freeze(NULL, NULL) == 0) {
+            fprintf(stderr, "Freezing LIB CTX failed\n");
+            goto err;
+        }
+    }
+#endif
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
