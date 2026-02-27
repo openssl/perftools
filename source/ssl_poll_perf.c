@@ -49,6 +49,7 @@
 #include <openssl/quic.h>
 #include "perflib/perflib.h"
 #include "perflib/list.h"
+#include "config.h"
 
 #ifndef _WIN32
 # include <unistd.h>
@@ -2981,10 +2982,17 @@ create_client_pe(SSL_CTX *ctx, struct client_stats *cs)
         goto fail;
     }
 
+#ifdef HAVE_SSL_SET1_DNSNAME
+    if (SSL_set1_dnsname(qconn, hostname) == 0) {
+        DPRINTFC(stderr, "%s SSL_set1_dnsname() failed\n", __func__);
+        goto fail;
+    }
+#else
     if (SSL_set1_host(qconn, hostname) == 0) {
         DPRINTFC(stderr, "%s SSL_set1_host() failed\n", __func__);
         goto fail;
     }
+#endif
 
     /* SSL_set_alpn_protos returns 0 for success! */
     switch (alpn) {
