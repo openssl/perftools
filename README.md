@@ -331,3 +331,26 @@ thread-count - number of thread
 ```sh
 ./evp_rand -o evp_shared 10
 ```
+
+## evp_pkey
+
+This CLI tool that generates keys using a given algorithm.
+Runs for 5 seconds and prints the average execution time per key generation.
+
+Two modes of operation:
+- evp_shared (default): Use EVP API and allow shared data between computations
+- evp_isolated: Use EVP API and don't allow shared data between computations
+
+```
+Usage: evp_pkey [-h] [-t] [-o operation] [-V] thread-count
+-h - print this help output
+-t - terse output
+-o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)
+-a algorithm - algorithm for generated key. One of [RSA, X25519, X448, ED25519, ED448] (default: ED25519)
+-V - print version information and exit
+thread-count - number of threads
+```
+
+```sh
+./evp_pkey -o evp_shared -a RSA 10
+```
