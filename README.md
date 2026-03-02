@@ -298,9 +298,10 @@ Four modes of operation:
 - deprecated_isolated: Use legacy API and don't allow shared data between computations
 
 ```
-Usage: evp_kdf [-h] [-t] [-o operation] [-V] thread-count
+Usage: evp_kdf [-h] [-t] [-f] [-o operation] [-V] thread-count
 -h - print this help output
 -t - terse output
+-f - freeze default context (available only with openssl >= 4.x.x)
 -o operation - mode of operation. One of [evp_isolated, evp_shared, deprecated_isolated, deprecated_shared] (default: evp_shared)
 -V - print version information and exit
 thread-count - number of threads
