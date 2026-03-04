@@ -409,7 +409,7 @@ function ssl_libs_haproxy {
 
 	#
 	# NOTE: always build openssl-master,because test
-	# uses openssl(1) tool from master to generate certicates.
+	# uses openssl(1) tool from master to generate certificates.
 	#
 	echo -n 'openssl-master'
 	for i in 3.0 3.1 3.2 3.3 3.4 3.5 3.6 ; do
