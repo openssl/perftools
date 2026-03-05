@@ -158,17 +158,93 @@ set(CMAKE_REQUIRED_LIBRARIES OpenSSL::Crypto)
 set(CMAKE_REQUIRED_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
 set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
 
+check_symbol_exists(OSSL_LIB_CTX_freeze "openssl/crypto.h" HAVE_OSSL_LIB_CTX_FREEZE)
+check_symbol_exists(SSL_set1_dnsname "openssl/ssl.h" HAVE_SSL_SET1_DNSNAME)
+
+set(run_tests CACHE STRING "List of tests to run")
+set(run_opts CACHE STRING "List of per-text options")
+
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
     add_executable(evp_fetch evp_fetch.c)
     target_link_libraries(evp_fetch PRIVATE perf)
+    list(APPEND run_tests evp_fetch)
+
+    set(run_evp_fetch_pqs
+        evp_fetch "" "" "-q"
+        CACHE STRING "Post-quantum option for evp_fetch")
+    list(APPEND run_opts run_evp_fetch_pqs)
+    if(HAVE_OSSL_LIB_CTX_FREEZE)
+        set(run_evp_fetch_freeze
+            evp_fetch "" "" "-F"
+            CACHE STRING "Freeze LIB_CTX for evp_fetch")
+        list(APPEND run_opts run_evp_fetch_pqs)
+    endif()
 
     add_executable(providerdoall providerdoall.c)
     target_link_libraries(providerdoall PRIVATE perf)
+    list(APPEND run_tests providerdoall)
+
+    add_executable(evp_cipher evp_cipher.c)
+    target_link_libraries(evp_cipher PRIVATE perf)
+    list(APPEND run_tests evp_cipher)
+    set(run_evp_cipher_operations
+        evp_cipher "" "" "-o evp_isolated" "-o evp_shared"
+        CACHE STRING "Modes of operation for evp_cipher")
+    list(APPEND run_opts run_evp_cipher_operations)
+    set(run_evp_cipher_algorithms
+        evp_cipher "" "" "-a AES-128-CBC" "-a AES-256-CBC"
+        CACHE STRING "Encryption algorithms for evp_cipher")
+    list(APPEND run_opts run_evp_cipher_algorithms)
+    if(HAVE_OSSL_LIB_CTX_FREEZE)
+        set(run_evp_cipher_freeze
+            evp_cipher "" "" "-f"
+            CACHE STRING "Freeze LIB_CTX for evp_cipher")
+        list(APPEND run_opts run_evp_cipher_freeze)
+    endif()
+
+    add_executable(evp_mac evp_mac.c)
+    target_link_libraries(evp_mac PRIVATE perf)
+    list(APPEND run_tests evp_mac)
+    set(run_evp_mac_operations
+        evp_mac "" "" "-o deprecated_isolated" "-o deprecated_shared" "-o evp_isolated" "-o evp_shared"
+        CACHE STRING "Modes of operation for evp_mac")
+    list(APPEND run_opts run_evp_mac_operations)
+
+    add_executable(evp_kdf evp_kdf.c)
+    target_link_libraries(evp_kdf PRIVATE perf)
+    list(APPEND run_tests evp_kdf)
+    set(run_evp_kdf_operations
+        evp_kdf "" "" "-o evp_shared" "-o evp_isolated" "-o deprecated_shared" "-o deprecated_isolated"
+        CACHE STRING "Modes of operation for evp_kdf")
+    list(APPEND run_opts run_evp_kdf_operations)
+
+    add_executable(evp_rand evp_rand.c)
+    target_link_libraries(evp_rand PRIVATE perf)
+    list(APPEND run_tests evp_rand)
+    set(run_evp_rand_operations
+        evp_rand "" "" "-o evp_isolated" "-o evp_shared"
+        CACHE STRING "Modes of operation for evp_rand")
+    list(APPEND run_opts run_evp_rand_operations)
+    if(HAVE_OSSL_LIB_CTX_FREEZE)
+        set(run_evp_rand_freeze
+            evp_rand "" "" "-f"
+            CACHE STRING "Freeze LIB_CTX for evp_rand")
+        list(APPEND run_opts run_evp_rand_freeze)
+    endif()
+
+    add_executable(evp_pkey evp_pkey.c)
+    target_link_libraries(evp_pkey PRIVATE perf)
+    list(APPEND run_tests evp_pkey)
+    set(run_evp_pkey_operations
+        evp_pkey "" "" "-o evp_isolated" "-o evp_shared"
+        CACHE STRING "Modes of operation for evp_pkey")
+    list(APPEND run_opts run_evp_pkey_operations)
+    set(run_evp_pkey_algorithms
+        evp_pkey "" "" "-a RSA" "-a X25519" "-a X448" "-a ED25519" "-a ED448"
+        CACHE STRING "Algorithms for evp_pkey")
+    list(APPEND run_opts run_evp_pkey_algorithms)
 
 endif()
-
-check_symbol_exists(OSSL_LIB_CTX_freeze "openssl/crypto.h" HAVE_OSSL_LIB_CTX_FREEZE)
-check_symbol_exists(SSL_set1_dnsname "openssl/ssl.h" HAVE_SSL_SET1_DNSNAME)
 
 if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3.6 )
     add_executable(ssl_poll_perf ssl_poll_perf.c)
@@ -181,24 +257,51 @@ endif()
 
 add_executable(randbytes randbytes.c)
 target_link_libraries(randbytes PRIVATE perf)
+list(APPEND run_tests randbytes)
 
 add_executable(handshake handshake.c)
 target_link_libraries(handshake PRIVATE perf)
+list(APPEND run_tests handshake)
+set(run_handshake_pools
+    handshake "" "-p" "-P" "-l"
+    CACHE STRING "Pool types for handshake")
+list(APPEND run_opts run_handshake_pools)
+set(run_handshake_ctx_sharing
+    handshake "" "" "-s"
+    CACHE STRING "Context sharing option for handshake")
+list(APPEND run_opts run_handshake_ctx_sharing)
+set(run_handshake_pool_size
+    handshake "" "" "-o 4" "-o 256"
+    CACHE STRING "Pool size for handshake")
+list(APPEND run_opts run_handshake_pool_size)
+set(run_handshake_secure_memory
+    handshake "" "-S 1048576"
+    CACHE STRING "Secure memory usage for handshake")
+list(APPEND run_opts run_handshake_secure_memory)
 
 add_executable(sslnew sslnew.c)
 target_link_libraries(sslnew PRIVATE perf)
+list(APPEND run_tests sslnew)
 
 add_executable(newrawkey newrawkey.c)
 target_link_libraries(newrawkey PRIVATE perf)
+list(APPEND run_tests newrawkey)
+set(run_newrawkey_algos
+    newrawkey "-a" x25519 ml-kem-512 ml-kem-768 ml-kem-1024
+    CACHE STRING "Algorithms for newrawkey")
+list(APPEND run_opts run_newrawkey_algos)
 
 add_executable(rsasign rsasign.c)
 target_link_libraries(rsasign PRIVATE perf)
+list(APPEND run_tests rsasign)
 
 add_executable(x509storeissuer x509storeissuer.c)
 target_link_libraries(x509storeissuer PRIVATE perf)
+list(APPEND run_tests x509storeissuer)
 
 add_executable(rwlocks rwlocks.c)
 target_link_libraries(rwlocks PRIVATE perf)
+list(APPEND run_tests rwlocks)
 
 add_executable(pkeyread pkeyread.c)
 if(WIN32)
@@ -206,169 +309,65 @@ if(WIN32)
 else()
     target_link_libraries(pkeyread PUBLIC m PRIVATE perf)
 endif()
+list(APPEND run_tests pkeyread)
+set(run_pkeyread_keys
+    pkeyread "-k" dh dhx dsa ec rsa x25519 all
+    CACHE STRING "Key types for pkeyread")
+list(APPEND run_opts run_pkeyread_keys)
+set(run_pkeyread_fmts
+    pkeyread "-f" pem der all
+    CACHE STRING "Key formats for pkeyread")
+list(APPEND run_opts run_pkeyread_fmts)
 
 add_executable(evp_setpeer evp_setpeer.c)
 target_link_libraries(evp_setpeer PRIVATE perf)
+list(APPEND run_tests evp_setpeer)
+set(run_evp_setpeer_keys
+    evp_setpeer "-k" dh ec256 ec521 x25519 all
+    CACHE STRING "Key types for evp_setpeer")
+list(APPEND run_opts run_evp_setpeer_keys)
 
 add_executable(writeread writeread.c)
 target_link_libraries(writeread PRIVATE perf)
+list(APPEND run_tests writeread)
+set(run_writeread_ctx_sharing
+    writeread "" "" "-s"
+    CACHE STRING "Context sharing for writeread")
+list(APPEND run_opts run_writeread_ctx_sharing)
+set(run_writeread_dtls
+    writeread "" "" "-d"
+    CACHE STRING "DTLS mode for writeread")
+list(APPEND run_opts run_writeread_dtls)
+set(run_writeread_buffers
+    writeread "" "" "-b 256" "-b 4096"
+    CACHE STRING "Buffer size for writeread")
+list(APPEND run_opts run_writeread_buffers)
 
 add_executable(evp_hash evp_hash.c)
 target_link_libraries(evp_hash PRIVATE perf)
-
-add_executable(evp_cipher evp_cipher.c)
-target_link_libraries(evp_cipher PRIVATE perf)
-
-add_executable(evp_mac evp_mac.c)
-target_link_libraries(evp_mac PRIVATE perf)
-
-add_executable(evp_kdf evp_kdf.c)
-target_link_libraries(evp_kdf PRIVATE perf)
-
-add_executable(evp_rand evp_rand.c)
-target_link_libraries(evp_rand PRIVATE perf)
-
-add_executable(evp_pkey evp_pkey.c)
-target_link_libraries(evp_pkey PRIVATE perf)
-
-## Running tests
-# Options
-set(run_tests evp_fetch
-              evp_hash
-              evp_cipher
-              evp_mac
-              evp_kdf
-              evp_rand
-              evp_pkey
-              evp_setpeer
-              handshake
-              newrawkey
-              pkeyread
-              providerdoall
-              randbytes
-              rsasign
-              rwlocks
-              sslnew
-              #ssl_poll_perf
-              writeread
-              x509storeissuer
-              CACHE STRING "List of tests to run")
+list(APPEND run_tests evp_hash)
+set(run_evp_hash_operations
+    evp_hash "" "" "-o deprecated" "-o evp_isolated" "-o evp_shared"
+    CACHE STRING "Modes of operation for evp_hash")
+list(APPEND run_opts run_evp_hash_operations)
+set(run_evp_hash_update_times
+    evp_hash "" "" "-u 1" "-u 5"
+    CACHE STRING "Digest update times for evp_hash")
+list(APPEND run_opts run_evp_hash_update_times)
+set(run_evp_hash_algorithms
+    evp_hash "" "" "-a SHA1" "-a SHA224" "-a SHA256" "-a SHA384" "-a SHA512"
+    CACHE STRING "Digest hash algorithms for evp_hash")
+list(APPEND run_opts run_evp_hash_algorithms)
+if(HAVE_OSSL_LIB_CTX_FREEZE)
+    set(run_evp_hash_freeze
+    evp_hash "" "" "-f"
+    CACHE STRING "Freeze LIB_CTX for evp_hash")
+    list(APPEND run_opts run_evp_hash_freeze)
+endif()
 
 set(run_add_version_dep ON
     CACHE BOOL "Whether to print version information on run " +
                "(call all the tests with -V option before the main run)")
-
-# Per-test options, the format: test option values
-set(run_evp_fetch_pqs
-    evp_fetch "" "" "-q"
-    CACHE STRING "Post-quantum option for evp_fetch")
-set(run_evp_fetch_freeze
-    evp_fetch "" "" "-F"
-    CACHE STRING "Freeze LIB_CTX for evp_fetch")
-set(run_evp_hash_operations
-    evp_hash "" "" "-o deprecated" "-o evp_isolated" "-o evp_shared"
-    CACHE STRING "Modes of operation for evp_hash")
-set(run_evp_hash_update_times
-    evp_hash "" "" "-u 1" "-u 5"
-    CACHE STRING "Digest update times for evp_hash")
-set(run_evp_hash_algorithms
-    evp_hash "" "" "-a SHA1" "-a SHA224" "-a SHA256" "-a SHA384" "-a SHA512"
-    CACHE STRING "Digest hash algorithms for evp_hash")
-set(run_evp_hash_freeze
-    evp_hash "" "" "-f"
-    CACHE STRING "Freeze LIB_CTX for evp_hash")
-set(run_evp_cipher_operations
-    evp_cipher "" "" "-o evp_isolated" "-o evp_shared"
-    CACHE STRING "Modes of operation for evp_cipher")
-set(run_evp_cipher_algorithms
-    evp_cipher "" "" "-a AES-128-CBC" "-a AES-256-CBC"
-    CACHE STRING "Encryption algorithms for evp_cipher")
-set(run_evp_cipher_freeze
-    evp_cipher "" "" "-f"
-    CACHE STRING "Freeze LIB_CTX for evp_cipher")
-set(run_evp_mac_operations
-    evp_mac "" "" "-o deprecated_isolated" "-o deprecated_shared" "-o evp_isolated" "-o evp_shared"
-    CACHE STRING "Modes of operation for evp_mac")
-set(run_evp_kdf_operations
-    evp_kdf "" "" "-o evp_shared" "-o evp_isolated" "-o deprecated_shared" "-o deprecated_isolated"
-    CACHE STRING "Modes of operation for evp_kdf")
-set(run_evp_rand_operations
-    evp_rand "" "" "-o evp_isolated" "-o evp_shared"
-    CACHE STRING "Modes of operation for evp_rand")
-set(run_evp_pkey_operations
-    evp_pkey "" "" "-o evp_isolated" "-o evp_shared"
-    CACHE STRING "Modes of operation for evp_pkey")
-set(run_evp_pkey_algorithms
-    evp_pkey "" "" "-a RSA" "-a X25519" "-a X448" "-a ED25519" "-a ED448"
-    CACHE STRING "Algorithms for evp_pkey")
-set(run_evp_rand_freeze
-    evp_rand "" "" "-f"
-    CACHE STRING "Freeze LIB_CTX for evp_rand")
-set(run_evp_setpeer_keys
-    evp_setpeer "-k" dh ec256 ec521 x25519 all
-    CACHE STRING "Key types for evp_setpeer")
-set(run_newrawkey_algos
-    newrawkey "-a" x25519 ml-kem-512 ml-kem-768 ml-kem-1024
-    CACHE STRING "Algorithms for newrawkey")
-set(run_pkeyread_keys
-    pkeyread "-k" dh dhx dsa ec rsa x25519 all
-    CACHE STRING "Key types for pkeyread")
-set(run_pkeyread_fmts
-    pkeyread "-f" pem der all
-    CACHE STRING "Key formats for pkeyread")
-set(run_handshake_pools
-    handshake "" "-p" "-P" "-l"
-    CACHE STRING "Pool types for handshake")
-set(run_handshake_ctx_sharing
-    handshake "" "" "-s"
-    CACHE STRING "Context sharing option for handshake")
-set(run_handshake_pool_size
-    handshake "" "" "-o 4" "-o 256"
-    CACHE STRING "Pool size for handshake")
-set(run_handshake_secure_memory
-    handshake "" "-S 1048576"
-    CACHE STRING "Secure memory usage for handshake")
-set(run_writeread_ctx_sharing
-    writeread "" "" "-s"
-    CACHE STRING "Context sharing for writeread")
-set(run_writeread_dtls
-    writeread "" "" "-d"
-    CACHE STRING "DTLS mode for writeread")
-set(run_writeread_buffers
-    writeread "" "" "-b 256" "-b 4096"
-    CACHE STRING "Buffer size for writeread")
-
-# The list of per-tet options
-set(run_opts run_evp_fetch_pqs
-             run_evp_hash_operations
-             run_evp_hash_update_times
-             run_evp_hash_algorithms
-             run_evp_cipher_operations
-             run_evp_cipher_algorithms
-             run_evp_mac_operations
-             run_evp_kdf_operations
-             run_evp_rand_operations
-             run_evp_pkey_operations
-             run_evp_pkey_algorithms
-             run_evp_setpeer_keys
-             run_newrawkey_algos
-             run_pkeyread_keys
-             run_pkeyread_fmts
-             run_handshake_pools
-             run_handshake_ctx_sharing
-             run_handshake_pool_size
-             run_handshake_secure_memory
-             run_writeread_ctx_sharing
-             run_writeread_dtls
-             run_writeread_buffers
-             CACHE STRING "List of per-text options")
-
-if(HAVE_OSSL_LIB_CTX_FREEZE)
-  list(APPEND run_opts run_evp_hash_freeze
-                       run_evp_cipher_freeze
-                       run_evp_rand_freeze
-                       run_evp_fetch_freeze)
-endif()
 
 # Used across multiple tests
 set(run_certdir_tests handshake writeread x509storeissuer
