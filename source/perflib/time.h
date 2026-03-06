@@ -11,7 +11,8 @@
 # define OSSL_PERFLIB_TIME_H
 # pragma once
 
-# include <openssl/e_os2.h>     /* uint64_t */
+#include <stdint.h>
+
 # ifndef _WIN32
 #  include "sys/time.h"
 # else
@@ -49,6 +50,18 @@ typedef struct {
 #define ossl_time2ms(t) (ossl_time2ticks(t) / OSSL_TIME_MS)
 #define ossl_us2time(us) ossl_ticks2time((us) * OSSL_TIME_US)
 #define ossl_time2us(t) (ossl_time2ticks(t) / OSSL_TIME_US)
+
+#ifndef ossl_unused
+#if defined(__GNUC__)
+#define ossl_unused __attribute__((unused))
+#else
+#define ossl_unused
+#endif
+#endif
+
+#ifndef ossl_inline
+#define ossl_inline inline
+#endif
 
 /* Convert a tick count into a time */
 static ossl_unused ossl_inline
