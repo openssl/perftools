@@ -227,7 +227,7 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
         set(run_evp_fetch_freeze
             evp_fetch "" "" "-F"
             CACHE STRING "Freeze LIB_CTX for evp_fetch")
-        list(APPEND run_opts run_evp_fetch_pqs)
+        list(APPEND run_opts run_evp_fetch_freeze)
     endif()
 
     add_executable(providerdoall providerdoall.c)
