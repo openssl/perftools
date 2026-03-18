@@ -49,8 +49,9 @@ handshakes are performed divided evenly among each thread. It take 2 optional
 and two required arguments:
 
 ```
-handshake [-t] [-s] <certsdir> <threadcount>
+handshake [-t] [-s] [-f] <certsdir> <threadcount>
 -t - produce terse output
+-f - freeze default context (available only with openssl >= 4.x.x)
 -s - create an ssl_ctx per connection, rather than a single thread-shared ctx
 -p - use ossl_lib_ctx per thread
 -P - use ossl_lib_ctx pool (can be combined with -s. If sharing is enabled, ssl_ctx
