@@ -7,7 +7,6 @@
  * https://www.openssl.org/source/license.html
  */
 
-#include "config.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -338,9 +337,6 @@ void usage(const char *progname)
     printf("-l - use ssl ctx pool\n");
     printf("-o - set ossl_lib_ctx pool size\n");
 #endif
-#ifdef HAVE_OSSL_LIB_CTX_FREEZE
-    printf("-f - freeze default context\n");
-#endif
     printf("-S [n] - use secure memory\n");
     printf("-V - print version information and exit\n");
 }
@@ -358,20 +354,12 @@ int main(int argc, char * const argv[])
     int p_flag = 0, P_flag = 0, l_flag = 0;
     char *endptr = NULL;
     char *getopt_options = "tsS:V";
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L && defined(HAVE_OSSL_LIB_CTX_FREEZE)
-    int freeze = 0;
-    getopt_options =  "tspPo:lS:Vf";
-#else
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
     getopt_options =  "tspPo:lS:V";
 #endif
 
     while ((opt = getopt(argc, argv, getopt_options)) != -1) {
         switch (opt) {
-#ifdef HAVE_OSSL_LIB_CTX_FREEZE
-        case 'f':
-            freeze = 1;
-            break;
-#endif
         case 't':
             terse = 1;
             break;
@@ -483,15 +471,6 @@ int main(int argc, char * const argv[])
     }
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
-
-#ifdef HAVE_OSSL_LIB_CTX_FREEZE
-    if (freeze) {
-        if (OSSL_LIB_CTX_freeze(NULL, NULL) == 0) {
-            fprintf(stderr, "Freezing LIB CTX failed\n");
-            goto err;
-        }
-    }
-#endif
 
     switch (test_case) {
     case TC_SSL_CTX: {
