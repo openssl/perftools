@@ -208,7 +208,6 @@ else()
     set(CMAKE_REQUIRED_INCLUDES "${OPENSSL_INCLUDE_DIR}")
 endif()
 
-check_symbol_exists(OSSL_LIB_CTX_freeze "openssl/crypto.h" HAVE_OSSL_LIB_CTX_FREEZE)
 check_symbol_exists(SSL_set1_dnsname "openssl/ssl.h" HAVE_SSL_SET1_DNSNAME)
 
 set(run_tests CACHE STRING "List of tests to run")
@@ -223,12 +222,6 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
         evp_fetch "" "" "-q"
         CACHE STRING "Post-quantum option for evp_fetch")
     list(APPEND run_opts run_evp_fetch_pqs)
-    if(HAVE_OSSL_LIB_CTX_FREEZE)
-        set(run_evp_fetch_freeze
-            evp_fetch "" "" "-F"
-            CACHE STRING "Freeze LIB_CTX for evp_fetch")
-        list(APPEND run_opts run_evp_fetch_freeze)
-    endif()
 
     add_executable(providerdoall providerdoall.c)
     target_link_libraries(providerdoall PRIVATE perf)
@@ -245,12 +238,6 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
         evp_cipher "" "" "-a AES-128-CBC" "-a AES-256-CBC"
         CACHE STRING "Encryption algorithms for evp_cipher")
     list(APPEND run_opts run_evp_cipher_algorithms)
-    if(HAVE_OSSL_LIB_CTX_FREEZE)
-        set(run_evp_cipher_freeze
-            evp_cipher "" "" "-f"
-            CACHE STRING "Freeze LIB_CTX for evp_cipher")
-        list(APPEND run_opts run_evp_cipher_freeze)
-    endif()
 
     add_executable(evp_mac evp_mac.c)
     target_link_libraries(evp_mac PRIVATE perf)
@@ -267,12 +254,6 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
         evp_kdf "" "" "-o evp_shared" "-o evp_isolated" "-o deprecated_shared" "-o deprecated_isolated"
         CACHE STRING "Modes of operation for evp_kdf")
     list(APPEND run_opts run_evp_kdf_operations)
-    if(HAVE_OSSL_LIB_CTX_FREEZE)
-        set(run_evp_kdf_freeze
-            evp_kdf "" "" "-f"
-            CACHE STRING "Freeze LIB_CTX for evp_kdf")
-        list(APPEND run_opts run_evp_kdf_freeze)
-    endif()
 
     add_executable(evp_rand evp_rand.c)
     target_link_libraries(evp_rand PRIVATE perf)
@@ -281,12 +262,6 @@ if( OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
         evp_rand "" "" "-o evp_isolated" "-o evp_shared"
         CACHE STRING "Modes of operation for evp_rand")
     list(APPEND run_opts run_evp_rand_operations)
-    if(HAVE_OSSL_LIB_CTX_FREEZE)
-        set(run_evp_rand_freeze
-            evp_rand "" "" "-f"
-            CACHE STRING "Freeze LIB_CTX for evp_rand")
-        list(APPEND run_opts run_evp_rand_freeze)
-    endif()
 
     add_executable(evp_pkey evp_pkey.c)
     target_link_libraries(evp_pkey PRIVATE perf)
@@ -435,12 +410,6 @@ if( NOT WITH_OPENSSL_FORK )
         evp_hash "" "" "-a SHA1" "-a SHA224" "-a SHA256" "-a SHA384" "-a SHA512"
         CACHE STRING "Digest hash algorithms for evp_hash")
     list(APPEND run_opts run_evp_hash_algorithms)
-    if(HAVE_OSSL_LIB_CTX_FREEZE)
-        set(run_evp_hash_freeze
-        evp_hash "" "" "-f"
-        CACHE STRING "Freeze LIB_CTX for evp_hash")
-        list(APPEND run_opts run_evp_hash_freeze)
-    endif()
 endif()
 
 set(run_add_version_dep ON
