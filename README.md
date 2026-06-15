@@ -49,7 +49,7 @@ handshakes are performed divided evenly among each thread. It take 2 optional
 and two required arguments:
 
 ```
-handshake [-t] [-s] [-f] <certsdir> <threadcount>
+handshake [-t] [-s] <certsdir> <threadcount>
 -t - produce terse output
 -s - create an ssl_ctx per connection, rather than a single thread-shared ctx
 -p - use ossl_lib_ctx per thread
@@ -225,7 +225,7 @@ Three modes of operation:
 - evp_shared (default): Use EVP API and allow shared data between threads
 
 ```
-Usage: evp_hash [-h] [-t] [-f] [-o operation] [-u update-times] [-a algorithm] thread-count
+Usage: evp_hash [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count
 -h - print this help output
 -t - terse output
 -o operation - mode of operation. One of [deprecated, evp_isolated, evp_shared] (default: evp_shared)
@@ -277,7 +277,7 @@ Two modes of operation:
 - evp_shared (default): Use EVP API and allow shared data between threads
 
 ```
-Usage: evp_cipher [-h] [-t] [-f] [-o operation] [-u update-times] [-a algorithm] thread-count
+Usage: evp_cipher [-h] [-t] [-o operation] [-u update-times] [-a algorithm] thread-count
 -h - print this help output
 -t - terse output
 -o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)
@@ -326,7 +326,7 @@ Four modes of operation:
 - deprecated_isolated: Use legacy API and don't allow shared data between computations
 
 ```
-Usage: evp_kdf [-h] [-t] [-f] [-o operation] [-V] thread-count
+Usage: evp_kdf [-h] [-t] [-o operation] [-V] thread-count
 -h - print this help output
 -t - terse output
 -o operation - mode of operation. One of [evp_isolated, evp_shared, deprecated_isolated, deprecated_shared] (default: evp_shared)
@@ -348,7 +348,7 @@ Two modes of operation:
 - evp_isolated: Use EVP API and don't allow shared data between computations
 
 ```
-Usage: evp_rand [-h] [-t] [-f] [-o operation] [-V] thread-count
+Usage: evp_rand [-h] [-t] [-o operation] [-V] thread-count
 -h - print this help output
 -t - terse output
 -o operation - mode of operation. One of [evp_isolated, evp_shared] (default: evp_shared)
