@@ -246,9 +246,9 @@ static void free_ctx_pool()
         return;
     for (int i = 0; i < pool_size; ++i) {
         if (ctx_pool[i]) {
-            OSSL_LIB_CTX_free(ctx_pool[i]->libctx);
             SSL_CTX_free(ctx_pool[i]->sctx);
             SSL_CTX_free(ctx_pool[i]->cctx);
+            OSSL_LIB_CTX_free(ctx_pool[i]->libctx);
             OPENSSL_free(ctx_pool[i]);
         }
     }
