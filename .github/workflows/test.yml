@@ -411,13 +411,13 @@ jobs:
       working-directory: ".\\openssl"
       shell: cmd
       run: |
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         perl Configure no-makedepend ${{ matrix.release.configopts }}
     - name: "Build openssl"
       working-directory: ".\\openssl"
       shell: cmd
       run: |
-        call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+        call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
         nmake
     - name: "Checkout perftools"
       uses: "actions/checkout@v5"
