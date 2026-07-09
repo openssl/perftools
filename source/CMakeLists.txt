@@ -338,6 +338,12 @@ if( NOT ${SKIP_STOREISSUER} )
     list(APPEND run_tests x509storeissuer)
 endif()
 
+# Single-threaded size sweep -- not part of the run target, run on demand.
+if( NOT WITH_OPENSSL_FORK AND OPENSSL_VERSION VERSION_GREATER_EQUAL 3 )
+    add_executable(x509storeadd x509storeadd.c)
+    target_link_libraries(x509storeadd PRIVATE perf)
+endif()
+
 if( NOT WITH_OPENSSL_FORK )
     add_executable(rwlocks rwlocks.c)
     target_link_libraries(rwlocks PRIVATE perf)
