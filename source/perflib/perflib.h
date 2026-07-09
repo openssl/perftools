@@ -34,6 +34,18 @@ typedef pthread_t thread_t;
 
 # endif
 
+#if defined(__GNUC__) || defined(__clang__)
+# define SAME_TYPE(a, b)                                                  \
+	 __builtin_types_compatible_p(__typeof__(a), __typeof__(b))
+/* &(x)[0] has x's type only for a pointer, and char[-1] does not compile. */
+# define MUST_BE_ARRAY(x)                                                 \
+	 (0 * sizeof(char[1 - 2 * SAME_TYPE((x), &(x)[0])]))
+#else
+# define MUST_BE_ARRAY(x) 0
+#endif
+
+#define ARRAY_SIZE(x) (sizeof((x)) / sizeof((*x)) + MUST_BE_ARRAY((x)))
+
 struct thread_arg_st {
     void (*func)(size_t num);
     size_t num;

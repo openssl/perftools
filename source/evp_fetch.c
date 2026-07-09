@@ -76,9 +76,6 @@ size_t num_calls;
 
 static OSSL_LIB_CTX *ctx = NULL;
 
-#define ARRAY_SIZE(a)                               \
-  ((sizeof(a) / sizeof(*(a))))
-
 typedef enum {
     FETCH_MD = 0,
     FETCH_CIPHER,
