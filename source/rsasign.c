@@ -54,8 +54,7 @@ void do_rsasign(size_t num)
     EVP_PKEY_CTX *ctx = EVP_PKEY_CTX_new(rsakey, NULL);
     size_t siglen = sizeof(sig);
     OSSL_TIME time;
-
-    counts[num] = 0;
+    size_t count = 0;
 
     do {
         if (EVP_PKEY_sign_init(ctx) <= 0
@@ -64,10 +63,11 @@ void do_rsasign(size_t num)
             err = 1;
             break;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while(time.t < max_time.t);
 
+    counts[num] = count;
     EVP_PKEY_CTX_free(ctx);
 }
 

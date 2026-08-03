@@ -163,6 +163,7 @@ void do_fetch(size_t num)
 {
     OSSL_TIME time;
     size_t i, j;
+    size_t count = 0;
     const char *fetch_alg = NULL;
     int array_size = ARRAY_SIZE(fetch_entries);
 
@@ -282,9 +283,11 @@ void do_fetch(size_t num)
             err = 1;
             return;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 static void

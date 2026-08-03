@@ -37,8 +37,7 @@ void do_sslnew(size_t num)
     SSL *s;
     BIO *rbio, *wbio;
     OSSL_TIME time;
-
-    counts[num] = 0;
+    size_t count = 0;
 
     do {
         s = SSL_new(ctx);
@@ -55,9 +54,11 @@ void do_sslnew(size_t num)
         }
 
         SSL_free(s);
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 int main(int argc, char *argv[])

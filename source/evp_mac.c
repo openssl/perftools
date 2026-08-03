@@ -93,6 +93,7 @@ err:
 static void do_evp_isolated(size_t num)
 {
     OSSL_TIME time;
+    size_t count = 0;
 
     do {
         if (!evp_isolated()) {
@@ -100,15 +101,18 @@ static void do_evp_isolated(size_t num)
             return;
         }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 static void do_evp_shared(size_t num)
 {
     OSSL_TIME time;
     EVP_MAC *mac = NULL;
+    size_t count = 0;
     EVP_MAC_CTX *ctx = NULL;
     OSSL_PARAM params[] = {
         OSSL_PARAM_construct_utf8_string("digest", "SHA256", 0),
@@ -129,11 +133,12 @@ static void do_evp_shared(size_t num)
             goto err;
         }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
 err:
+    counts[num] = count;
     EVP_MAC_CTX_free(ctx);
     EVP_MAC_free(mac);
 }
@@ -173,6 +178,7 @@ err:
 static void do_deprecated_isolated(size_t num)
 {
     OSSL_TIME time;
+    size_t count = 0;
 
     do {
         if (!hmac_isolated()) {
@@ -180,15 +186,18 @@ static void do_deprecated_isolated(size_t num)
             return;
         }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 static void do_deprecated_shared(size_t num)
 {
     OSSL_TIME time;
     HMAC_CTX *ctx = HMAC_CTX_new();
+    size_t count = 0;
 
     if (ctx == NULL
         || !HMAC_Init_ex(ctx, key, KEY_SIZE, EVP_sha256(), NULL))
@@ -199,10 +208,11 @@ static void do_deprecated_shared(size_t num)
             || !HMAC_Init_ex(ctx, NULL, 0, NULL, NULL))
             goto err;
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
+    counts[num] = count;
     return;
 
 err:

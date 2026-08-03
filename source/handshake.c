@@ -69,6 +69,7 @@ static void do_handshake(size_t num)
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
     OSSL_TIME time;
+    size_t count = 0;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
 
@@ -102,9 +103,11 @@ static void do_handshake(size_t num)
             SSL_CTX_free(lcctx);
             lsctx = lcctx = NULL;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 
     if (!ret)
         err = 1;
@@ -117,6 +120,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
     OSSL_TIME time;
+    size_t count = 0;
     OSSL_LIB_CTX *libctx = NULL;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
@@ -156,9 +160,11 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
             SSL_CTX_free(lcctx);
             lsctx = lcctx = NULL;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 
     SSL_CTX_free(lsctx);
     SSL_CTX_free(lcctx);
@@ -174,6 +180,7 @@ static void do_handshake_ctx_pool(size_t num)
     SSL *clientssl = NULL, *serverssl = NULL;
     int ret = 1;
     OSSL_TIME time;
+    size_t count = 0;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
     struct ctxs *ctx = NULL;
@@ -226,10 +233,12 @@ static void do_handshake_ctx_pool(size_t num)
             SSL_CTX_free(lcctx);
             lsctx = lcctx = NULL;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     }
     while (time.t < max_time.t);
+
+    counts[num] = count;
 
     if (share_ctx == 1 && test_case == TC_OSSL_LIB_CTX_POOL) {
         SSL_CTX_free(lsctx);

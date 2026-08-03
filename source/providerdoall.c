@@ -44,8 +44,7 @@ static void do_providerdoall(size_t num)
 {
     int count;
     OSSL_TIME time;
-
-    counts[num] = 0;
+    size_t iters = 0;
 
     do {
         count = 0;
@@ -53,9 +52,11 @@ static void do_providerdoall(size_t num)
             err = 1;
             break;
         }
-        counts[num]++;
+        iters++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = iters;
 }
 
 int main(int argc, char *argv[])
