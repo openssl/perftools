@@ -44,6 +44,7 @@ static void do_writeread(size_t num)
     int ret = 1;
     OSSL_TIME time;
     char *sbuf, *cbuf;
+    size_t count = 0;
 
     /* Prepare client and server buffers. */
     sbuf = OPENSSL_malloc(buf_size);
@@ -92,10 +93,11 @@ static void do_writeread(size_t num)
             err = 1;
             return;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
+    counts[num] = count;
     perflib_shutdown_ssl_connection(serverssl, clientssl);
     if (share_ctx == 0) {
         SSL_CTX_free(lsctx);

@@ -39,6 +39,7 @@ OSSL_TIME max_time;
 void do_setpeer(size_t num)
 {
     OSSL_TIME time;
+    size_t count = 0;
 
     EVP_PKEY_CTX *pkey_ctx = NULL;
 
@@ -56,17 +57,16 @@ void do_setpeer(size_t num)
         return;
     }
 
-    counts[num] = 0;
-
     do {
         if (EVP_PKEY_derive_set_peer(pkey_ctx, pkey) <= 0) {
             err = 1;
             break;
         }
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
+    counts[num] = count;
     EVP_PKEY_CTX_free(pkey_ctx);
 }
 
@@ -183,7 +183,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    counts = OPENSSL_malloc(sizeof(OSSL_TIME) * threadcount);
+    counts = OPENSSL_malloc(sizeof(size_t) * threadcount);
     if (counts == NULL) {
         printf("Failed to create counts array\n");
         return EXIT_FAILURE;

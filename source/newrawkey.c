@@ -337,6 +337,7 @@ void do_newrawkey(size_t num)
 {
     EVP_PKEY *pkey;
     OSSL_TIME time;
+    size_t count = 0;
     const unsigned char *key_data = key_x25519;
     size_t key_len = sizeof(key_x25519);
 
@@ -362,8 +363,6 @@ void do_newrawkey(size_t num)
             break;
     }
 
-    counts[num] = 0;
-
     do {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
         pkey = EVP_PKEY_new_raw_public_key_ex(NULL, alg_name, NULL, key_data,
@@ -379,9 +378,11 @@ void do_newrawkey(size_t num)
             err = 1;
         else
             EVP_PKEY_free(pkey);
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 int main(int argc, char *argv[])

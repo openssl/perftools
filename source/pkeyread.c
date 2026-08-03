@@ -128,14 +128,13 @@ static void do_derread(size_t num)
     size_t keydata_sz;
     EVP_PKEY *pkey = NULL;
     OSSL_TIME time;
+    size_t count = 0;
 
     if (sample_id >= SAMPLE_ALL) {
         fprintf(stderr, "%s no sample key set for test\n", __func__);
         err = 1;
         return;
     }
-
-    counts[num] = 0;
 
     do {
         keydata = (const unsigned char *)sample_keys[sample_id][FORMAT_DER];
@@ -151,9 +150,11 @@ static void do_derread(size_t num)
 error:
         EVP_PKEY_free(pkey);
         pkey = NULL;
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 static int sample_name_to_id(const char *sample_name)

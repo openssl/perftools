@@ -191,6 +191,7 @@ static int hash_evp_sha512()
 static void do_hash_isolated(size_t num)
 {
     OSSL_TIME time;
+    size_t count = 0;
 
     do {
         if (!hash_func_isolated()) {
@@ -198,9 +199,11 @@ static void do_hash_isolated(size_t num)
             return;
         }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 /*
@@ -226,6 +229,7 @@ static void do_hash_evp_shared(size_t num)
 {
     OSSL_TIME time;
     EVP_MD_CTX *mctx = EVP_MD_CTX_new();
+    size_t count = 0;
 
     if (mctx == NULL || !EVP_DigestInit_ex(mctx, evp_md, NULL)) {
         err = 1;
@@ -238,11 +242,12 @@ static void do_hash_evp_shared(size_t num)
             goto err;
         }
  
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
 err:
+    counts[num] = count;
     EVP_MD_CTX_free(mctx);
 }
 

@@ -83,6 +83,7 @@ err:
 static void do_cipher_isolated(size_t num)
 {
     OSSL_TIME time;
+    size_t count = 0;
 
     do {
         if (!cipher_isolated()) {
@@ -90,15 +91,18 @@ static void do_cipher_isolated(size_t num)
             return;
         }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 static void do_cipher_shared(size_t num)
 {
     OSSL_TIME time;
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    size_t count = 0;
 
     if (ctx == NULL || !EVP_CipherInit_ex2(ctx, evp_cipher, key, iv, 1, NULL)) {
         err = 1;
@@ -111,11 +115,12 @@ static void do_cipher_shared(size_t num)
             goto err;
         }
 
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
 
 err:
+    counts[num] = count;
     EVP_CIPHER_CTX_free(ctx);
 }
 

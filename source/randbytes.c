@@ -36,15 +36,16 @@ void do_randbytes(size_t num)
 {
     unsigned char buf[32];
     OSSL_TIME time;
-
-    counts[num] = 0;
+    size_t count = 0;
 
     do {
         if (!RAND_bytes(buf, sizeof(buf)))
             err = 1;
-        counts[num]++;
+        count++;
         time = ossl_time_now();
     } while (time.t < max_time.t);
+
+    counts[num] = count;
 }
 
 int main(int argc, char *argv[])
