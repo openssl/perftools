@@ -154,14 +154,18 @@ evp_setpeer as follows:
 Performs an in-memory client and server handshake and measures the average
 time taken for a single sequence of calling [SSL_write_ex()](https://docs.openssl.org/master/man3/SSL_write/) on the client and
 [SSL_write_ex()](https://docs.openssl.org/master/man3/SSL_write/) on the server.  In total 1000000 writes and reads are performed
-divided evenly among each thread. It take 4 optional and 2 required arguments:
+divided evenly among each thread. It takes 5 optional and 2 required arguments:
 
 ```
-writeread [-t] [-s] [-d] [-b size] <certsdir> <threadcount>
+writeread [-t] [-s] [-d] [-b size] [-v version] <certsdir> <threadcount>
 -t - produce terse output.
 -s - create an ssl_ctx per connection, rather than a single thread-shared ctx.
 -d - use DTLS as connection method.
 -b - size of buffer to write and read, default is 1024 bytes.
+-v - pin the protocol version to 1.2 or 1.3 (applies to TLS, or DTLS with -d).
+     By default the library negotiates the highest version it supports, so
+     pin the version when results must stay comparable across OpenSSL branches
+     (e.g. DTLS 1.3 exists only in 4.1 and later).
 certsdir - directory where the test can locate servercert.pem and serverkey.pem.
 threadcount - number of concurrent threads to run in test.
 ```

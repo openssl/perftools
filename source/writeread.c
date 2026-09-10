@@ -30,6 +30,9 @@ static int share_ctx = 1;
 static char *cert = NULL;
 static char *privkey = NULL;
 static const SSL_METHOD *smethod, *cmethod;
+static int use_dtls = 0;
+/* Protocol version to pin both min and max to, 0 = library default. */
+static int proto_version = 0;
 
 static int threadcount;
 int buf_size = 1024;
@@ -55,7 +58,8 @@ static void do_writeread(size_t num)
         lsctx = sctx;
         lcctx = cctx;
     } else {
-        if (!perflib_create_ssl_ctx_pair(smethod, cmethod, 0, 0,
+        if (!perflib_create_ssl_ctx_pair(smethod, cmethod,
+                                         proto_version, proto_version,
                                          &lsctx, &lcctx, cert, privkey)) {
             fprintf(stderr, "Failed to create SSL_CTX pair\n");
             err = 1;
@@ -116,12 +120,9 @@ int main(int argc, char * const argv[])
     int i;
     int terse = 0;
     int opt;
+    const char *version_arg = NULL;
 
-    /* Use TLS by default. */
-    smethod = TLS_server_method();
-    cmethod = TLS_client_method();
-
-    while ((opt = getopt(argc, argv, "tsdb:V")) != -1) {
+    while ((opt = getopt(argc, argv, "tsdb:v:V")) != -1) {
         switch (opt) {
         case 't':
             terse = 1;
@@ -130,8 +131,7 @@ int main(int argc, char * const argv[])
             share_ctx = 0;
             break;
         case 'd':
-            smethod = DTLS_server_method();
-            cmethod = DTLS_client_method();
+            use_dtls = 1;
             break;
         case 'b':
             buf_size = atoi(optarg);
@@ -140,17 +140,54 @@ int main(int argc, char * const argv[])
                 return EXIT_FAILURE;
             }
             break;
+        case 'v':
+            version_arg = optarg;
+            break;
         case 'V':
             perflib_print_version(basename(argv[0]));
             return EXIT_SUCCESS;
         default:
-            fprintf(stderr, "Usage: %s [-t] [-s] [-d] [-b size] [-V] certsdir threadcount\n",
+            fprintf(stderr, "Usage: %s [-t] [-s] [-d] [-b size] [-v version] [-V] certsdir threadcount\n",
                     basename(argv[0]));
             fprintf(stderr, "-t - terse output\n");
             fprintf(stderr, "-s - disable context sharing\n");
             fprintf(stderr, "-d - use DTLS as connection method\n");
             fprintf(stderr, "-b - size of buffer to write and read (Default: 1024)\n");
+            fprintf(stderr, "-v - pin the protocol version: 1.2 or 1.3 "
+                            "(Default: library default, i.e. highest supported)\n");
             fprintf(stderr, "-V - print version information and exit\n");
+            return EXIT_FAILURE;
+        }
+    }
+
+    if (use_dtls) {
+        smethod = DTLS_server_method();
+        cmethod = DTLS_client_method();
+    } else {
+        smethod = TLS_server_method();
+        cmethod = TLS_client_method();
+    }
+
+    /*
+     * Resolve -v after the loop so that it does not matter whether -d
+     * was given before or after it.
+     */
+    if (version_arg != NULL) {
+        if (strcmp(version_arg, "1.2") == 0) {
+            proto_version = use_dtls ? DTLS1_2_VERSION : TLS1_2_VERSION;
+        } else if (strcmp(version_arg, "1.3") == 0) {
+#ifdef DTLS1_3_VERSION
+            proto_version = use_dtls ? DTLS1_3_VERSION : TLS1_3_VERSION;
+#else
+            if (use_dtls) {
+                fprintf(stderr, "DTLS 1.3 is not supported by this OpenSSL\n");
+                return EXIT_FAILURE;
+            }
+            proto_version = TLS1_3_VERSION;
+#endif
+        } else {
+            fprintf(stderr, "Unsupported protocol version '%s', expected 1.2 or 1.3\n",
+                    version_arg);
             return EXIT_FAILURE;
         }
     }
@@ -186,7 +223,8 @@ int main(int argc, char * const argv[])
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
     if (share_ctx == 1) {
-        if (!perflib_create_ssl_ctx_pair(smethod, cmethod, 0, 0,
+        if (!perflib_create_ssl_ctx_pair(smethod, cmethod,
+                                         proto_version, proto_version,
                                          &sctx, &cctx, cert, privkey)) {
             fprintf(stderr, "Failed to create SSL_CTX pair\n");
             goto err;
