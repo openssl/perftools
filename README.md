@@ -104,6 +104,51 @@ default configuration this is "/usr/local/ssl/certs". The test takes the number
 of threads to use as an argument and the test reports the average time take to
 execute a block of 1000 [X509_STORE_CTX_get1_issuer()](https://docs.openssl.org/master/man3/X509_STORE_set_verify_cb_func/) calls.
 
+## x509storeadd
+
+The `x509storeadd` test repeatedly fills a fresh
+[X509_STORE](https://docs.openssl.org/master/man3/X509_STORE_new/)
+with a mix of programmatically generated certificates and CRLs using
+[X509_STORE_add_cert()/X509_STORE_add_crl()](https://docs.openssl.org/master/man3/X509_STORE_add_cert/). The
+store keys objects by their subject/issuer name into a hash table, so
+the cost of an add depends on how the names distribute over the
+buckets. Two workloads are supported:
+
+* `spread` (default) - every object carries a distinct name and lands in a
+  bucket of its own, with randomised insertion order. This is the O(1)
+  common case.
+* `bucket` - every object carries the same name, so all of them collide into
+  a single bucket whose growth dominates the add cost. This is the
+  pathological case (e.g. many cross-signed certs sharing one subject).
+
+```
+x509storeadd [-t] [-V] [-m mode] [-n sizes] [-d datfile] [-l label]
+-t - produce terse output
+-V - print version information and exit
+-m - name distribution: spread (default), bucket or both
+-n - comma-separated list of store sizes to sweep
+     (default 128,512,2048,8192,16384,32768)
+-d - write gnuplot data file
+-l - build label recorded in the data file header
+```
+
+The test is single-threaded and sweeps over the store sizes. For each size N
+it fills a fresh store with N objects, repeating until enough time has been
+accumulated for a reliable measurement; only the add loop is timed (store
+creation/free is excluded). It reports the best time per add call in ns over
+5 trials, one line per size and mode.
+
+With `-d` the results are also written to a gnuplot data file (columns:
+N spread bucket, with NaN for a mode that was not measured; use `-m both`
+to fill all columns).
+
+```sh
+./x509storeadd -m both -d baseline.dat -l baseline   # baseline build
+./x509storeadd -m both -d patched.dat  -l patched    # patched build
+```
+
+This test is not wired into the cmake `run` target -- run it on demand.
+
 ## providerdoall
 
 The `providerdoall` test repeatedly calls the [OSSL_PROVIDER_do_all()](https://docs.openssl.org/master/man3/OSSL_PROVIDER) function.

@@ -32,6 +32,8 @@ typedef pthread_t thread_t;
 
 # endif
 
+#define ARRAY_SIZE(x) (sizeof((x)) / sizeof((*x)))
+
 struct thread_arg_st {
     void (*func)(size_t num);
     size_t num;
