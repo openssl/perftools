@@ -29,6 +29,7 @@ static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
 static char *cert = NULL;
 static char *privkey = NULL;
+static PERFLIB_CREDS creds;
 static const SSL_METHOD *smethod, *cmethod;
 static int use_dtls = 0;
 /* Protocol version to pin both min and max to, 0 = library default. */
@@ -60,7 +61,7 @@ static void do_writeread(size_t num)
     } else {
         if (!perflib_create_ssl_ctx_pair(smethod, cmethod,
                                          proto_version, proto_version,
-                                         &lsctx, &lcctx, cert, privkey)) {
+                                         &lsctx, &lcctx, &creds)) {
             fprintf(stderr, "Failed to create SSL_CTX pair\n");
             err = 1;
             return;
@@ -222,10 +223,15 @@ int main(int argc, char * const argv[])
 
     max_time = ossl_time_add(ossl_time_now(), ossl_seconds2time(RUN_TIME));
 
+    if (!perflib_load_creds(cert, privkey, &creds)) {
+        fprintf(stderr, "Failed to load cert/privkey\n");
+        goto err;
+    }
+
     if (share_ctx == 1) {
         if (!perflib_create_ssl_ctx_pair(smethod, cmethod,
                                          proto_version, proto_version,
-                                         &sctx, &cctx, cert, privkey)) {
+                                         &sctx, &cctx, &creds)) {
             fprintf(stderr, "Failed to create SSL_CTX pair\n");
             goto err;
         }
@@ -257,6 +263,7 @@ int main(int argc, char * const argv[])
     free(cert);
     free(privkey);
     free(counts);
+    perflib_free_creds(&creds);
     if (share_ctx == 1) {
         SSL_CTX_free(sctx);
         SSL_CTX_free(cctx);

@@ -37,6 +37,7 @@ struct ctxs {
     OSSL_LIB_CTX *libctx;
     SSL_CTX *sctx;
     SSL_CTX *cctx;
+    PERFLIB_CREDS creds;
 };
 
 static struct ctxs **ctx_pool = NULL;
@@ -46,6 +47,7 @@ static SSL_CTX *sctx = NULL, *cctx = NULL;
 static int share_ctx = 1;
 static char *cert = NULL;
 static char *privkey = NULL;
+static PERFLIB_CREDS creds;
 
 size_t *counts;
 
@@ -84,8 +86,7 @@ static void do_handshake(size_t num)
         if (share_ctx == 0) {
             if (!perflib_create_ssl_ctx_pair(TLS_server_method(),
                                              TLS_client_method(),
-                                             0, 0, &lsctx, &lcctx, cert,
-                                             privkey)) {
+                                             0, 0, &lsctx, &lcctx, &creds)) {
                 ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 break;
@@ -124,11 +125,20 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     OSSL_LIB_CTX *libctx = NULL;
     SSL_CTX *lsctx = NULL;
     SSL_CTX *lcctx = NULL;
+    PERFLIB_CREDS tcreds;
 
     libctx = OSSL_LIB_CTX_new();
     if (libctx == NULL) {
         fprintf(stderr, "%s:%d: Failed to create ossl lib context\n", __FILE__, __LINE__);
         err = 1;
+        return;
+    }
+
+    if (!perflib_load_creds_ex(libctx, cert, privkey, &tcreds)) {
+        ERR_print_errors_fp(stderr);
+        fprintf(stderr, "%s:%d: Failed to load cert/privkey\n", __FILE__, __LINE__);
+        err = 1;
+        OSSL_LIB_CTX_free(libctx);
         return;
     }
 
@@ -139,11 +149,13 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
             if (!perflib_create_ossl_lib_ctx_pair(libctx,
                                                   TLS_server_method(),
                                                   TLS_client_method(),
-                                                  0, 0, &lsctx, &lcctx, cert,
-                                                  privkey)) {
+                                                  0, 0, &lsctx, &lcctx,
+                                                  &tcreds)) {
                 ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 err = 1;
+                perflib_free_creds(&tcreds);
+                OSSL_LIB_CTX_free(libctx);
                 return;
             }
         }
@@ -172,6 +184,7 @@ static void do_handshake_ossl_lib_ctx_per_thread(size_t num)
     if (!ret)
         err = 1;
 
+    perflib_free_creds(&tcreds);
     OSSL_LIB_CTX_free(libctx);
 }
 
@@ -197,8 +210,8 @@ static void do_handshake_ctx_pool(size_t num)
         if (!perflib_create_ossl_lib_ctx_pair(ctx->libctx,
                                               TLS_server_method(),
                                               TLS_client_method(),
-                                              0, 0, &lsctx, &lcctx, cert,
-                                              privkey)) {
+                                              0, 0, &lsctx, &lcctx,
+                                              &ctx->creds)) {
             ERR_print_errors_fp(stderr);
             fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
             err = 1;
@@ -213,8 +226,8 @@ static void do_handshake_ctx_pool(size_t num)
             if (!perflib_create_ossl_lib_ctx_pair(ctx->libctx,
                                                   TLS_server_method(),
                                                   TLS_client_method(),
-                                                  0, 0, &lsctx, &lcctx, cert,
-                                                  privkey)) {
+                                                  0, 0, &lsctx, &lcctx,
+                                                  &ctx->creds)) {
                 ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 err = 1;
@@ -257,6 +270,7 @@ static void free_ctx_pool()
         if (ctx_pool[i]) {
             SSL_CTX_free(ctx_pool[i]->sctx);
             SSL_CTX_free(ctx_pool[i]->cctx);
+            perflib_free_creds(&ctx_pool[i]->creds);
             OSSL_LIB_CTX_free(ctx_pool[i]->libctx);
             OPENSSL_free(ctx_pool[i]);
         }
@@ -276,6 +290,7 @@ static int init_ctx_pool(init_ctx init_ctx)
     for (int i = 0; i < pool_size; ++i) {
         SSL_CTX *lsctx = NULL, *lcctx = NULL;
         struct ctxs *ctx = NULL;
+        PERFLIB_CREDS lcreds;
         OSSL_LIB_CTX *libctx = OSSL_LIB_CTX_new();
 
         if (libctx == NULL) {
@@ -283,13 +298,20 @@ static int init_ctx_pool(init_ctx init_ctx)
             return 0;
         }
 
+        if (!perflib_load_creds_ex(libctx, cert, privkey, &lcreds)) {
+            fprintf(stderr, "%s:%d: Failed to load cert/privkey\n", __FILE__, __LINE__);
+            OSSL_LIB_CTX_free(libctx);
+            return 0;
+        }
+
         if (init_ctx == INIT_LIB_AND_SSL_CTX) {
             if (!perflib_create_ossl_lib_ctx_pair(libctx,
                                                   TLS_server_method(),
                                                   TLS_client_method(),
-                                                  0, 0, &lsctx, &lcctx, cert,
-                                                  privkey)) {
+                                                  0, 0, &lsctx, &lcctx,
+                                                  &lcreds)) {
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
+                perflib_free_creds(&lcreds);
                 OSSL_LIB_CTX_free(libctx);
                 return 0;
             }
@@ -297,15 +319,17 @@ static int init_ctx_pool(init_ctx init_ctx)
 
         ctx = OPENSSL_zalloc(sizeof(*ctx));
         if (ctx == NULL) {
-            OSSL_LIB_CTX_free(libctx);
             SSL_CTX_free(lsctx);
             SSL_CTX_free(lcctx);
+            perflib_free_creds(&lcreds);
+            OSSL_LIB_CTX_free(libctx);
             return 0;
         }
 
         ctx->libctx = libctx;
         ctx->sctx = lsctx;
         ctx->cctx = lcctx;
+        ctx->creds = lcreds;
         ctx_pool[i] = ctx;
     }
 
@@ -483,9 +507,15 @@ int main(int argc, char * const argv[])
 
     switch (test_case) {
     case TC_SSL_CTX: {
+        if (!perflib_load_creds(cert, privkey, &creds)) {
+            ERR_print_errors_fp(stderr);
+            fprintf(stderr, "%s:%d: Failed to load cert/privkey\n", __FILE__, __LINE__);
+            goto err;
+        }
+
         if (share_ctx == 1) {
             if (!perflib_create_ssl_ctx_pair(TLS_server_method(), TLS_client_method(),
-                                             0, 0, &sctx, &cctx, cert, privkey)) {
+                                             0, 0, &sctx, &cctx, &creds)) {
                 ERR_print_errors_fp(stderr);
                 fprintf(stderr, "%s:%d: Failed to create SSL_CTX pair\n", __FILE__, __LINE__);
                 goto err;
@@ -544,6 +574,7 @@ int main(int argc, char * const argv[])
     OPENSSL_free(cert);
     OPENSSL_free(privkey);
     OPENSSL_free(counts);
+    perflib_free_creds(&creds);
     if (share_ctx == 1) {
         SSL_CTX_free(sctx);
         SSL_CTX_free(cctx);
