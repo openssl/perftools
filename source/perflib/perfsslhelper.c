@@ -11,14 +11,92 @@
 #include <openssl/crypto.h>
 #include <openssl/bio.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/ssl.h>
+#include <openssl/x509.h>
 #include "perflib/perflib.h"
 
+static int perflib_read_creds(void *libctx, const char *certfile,
+                              const char *privkeyfile, PERFLIB_CREDS *creds)
+{
+    BIO *bio = NULL;
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+    (void)libctx;
+#endif
+
+    creds->cert = NULL;
+    creds->privkey = NULL;
+
+    if (certfile == NULL || privkeyfile == NULL)
+        return 0;
+
+    if ((bio = BIO_new_file(certfile, "r")) == NULL)
+        goto err;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    if ((creds->cert = X509_new_ex((OSSL_LIB_CTX *)libctx, NULL)) == NULL)
+        goto err;
+    if (PEM_read_bio_X509(bio, &creds->cert, NULL, NULL) == NULL)
+        goto err;
+#else
+    if ((creds->cert = PEM_read_bio_X509(bio, NULL, NULL, NULL)) == NULL)
+        goto err;
+#endif
+    BIO_free(bio);
+
+    if ((bio = BIO_new_file(privkeyfile, "r")) == NULL)
+        goto err;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+    creds->privkey = PEM_read_bio_PrivateKey_ex(bio, NULL, NULL, NULL,
+                                                (OSSL_LIB_CTX *)libctx, NULL);
+#else
+    creds->privkey = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+#endif
+    if (creds->privkey == NULL)
+        goto err;
+    BIO_free(bio);
+    bio = NULL;
+
+    if (X509_check_private_key(creds->cert, creds->privkey) != 1)
+        goto err;
+
+    return 1;
+
+ err:
+    BIO_free(bio);
+    perflib_free_creds(creds);
+    return 0;
+}
+
+int perflib_load_creds(const char *certfile, const char *privkeyfile,
+                       PERFLIB_CREDS *creds)
+{
+    return perflib_read_creds(NULL, certfile, privkeyfile, creds);
+}
+
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+int perflib_load_creds_ex(OSSL_LIB_CTX *libctx, const char *certfile,
+                          const char *privkeyfile, PERFLIB_CREDS *creds)
+{
+    return perflib_read_creds(libctx, certfile, privkeyfile, creds);
+}
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+
+void perflib_free_creds(PERFLIB_CREDS *creds)
+{
+    if (creds == NULL)
+        return;
+    X509_free(creds->cert);
+    EVP_PKEY_free(creds->privkey);
+    creds->cert = NULL;
+    creds->privkey = NULL;
+}
 
 static int perflib_use_certificate(SSL_CTX *serverctx, SSL_CTX *clientctx,
                                    int min_proto_version, int max_proto_version,
                                    SSL_CTX **sctx, SSL_CTX **cctx,
-                                   char *certfile, char *privkeyfile)
+                                   PERFLIB_CREDS *creds)
 {
     if (serverctx != NULL
         && ((min_proto_version > 0
@@ -38,12 +116,9 @@ static int perflib_use_certificate(SSL_CTX *serverctx, SSL_CTX *clientctx,
                                                   max_proto_version))))
         goto err;
 
-    if (serverctx != NULL && certfile != NULL && privkeyfile != NULL) {
-        if (SSL_CTX_use_certificate_file(serverctx, certfile,
-                                         SSL_FILETYPE_PEM) != 1
-            || SSL_CTX_use_PrivateKey_file(serverctx, privkeyfile,
-                                           SSL_FILETYPE_PEM) != 1
-            || SSL_CTX_check_private_key(serverctx) != 1)
+    if (serverctx != NULL && creds != NULL) {
+        if (SSL_CTX_use_certificate(serverctx, creds->cert) != 1
+            || SSL_CTX_use_PrivateKey(serverctx, creds->privkey) != 1)
             goto err;
     }
 
@@ -65,7 +140,7 @@ static int perflib_use_certificate(SSL_CTX *serverctx, SSL_CTX *clientctx,
 int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
                                      const SSL_METHOD *cm, int min_proto_version,
                                      int max_proto_version, SSL_CTX **sctx, SSL_CTX **cctx,
-                                     char *certfile, char *privkeyfile)
+                                     PERFLIB_CREDS *creds)
 {
     SSL_CTX *serverctx = NULL;
     SSL_CTX *clientctx = NULL;
@@ -86,8 +161,7 @@ int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
     }
 
     return perflib_use_certificate(serverctx, clientctx, min_proto_version,
-                                   max_proto_version, sctx, cctx, certfile,
-                                   privkeyfile);
+                                   max_proto_version, sctx, cctx, creds);
  err:
     return 0;
 }
@@ -96,8 +170,7 @@ int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
 int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm,
                                 const SSL_METHOD *cm, int min_proto_version,
                                 int max_proto_version, SSL_CTX **sctx,
-                                SSL_CTX **cctx, char *certfile,
-                                char *privkeyfile)
+                                SSL_CTX **cctx, PERFLIB_CREDS *creds)
 {
     SSL_CTX *serverctx = NULL;
     SSL_CTX *clientctx = NULL;
@@ -117,8 +190,7 @@ int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm,
     }
 
     return perflib_use_certificate(serverctx, clientctx, min_proto_version,
-                                   max_proto_version, sctx, cctx, certfile,
-                                   privkeyfile);
+                                   max_proto_version, sctx, cctx, creds);
  err:
     return 0;
 }

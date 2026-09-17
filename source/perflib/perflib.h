@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <openssl/ssl.h>
 #include <openssl/bio.h>
+#include <openssl/evp.h>
+#include <openssl/x509.h>
 #include "perflib/time.h"
 
 # if defined(_WIN32)
@@ -43,15 +45,28 @@ int perflib_run_multi_thread_test(void (*f)(size_t), size_t threadcount,
                                   OSSL_TIME *duration);
 char *perflib_mk_file_path(const char *dir, const char *file);
 
+typedef struct perflib_creds_st {
+    X509 *cert;
+    EVP_PKEY *privkey;
+} PERFLIB_CREDS;
+
+int perflib_load_creds(const char *certfile, const char *privkeyfile,
+                       PERFLIB_CREDS *creds);
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+int perflib_load_creds_ex(OSSL_LIB_CTX *libctx, const char *certfile,
+                          const char *privkeyfile, PERFLIB_CREDS *creds);
+#endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
+void perflib_free_creds(PERFLIB_CREDS *creds);
+
 int perflib_create_ssl_ctx_pair(const SSL_METHOD *sm, const SSL_METHOD *cm,
                                 int min_proto_version, int max_proto_version,
-                                SSL_CTX **sctx, SSL_CTX **cctx, char *certfile,
-                                char *privkeyfile);
+                                SSL_CTX **sctx, SSL_CTX **cctx,
+                                PERFLIB_CREDS *creds);
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
 int perflib_create_ossl_lib_ctx_pair(OSSL_LIB_CTX *libctx, const SSL_METHOD *sm,
                                      const SSL_METHOD *cm, int min_proto_version,
                                      int max_proto_version, SSL_CTX **sctx, SSL_CTX **cctx,
-                                     char *certfile, char *privkeyfile);
+                                     PERFLIB_CREDS *creds);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 int perflib_create_ssl_objects(SSL_CTX *serverctx, SSL_CTX *clientctx,
                                SSL **sssl, SSL **cssl, BIO *s_to_c_fbio,
